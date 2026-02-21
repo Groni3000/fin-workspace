@@ -1,0 +1,8 @@
+[package]
+name = "fin-futures"
+version = "0.1.0"
+edition = "2024"
+description = "Futures contract rolling and utilities for backtesting"
+license = "Apache-2.0"
+
+[dependencies]

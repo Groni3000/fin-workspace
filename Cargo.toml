@@ -1,0 +1,7 @@
+# Cargo.toml  (workspace root)
+[workspace]
+members = [
+    "instrid",
+    "fin-futures",
+]
+resolver = "2"

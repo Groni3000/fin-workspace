@@ -1,0 +1,8 @@
+[package]
+name = "instrid"
+version = "0.1.0"
+edition = "2024"
+description = "Financial instrument identification types"
+license = "Apache-2.0"
+
+[dependencies]
