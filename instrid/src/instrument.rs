@@ -118,6 +118,18 @@ pub trait TradeInstrument {
     fn exchange(&self) -> &Exchange;
 }
 
+impl TradeInstrument for Instrument {
+    fn base(&self) -> &Asset {
+        &self.base
+    }
+    fn quote(&self) -> &Asset {
+        &self.quote
+    }
+    fn exchange(&self) -> &Exchange {
+        &self.exchange
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
