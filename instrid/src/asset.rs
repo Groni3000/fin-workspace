@@ -14,7 +14,8 @@ impl Asset {
     /// Panics at compile time if the code is invalid.
     /// For runtime parsing with proper error handling, use `FromStr` instead:
     /// ```
-    /// let asset: Asset = "BTC".parse()?;
+    /// use instrid::asset::Asset;
+    /// let asset: Asset = "BTC".parse().unwrap();
     /// ```
     pub const fn new(code: &str) -> Self {
         let src = code.as_bytes();

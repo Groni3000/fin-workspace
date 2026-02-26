@@ -107,7 +107,15 @@ mod tests {
     #[test]
     fn display_format() {
         let stock: Stock = "AAPL/USD@NASDAQ".parse().unwrap();
-        assert_eq!(stock.to_string(), "AAPL/USD @ NASDAQ");
+        assert_eq!(stock.to_string(), "AAPL/USD@NASDAQ");
+    }
+
+    #[test]
+    fn roundtrip() {
+        let original: Stock = "AAPL/USD@NASDAQ".parse().unwrap();
+        let displayed = original.to_string();
+        let parsed: Stock = displayed.parse().unwrap();
+        assert_eq!(original, parsed);
     }
 
     // endregion

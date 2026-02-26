@@ -14,7 +14,8 @@ impl Exchange {
     /// Panics at compile time if the code is invalid.
     /// For runtime parsing with proper error handling, use `FromStr` instead:
     /// ```
-    /// let exchange: Exchange = "CME".parse()?;
+    /// use instrid::exchange::Exchange;
+    /// let exchange: Exchange = "CME".parse().unwrap();
     /// ```
     pub const fn new(code: &str) -> Self {
         let src = code.as_bytes();

@@ -17,7 +17,7 @@ use std::str::FromStr;
 /// use instrid::exchange::Exchange;
 ///
 /// // Compile-time constant
-/// const inst: Instrument = Instrument::new(Asset::BTC, Asset::USDT, Exchange::BINANCE);
+/// const BTC_USDT: Instrument = Instrument::new(Asset::BTC, Asset::USDT, Exchange::BINANCE);
 ///
 /// // Runtime parsing
 /// let inst: Instrument = "BTC/USDT@BINANCE".parse().unwrap();
@@ -35,7 +35,8 @@ impl Instrument {
     /// Intended for use in `const` contexts. For runtime construction from strings,
     /// use `FromStr` instead:
     /// ```
-    /// let inst: Instrument = "BTC/USDT@BINANCE".parse()?;
+    /// use instrid::instrument::Instrument;
+    /// let inst: Instrument = "BTC/USDT@BINANCE".parse().unwrap();
     /// ```
     pub const fn new(base: Asset, quote: Asset, exchange: Exchange) -> Self {
         Self {
@@ -79,8 +80,9 @@ impl FromStr for Instrument {
     ///
     /// # Examples
     /// ```
-    /// let inst: Instrument = "BTC/USDT@BINANCE".parse()?;
-    /// let inst: Instrument = "EUR/USD@NYSE".parse()?;
+    /// use instrid::instrument::Instrument;
+    /// let inst: Instrument = "BTC/USDT@BINANCE".parse().unwrap();
+    /// let inst: Instrument = "EUR/USD@NYSE".parse().unwrap();
     /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (pair, exchange) = s
@@ -107,7 +109,7 @@ impl FromStr for Instrument {
 
 impl fmt::Display for Instrument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}/{} @ {}", self.base, self.quote, self.exchange)
+        write!(f, "{}/{}@{}", self.base, self.quote, self.exchange)
     }
 }
 
@@ -219,18 +221,15 @@ mod tests {
     #[test]
     fn display_format() {
         let inst: Instrument = "BTC/USDT@BINANCE".parse().unwrap();
-        assert_eq!(inst.to_string(), "BTC/USDT @ BINANCE");
+        assert_eq!(inst.to_string(), "BTC/USDT@BINANCE");
     }
 
     #[test]
     fn roundtrip() {
-        // Display adds spaces around @, so round-trip needs to account for that
-        // This test documents current behavior explicitly
         let original = Instrument::new(Asset::EUR, Asset::USD, Exchange::NYSE);
-        let displayed = original.to_string(); // "EUR/USD @ NYSE"
-        // spaces around @ break naive round-trip — this is intentional,
-        // parse format is strict: no spaces
-        assert!(displayed.parse::<Instrument>().is_err());
+        let displayed = original.to_string();
+        let parsed: Instrument = displayed.parse().unwrap();
+        assert_eq!(original, parsed);
     }
 
     // endregion

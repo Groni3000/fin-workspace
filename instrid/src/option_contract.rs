@@ -45,8 +45,8 @@ impl FromStr for OptionType {
 impl fmt::Display for OptionType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            OptionType::Call => f.write_str("Call"),
-            OptionType::Put => f.write_str("Put"),
+            OptionType::Call => f.write_str("CALL"),
+            OptionType::Put => f.write_str("PUT"),
         }
     }
 }
@@ -175,6 +175,9 @@ impl FromStr for OptionContract {
         let strike: f64 = strike_str
             .parse()
             .map_err(|_| OptionContractParseError::InvalidStrike)?;
+        if strike < 0.0 || strike.is_nan() || strike.is_infinite() {
+            return Err(OptionContractParseError::InvalidStrike);
+        }
 
         // Split off multiplier if present
         let (date_str, multiplier_str) = match contract_str.split_once('*') {
@@ -202,7 +205,7 @@ impl FromStr for OptionContract {
                 let day_val: u8 = d
                     .parse()
                     .map_err(|_| OptionContractParseError::InvalidDay)?;
-                if day_val == 0 || day_val > 31 {
+                if day_val == 0 || day_val > month.max_days() {
                     return Err(OptionContractParseError::InvalidDay);
                 }
                 Some(day_val)
@@ -215,6 +218,9 @@ impl FromStr for OptionContract {
                 let val: f64 = m
                     .parse()
                     .map_err(|_| OptionContractParseError::InvalidMultiplier)?;
+                if val <= 0.0 || val.is_nan() || val.is_infinite() {
+                    return Err(OptionContractParseError::InvalidMultiplier);
+                }
                 Some(val)
             }
             None => None,
@@ -234,7 +240,7 @@ impl FromStr for OptionContract {
 
 impl fmt::Display for OptionContract {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} # {}-{}", self.instrument, self.year, self.month)?;
+        write!(f, "{}#{}-{}", self.instrument, self.year, self.month)?;
         if let Some(day) = self.day {
             write!(f, "-{}", day)?;
         }
@@ -245,7 +251,7 @@ impl fmt::Display for OptionContract {
                 write!(f, "*{}", mult)?;
             }
         }
-        write!(f, " : {} $", self.option_type)?;
+        write!(f, ":{}$", self.option_type)?;
         if self.strike.fract() == 0.0 {
             write!(f, "{}", self.strike as u64)
         } else {
@@ -314,8 +320,8 @@ mod tests {
 
     #[test]
     fn display_option_type() {
-        assert_eq!(OptionType::Call.to_string(), "Call");
-        assert_eq!(OptionType::Put.to_string(), "Put");
+        assert_eq!(OptionType::Call.to_string(), "CALL");
+        assert_eq!(OptionType::Put.to_string(), "PUT");
     }
 
     // endregion
@@ -407,6 +413,42 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn parse_day_exceeds_month() {
+        let result = "ES/USD@CME#2025-FEB-30:CALL$4500".parse::<OptionContract>();
+        assert!(matches!(
+            result,
+            Err(OptionContractParseError::InvalidDay)
+        ));
+    }
+
+    #[test]
+    fn parse_negative_multiplier() {
+        let result = "ES/USD@CME#2025-SEP*-5:CALL$4500".parse::<OptionContract>();
+        assert!(matches!(
+            result,
+            Err(OptionContractParseError::InvalidMultiplier)
+        ));
+    }
+
+    #[test]
+    fn parse_zero_multiplier() {
+        let result = "ES/USD@CME#2025-SEP*0:CALL$4500".parse::<OptionContract>();
+        assert!(matches!(
+            result,
+            Err(OptionContractParseError::InvalidMultiplier)
+        ));
+    }
+
+    #[test]
+    fn parse_negative_strike() {
+        let result = "ES/USD@CME#2025-SEP:CALL$-100".parse::<OptionContract>();
+        assert!(matches!(
+            result,
+            Err(OptionContractParseError::InvalidStrike)
+        ));
+    }
+
     // endregion
 
     // region: Display / round-trip
@@ -414,26 +456,29 @@ mod tests {
     #[test]
     fn display_basic_call() {
         let opt: OptionContract = "ES/USD@CME#2025-SEP:CALL$4500".parse().unwrap();
-        assert_eq!(opt.to_string(), "ES/USD @ CME # 2025-September : Call $4500");
+        assert_eq!(opt.to_string(), "ES/USD@CME#2025-SEP:CALL$4500");
     }
 
     #[test]
     fn display_put_with_decimal_strike() {
         let opt: OptionContract = "CL/USD@NYMEX#2025-JUN:PUT$75.50".parse().unwrap();
-        assert_eq!(
-            opt.to_string(),
-            "CL/USD @ NYMEX # 2025-June : Put $75.5"
-        );
+        assert_eq!(opt.to_string(), "CL/USD@NYMEX#2025-JUN:PUT$75.5");
     }
 
     #[test]
     fn display_with_day_and_multiplier() {
         let opt: OptionContract =
             "CL/USD@NYMEX#2025-JUN-15*1000:PUT$75".parse().unwrap();
-        assert_eq!(
-            opt.to_string(),
-            "CL/USD @ NYMEX # 2025-June-15*1000 : Put $75"
-        );
+        assert_eq!(opt.to_string(), "CL/USD@NYMEX#2025-JUN-15*1000:PUT$75");
+    }
+
+    #[test]
+    fn roundtrip() {
+        let original: OptionContract =
+            "ES/USD@CME#2025-SEP-15*50:CALL$4500".parse().unwrap();
+        let displayed = original.to_string();
+        let parsed: OptionContract = displayed.parse().unwrap();
+        assert_eq!(original, parsed);
     }
 
     // endregion

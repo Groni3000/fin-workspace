@@ -121,7 +121,7 @@ impl FromStr for Future {
         let day: Option<u8> = match parts.next() {
             Some(d) => {
                 let day_val: u8 = d.parse().map_err(|_| FutureParseError::InvalidDay)?;
-                if day_val == 0 || day_val > 31 {
+                if day_val == 0 || day_val > month.max_days() {
                     return Err(FutureParseError::InvalidDay);
                 }
                 Some(day_val)
@@ -132,6 +132,9 @@ impl FromStr for Future {
         let multiplier: Option<f64> = match multiplier_str {
             Some(m) => {
                 let val: f64 = m.parse().map_err(|_| FutureParseError::InvalidMultiplier)?;
+                if val <= 0.0 || val.is_nan() || val.is_infinite() {
+                    return Err(FutureParseError::InvalidMultiplier);
+                }
                 Some(val)
             }
             None => None,
@@ -143,7 +146,7 @@ impl FromStr for Future {
 
 impl fmt::Display for Future {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} # {}-{}", self.instrument, self.year, self.month)?;
+        write!(f, "{}#{}-{}", self.instrument, self.year, self.month)?;
         if let Some(day) = self.day {
             write!(f, "-{}", day)?;
         }
@@ -263,13 +266,31 @@ mod tests {
 
     #[test]
     fn parse_day_out_of_range() {
-        let result = "CL/USD@NYMEX#2025-JUN-32".parse::<Future>();
+        let result = "CL/USD@NYMEX#2025-JUN-31".parse::<Future>();
+        assert!(matches!(result, Err(FutureParseError::InvalidDay)));
+    }
+
+    #[test]
+    fn parse_day_feb_30() {
+        let result = "CL/USD@NYMEX#2025-FEB-30".parse::<Future>();
         assert!(matches!(result, Err(FutureParseError::InvalidDay)));
     }
 
     #[test]
     fn parse_invalid_multiplier() {
         let result = "CL/USD@NYMEX#2025-JUN*abc".parse::<Future>();
+        assert!(matches!(result, Err(FutureParseError::InvalidMultiplier)));
+    }
+
+    #[test]
+    fn parse_negative_multiplier() {
+        let result = "CL/USD@NYMEX#2025-JUN*-1".parse::<Future>();
+        assert!(matches!(result, Err(FutureParseError::InvalidMultiplier)));
+    }
+
+    #[test]
+    fn parse_zero_multiplier() {
+        let result = "CL/USD@NYMEX#2025-JUN*0".parse::<Future>();
         assert!(matches!(result, Err(FutureParseError::InvalidMultiplier)));
     }
 
@@ -280,25 +301,33 @@ mod tests {
     #[test]
     fn display_basic() {
         let fut: Future = "CL/USD@NYMEX#2025-JUN".parse().unwrap();
-        assert_eq!(fut.to_string(), "CL/USD @ NYMEX # 2025-June");
+        assert_eq!(fut.to_string(), "CL/USD@NYMEX#2025-JUN");
     }
 
     #[test]
     fn display_with_day() {
         let fut: Future = "ES/USD@CME#2025-SEP-15".parse().unwrap();
-        assert_eq!(fut.to_string(), "ES/USD @ CME # 2025-September-15");
+        assert_eq!(fut.to_string(), "ES/USD@CME#2025-SEP-15");
     }
 
     #[test]
     fn display_with_multiplier() {
         let fut: Future = "CL/USD@NYMEX#2025-JUN*1000".parse().unwrap();
-        assert_eq!(fut.to_string(), "CL/USD @ NYMEX # 2025-June*1000");
+        assert_eq!(fut.to_string(), "CL/USD@NYMEX#2025-JUN*1000");
     }
 
     #[test]
     fn display_with_day_and_multiplier() {
         let fut: Future = "ES/USD@CME#2025-SEP-15*50".parse().unwrap();
-        assert_eq!(fut.to_string(), "ES/USD @ CME # 2025-September-15*50");
+        assert_eq!(fut.to_string(), "ES/USD@CME#2025-SEP-15*50");
+    }
+
+    #[test]
+    fn roundtrip() {
+        let original: Future = "CL/USD@NYMEX#2025-JUN-15*1000".parse().unwrap();
+        let displayed = original.to_string();
+        let parsed: Future = displayed.parse().unwrap();
+        assert_eq!(original, parsed);
     }
 
     // endregion

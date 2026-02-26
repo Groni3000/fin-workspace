@@ -22,6 +22,27 @@ impl Tenor {
         *self as u8
     }
 
+    /// Returns the maximum number of days in this month.
+    ///
+    /// February returns 29 (assumes leap year possibility since contract
+    /// identifiers don't validate leap years).
+    pub const fn max_days(&self) -> u8 {
+        match self {
+            Tenor::January => 31,
+            Tenor::February => 29,
+            Tenor::March => 31,
+            Tenor::April => 30,
+            Tenor::May => 31,
+            Tenor::June => 30,
+            Tenor::July => 31,
+            Tenor::August => 31,
+            Tenor::September => 30,
+            Tenor::October => 31,
+            Tenor::November => 30,
+            Tenor::December => 31,
+        }
+    }
+
     pub fn from_ordinal(n: u8) -> Option<Self> {
         match n {
             1 => Some(Tenor::January),
@@ -81,18 +102,18 @@ impl FromStr for Tenor {
 impl fmt::Display for Tenor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
-            Tenor::January => "January",
-            Tenor::February => "February",
-            Tenor::March => "March",
-            Tenor::April => "April",
-            Tenor::May => "May",
-            Tenor::June => "June",
-            Tenor::July => "July",
-            Tenor::August => "August",
-            Tenor::September => "September",
-            Tenor::October => "October",
-            Tenor::November => "November",
-            Tenor::December => "December",
+            Tenor::January => "JAN",
+            Tenor::February => "FEB",
+            Tenor::March => "MAR",
+            Tenor::April => "APR",
+            Tenor::May => "MAY",
+            Tenor::June => "JUN",
+            Tenor::July => "JUL",
+            Tenor::August => "AUG",
+            Tenor::September => "SEP",
+            Tenor::October => "OCT",
+            Tenor::November => "NOV",
+            Tenor::December => "DEC",
         };
         f.write_str(s)
     }
