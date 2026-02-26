@@ -4,6 +4,7 @@ use crate::{
     instrument::{Instrument, InstrumentParseError, TradeInstrument},
     tenor::{Tenor, TenorParseError},
 };
+use std::cmp::Ordering;
 use std::fmt;
 use std::str::FromStr;
 
@@ -154,6 +155,22 @@ impl fmt::Display for Future {
             }
         }
         Ok(())
+    }
+}
+
+/// Compares futures by expiration date (year, month, day).
+///
+/// Contracts without a day (`None`) sort before contracts with a day in the
+/// same year/month, treating `None` as "month-level expiry" (i.e. earlier
+/// or equal to any specific day).
+impl PartialOrd for Future {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(
+            self.year
+                .cmp(&other.year)
+                .then(self.month.cmp(&other.month))
+                .then(self.day.cmp(&other.day)),
+        )
     }
 }
 
@@ -329,6 +346,69 @@ mod tests {
         assert_eq!(fut.base().code(), "CL");
         assert_eq!(fut.quote().code(), "USD");
         assert_eq!(fut.exchange().code(), "NYMEX");
+    }
+
+    // endregion
+
+    // region: ordering (by expiration date)
+
+    #[test]
+    fn earlier_year_is_less() {
+        let a: Future = "CL/USD@NYMEX#2024-JUN".parse().unwrap();
+        let b: Future = "CL/USD@NYMEX#2025-JUN".parse().unwrap();
+        assert!(a < b);
+    }
+
+    #[test]
+    fn earlier_month_is_less() {
+        let a: Future = "CL/USD@NYMEX#2025-MAR".parse().unwrap();
+        let b: Future = "CL/USD@NYMEX#2025-JUN".parse().unwrap();
+        assert!(a < b);
+    }
+
+    #[test]
+    fn earlier_day_is_less() {
+        let a: Future = "CL/USD@NYMEX#2025-JUN-1".parse().unwrap();
+        let b: Future = "CL/USD@NYMEX#2025-JUN-15".parse().unwrap();
+        assert!(a < b);
+    }
+
+    #[test]
+    fn no_day_sorts_before_day() {
+        let a: Future = "CL/USD@NYMEX#2025-JUN".parse().unwrap();
+        let b: Future = "CL/USD@NYMEX#2025-JUN-1".parse().unwrap();
+        assert!(a < b);
+    }
+
+    #[test]
+    fn same_expiration_is_equal_order() {
+        let a: Future = "CL/USD@NYMEX#2025-JUN".parse().unwrap();
+        let b: Future = "ES/USD@CME#2025-JUN".parse().unwrap();
+        assert!(a.partial_cmp(&b) == Some(Ordering::Equal));
+    }
+
+    #[test]
+    fn ordering_ignores_multiplier() {
+        let a: Future = "CL/USD@NYMEX#2025-JUN*1000".parse().unwrap();
+        let b: Future = "CL/USD@NYMEX#2025-JUN*50".parse().unwrap();
+        assert!(a.partial_cmp(&b) == Some(Ordering::Equal));
+    }
+
+    #[test]
+    fn sort_futures_by_expiration() {
+        let mut futs: Vec<Future> = vec![
+            "CL/USD@NYMEX#2025-DEC".parse().unwrap(),
+            "CL/USD@NYMEX#2024-MAR".parse().unwrap(),
+            "CL/USD@NYMEX#2025-JUN-15".parse().unwrap(),
+            "CL/USD@NYMEX#2025-JUN".parse().unwrap(),
+        ];
+        futs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        assert_eq!(futs[0].year, 2024);
+        assert_eq!(futs[1].month, Tenor::June);
+        assert_eq!(futs[1].day, None);
+        assert_eq!(futs[2].month, Tenor::June);
+        assert_eq!(futs[2].day, Some(15));
+        assert_eq!(futs[3].month, Tenor::December);
     }
 
     // endregion

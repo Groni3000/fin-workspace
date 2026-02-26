@@ -4,6 +4,7 @@ use crate::{
     instrument::{Instrument, InstrumentParseError, TradeInstrument},
     tenor::{Tenor, TenorParseError},
 };
+use std::cmp::Ordering;
 use std::fmt;
 use std::str::FromStr;
 
@@ -253,6 +254,22 @@ impl fmt::Display for OptionContract {
     }
 }
 
+/// Compares option contracts by expiration date (year, month, day).
+///
+/// Contracts without a day (`None`) sort before contracts with a day in the
+/// same year/month, treating `None` as "month-level expiry" (i.e. earlier
+/// or equal to any specific day).
+impl PartialOrd for OptionContract {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(
+            self.year
+                .cmp(&other.year)
+                .then(self.month.cmp(&other.month))
+                .then(self.day.cmp(&other.day)),
+        )
+    }
+}
+
 impl TradeInstrument for OptionContract {
     fn base(&self) -> &Asset {
         &self.instrument.base
@@ -473,6 +490,51 @@ mod tests {
         assert_eq!(opt.base().code(), "ES");
         assert_eq!(opt.quote().code(), "USD");
         assert_eq!(opt.exchange().code(), "CME");
+    }
+
+    // endregion
+
+    // region: ordering (by expiration date)
+
+    #[test]
+    fn earlier_year_is_less() {
+        let a: OptionContract = "ES/USD@CME#2024-SEP:CALL$4500".parse().unwrap();
+        let b: OptionContract = "ES/USD@CME#2025-SEP:CALL$4500".parse().unwrap();
+        assert!(a < b);
+    }
+
+    #[test]
+    fn earlier_month_is_less() {
+        let a: OptionContract = "ES/USD@CME#2025-MAR:CALL$4500".parse().unwrap();
+        let b: OptionContract = "ES/USD@CME#2025-SEP:CALL$4500".parse().unwrap();
+        assert!(a < b);
+    }
+
+    #[test]
+    fn earlier_day_is_less() {
+        let a: OptionContract = "ES/USD@CME#2025-SEP-1:CALL$4500".parse().unwrap();
+        let b: OptionContract = "ES/USD@CME#2025-SEP-15:CALL$4500".parse().unwrap();
+        assert!(a < b);
+    }
+
+    #[test]
+    fn ordering_ignores_strike_and_type() {
+        let a: OptionContract = "ES/USD@CME#2025-SEP:CALL$5000".parse().unwrap();
+        let b: OptionContract = "ES/USD@CME#2025-SEP:PUT$4000".parse().unwrap();
+        assert!(a.partial_cmp(&b) == Some(Ordering::Equal));
+    }
+
+    #[test]
+    fn sort_options_by_expiration() {
+        let mut opts: Vec<OptionContract> = vec![
+            "ES/USD@CME#2025-DEC:PUT$4500".parse().unwrap(),
+            "ES/USD@CME#2024-MAR:CALL$4000".parse().unwrap(),
+            "ES/USD@CME#2025-JUN:CALL$4200".parse().unwrap(),
+        ];
+        opts.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        assert_eq!(opts[0].year, 2024);
+        assert_eq!(opts[1].month, Tenor::June);
+        assert_eq!(opts[2].month, Tenor::December);
     }
 
     // endregion
