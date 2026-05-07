@@ -1,10 +1,11 @@
-use std::{error::Error, io::Error, str::FromStr};
+use std::{fmt::Display, str::FromStr};
 
 /// Market Identifier Code (MIC) record as defined by ISO 10383.
 ///
 /// Identifies a securities trading exchange, regulated market, or
 /// other trading venue, along with descriptive metadata published
 /// in the ISO MIC registry.
+#[derive(Debug)]
 pub struct Mic {
     /// Four-character MIC assigned to the venue (e.g. `XNAS`).
     code: [u8; 4],
@@ -31,18 +32,19 @@ pub struct Mic {
     /// Current registry status of the MIC.
     status: MicStatus,
     /// Date the MIC was created, as `YYYYMMDD`.
-    creation_date: [u8; 8],
+    creation_date: Date,
     /// Date of the most recent update to the record, as `YYYYMMDD`.
-    last_update_date: [u8; 8],
+    last_update_date: Date,
     /// Date the record was last validated by the registrar, as `YYYYMMDD`.
-    last_validation_date: Option<[char; 8]>,
+    last_validation_date: Option<Date>,
     /// Date the MIC expired or will expire, as `YYYYMMDD`.
-    expiry_date: Option<[u8; 8]>,
+    expiry_date: Option<Date>,
     /// Free-form notes published with the registry entry.
     comments: Option<String>,
 }
 
 /// Distinguishes top-level operating MICs from their market segments.
+#[derive(Debug)]
 enum MicType {
     /// Operating MIC: identifies the venue itself.
     Operating,
@@ -51,6 +53,7 @@ enum MicType {
 }
 
 /// Lifecycle status of a MIC entry in the ISO registry.
+#[derive(Debug)]
 enum MicStatus {
     /// Currently in use.
     Active,
@@ -66,6 +69,7 @@ enum MicStatus {
 /// The `Unknown` variant carries any 4-character code not recognised by this
 /// enum, so registry entries with newly-introduced categories can still be
 /// represented round-trip.
+#[derive(Debug)]
 enum MarketCategoryCode {
     /// `APPA` — Approved Publication Arrangement (MiFID II trade publication).
     Appa,
@@ -98,7 +102,7 @@ enum MarketCategoryCode {
     /// `TRFS` — Trade Reporting Facility.
     Trfs,
     /// Any 4-character code not covered by the variants above.
-    Unknown([char; 4]),
+    Unknown([u8; 4]),
 }
 
 /// Calendar date as published by ISO 10383 registry (`YYYYMMDD`)
@@ -118,8 +122,9 @@ impl Date {
     }
 }
 
-pub enum DateParseError {
-    InvalidLenght,
+#[derive(Debug)]
+enum DateParseError {
+    InvalidLength,
     NotDigits,
 }
 
@@ -130,8 +135,8 @@ impl FromStr for Date {
         let bytes = s.as_bytes();
 
         if bytes.len() != 8 {
-            return Err(DateParseError::InvalidLenght);
-        };
+            return Err(DateParseError::InvalidLength);
+        }
         if !bytes.iter().all(|b| b.is_ascii_digit()) {
             return Err(DateParseError::NotDigits);
         }
@@ -153,4 +158,10 @@ fn parse4(bytes: &[u8]) -> u16 {
         + (bytes[1] - b'0') as u16 * 100
         + (bytes[2] - b'0') as u16 * 10
         + (bytes[3] - b'0') as u16
+}
+
+impl Display for Date {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:04}{:02}{:02}", self.year, self.month, self.day)
+    }
 }
