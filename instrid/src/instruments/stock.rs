@@ -9,6 +9,12 @@ pub struct Stock {
     mic: Mic,
 }
 
+impl Stock {
+    pub const fn new(base: Asset, quote: Asset, mic: Mic) -> Self {
+        Self { base, quote, mic }
+    }
+}
+
 impl BaseInstrument for Stock {
     fn base(&self) -> &Asset {
         &self.base
