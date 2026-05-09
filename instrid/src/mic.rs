@@ -5,7 +5,7 @@ use std::{fmt::Display, str::FromStr};
 /// Identifies a securities trading exchange, regulated market, or
 /// other trading venue, along with descriptive metadata published
 /// in the ISO MIC registry.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Default)]
 pub struct Mic {
     /// Four-character MIC assigned to the venue (e.g. `XNAS`).
     code: [u8; 4],
@@ -43,24 +43,121 @@ pub struct Mic {
     comments: Option<String>,
 }
 
+impl Mic {
+    pub fn new(
+        code: [u8; 4],
+        operating: [u8; 4],
+        market_name: &str,
+        mic_type: MicType,
+        legal_entity_name: Option<&str>,
+        lei_code: Option<[u8; 20]>,
+        market_category_code: MarketCategoryCode,
+        acronym: Option<&str>,
+        iso_country_code: [u8; 2],
+        city: &str,
+        website: Option<&str>,
+        status: MicStatus,
+        creation_date: Date,
+        last_update_date: Date,
+        last_validation_date: Option<Date>,
+        expiry_date: Option<Date>,
+        comments: Option<&str>,
+    ) -> Self {
+        Mic {
+            code,
+            operating,
+            mic_type,
+            market_name: String::from(market_name),
+            legal_entity_name: legal_entity_name.map(String::from),
+            lei_code,
+            market_category_code,
+            acronym: acronym.map(String::from),
+            iso_country_code,
+            city: String::from(city),
+            website: website.map(String::from),
+            status,
+            creation_date,
+            last_update_date,
+            last_validation_date,
+            expiry_date,
+            comments: comments.map(String::from),
+        }
+    }
+}
+
+impl Display for Mic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            std::str::from_utf8(&self.code).expect("MIC must be a valid ASCII")
+        )
+    }
+}
+
 /// Distinguishes top-level operating MICs from their market segments.
 #[derive(Debug, PartialEq, Eq)]
-enum MicType {
+pub enum MicType {
     /// Operating MIC: identifies the venue itself.
     Operating,
     /// Segment MIC: identifies a specific market segment within an operating MIC.
     Segment,
 }
 
+impl Default for MicType {
+    fn default() -> Self {
+        MicType::Operating
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownMicType;
+
+impl FromStr for MicType {
+    type Err = UnknownMicType;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "OPRT" => Ok(MicType::Operating),
+            "SGMT" => Ok(MicType::Segment),
+            _ => Err(UnknownMicType),
+        }
+    }
+}
+
 /// Lifecycle status of a MIC entry in the ISO registry.
 #[derive(Debug, PartialEq, Eq)]
-enum MicStatus {
+pub enum MicStatus {
     /// Currently in use.
     Active,
     /// No longer in use; retained for historical reference.
     Expired,
     /// At least one field is changed in the current monthly publication.
     Updated,
+    /// Used for internal testing
+    Mock,
+}
+
+impl Default for MicStatus {
+    fn default() -> Self {
+        MicStatus::Mock
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownMicStatus;
+
+impl FromStr for MicStatus {
+    type Err = UnknownMicStatus;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "ACTIVE" => Ok(MicStatus::Active),
+            "EXPIRED" => Ok(MicStatus::Expired),
+            "UPDATED" => Ok(MicStatus::Updated),
+            _ => Err(UnknownMicStatus),
+        }
+    }
 }
 
 /// ISO 10383 market category code — classifies the regulatory or functional
@@ -70,7 +167,7 @@ enum MicStatus {
 /// enum, so registry entries with newly-introduced categories can still be
 /// represented round-trip.
 #[derive(Debug, PartialEq, Eq)]
-enum MarketCategoryCode {
+pub enum MarketCategoryCode {
     /// `APPA` — Approved Publication Arrangement (MiFID II trade publication).
     Appa,
     /// `ARMS` — Approved Reporting Mechanism (MiFID II transaction reporting).
@@ -105,15 +202,67 @@ enum MarketCategoryCode {
     Unknown([u8; 4]),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MktCatCodeParseError {
+    InvalidLength,
+}
+
+impl FromStr for MarketCategoryCode {
+    type Err = MktCatCodeParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() != 4 {
+            return Err(MktCatCodeParseError::InvalidLength);
+        }
+        let bytes = s.as_bytes();
+        let arr: [u8; 4] = [bytes[0], bytes[1], bytes[2], bytes[3]];
+
+        Ok(match &arr {
+            b"APPA" => MarketCategoryCode::Appa,
+            b"ARMS" => MarketCategoryCode::Arms,
+            b"CASP" => MarketCategoryCode::Casp,
+            b"CTPS" => MarketCategoryCode::Ctps,
+            b"DCMS" => MarketCategoryCode::Dcms,
+            b"IDQS" => MarketCategoryCode::Idqs,
+            b"MLTF" => MarketCategoryCode::Mltf,
+            b"NSPD" => MarketCategoryCode::Nspd,
+            b"OTFS" => MarketCategoryCode::Otfs,
+            b"OTHR" => MarketCategoryCode::Othr,
+            b"RMKT" => MarketCategoryCode::Rmkt,
+            b"RMOS" => MarketCategoryCode::Rmos,
+            b"SEFS" => MarketCategoryCode::Sefs,
+            b"SINT" => MarketCategoryCode::Sint,
+            b"TRFS" => MarketCategoryCode::Trfs,
+            _ => MarketCategoryCode::Unknown(arr),
+        })
+    }
+}
+
+impl Default for MarketCategoryCode {
+    fn default() -> Self {
+        MarketCategoryCode::Unknown([0; 4])
+    }
+}
+
 /// Calendar date as published by ISO 10383 registry (`YYYYMMDD`)
 ///
 /// No timezone, no validation beyond field ranges.
 /// Ordered chronologically via the derived Ord.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-struct Date {
+pub struct Date {
     year: u16,
     month: u8,
     day: u8,
+}
+
+impl Default for Date {
+    fn default() -> Self {
+        Self {
+            year: 1970,
+            month: 1,
+            day: 1,
+        }
+    }
 }
 
 impl Date {
@@ -123,7 +272,7 @@ impl Date {
 }
 
 #[derive(Debug)]
-enum DateParseError {
+pub enum DateParseError {
     InvalidLength,
     NotDigits,
 }
@@ -163,5 +312,34 @@ fn parse4(bytes: &[u8]) -> u16 {
 impl Display for Date {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:04}{:02}{:02}", self.year, self.month, self.day)
+    }
+}
+
+/// Hand-written constructors for commonly used MICs.
+///
+/// Until `build.rs` codegen from `assets/ISO10383_MIC.csv` lands, add entries
+/// here as needed.
+impl Mic {
+    /// NASDAQ - ALL MARKETS (operating MIC).
+    pub fn xnas() -> Self {
+        Mic::new(
+            *b"XNAS",
+            *b"XNAS",
+            "NASDAQ - ALL MARKETS",
+            MicType::Operating,
+            Some("NASDAQ, INC."),
+            Some(*b"549300L8X1Q78ERXFD06"),
+            MarketCategoryCode::Rmkt,
+            Some("NASDAQ"),
+            *b"US",
+            "NEW YORK",
+            Some("WWW.NASDAQ.COM"),
+            MicStatus::Updated,
+            Date::new(2005, 6, 27),
+            Date::new(2026, 4, 27),
+            Some(Date::new(2026, 4, 27)),
+            None,
+            None,
+        )
     }
 }
