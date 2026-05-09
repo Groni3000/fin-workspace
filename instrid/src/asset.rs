@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 /// Represents an asset (e.g., equity, commodity, currency, etc.).
 ///
 /// Asset - an entity that can be traded or cash settled.
@@ -19,6 +21,12 @@ impl Asset {
     }
 }
 
+impl Display for Asset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}){}", self.category, self.name)
+    }
+}
+
 /// Represents the class or type of an asset (e.g., equity, commodity, currency, etc.).
 #[derive(Debug, PartialEq, Eq)]
 pub enum AssetClass {
@@ -37,6 +45,20 @@ pub enum AssetClass {
     ///Market indices: S&P 500, NASDAQ Composite, VIX. Not directly tradeable,
     ///but derivatives reference them.
     Index,
+}
+
+impl Display for AssetClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            AssetClass::Equity => "Equity",
+            AssetClass::Commodity => "Commodity",
+            AssetClass::Currency => "Currency",
+            AssetClass::FixedIncome => "FixedIncome",
+            AssetClass::RealEstate => "RealEstate",
+            AssetClass::Index => "Index",
+        };
+        f.write_str(s)
+    }
 }
 
 #[cfg(test)]
