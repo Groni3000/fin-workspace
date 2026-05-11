@@ -6,3 +6,10 @@ description = "Financial instrument identification types"
 license = "Apache-2.0"
 
 [dependencies]
+
+[build-dependencies]
+csv = { version = "1" }
+
+[features]
+default = []
+mic-full = []

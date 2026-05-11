@@ -2,6 +2,6 @@
 [workspace]
 members = [
     "instrid",
-    "fin-futures",
+    # "fin-futures",
 ]
 resolver = "2"

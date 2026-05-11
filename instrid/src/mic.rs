@@ -315,10 +315,9 @@ impl Display for Date {
     }
 }
 
+include!(concat!(env!("OUT_DIR"), "/mic_generated.rs"));
+
 /// Hand-written constructors for commonly used MICs.
-///
-/// Until `build.rs` codegen from `assets/ISO10383_MIC.csv` lands, add entries
-/// here as needed.
 impl Mic {
     /// NASDAQ - ALL MARKETS (operating MIC).
     pub const fn xnas() -> Self {
@@ -341,5 +340,34 @@ impl Mic {
             None,
             None,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn xnas_lookup_returns_some() {
+        assert!(mic_by_code("XNAS").is_some());
+    }
+
+    #[test]
+    fn unknown_code_returns_none() {
+        assert!(mic_by_code("ZZZZ").is_none());
+    }
+
+    #[test]
+    fn wrong_length_returns_none() {
+        assert!(mic_by_code("XNA").is_none());
+        assert!(mic_by_code("XNASD").is_none());
+        assert!(mic_by_code("").is_none());
+    }
+
+    #[cfg(feature = "mic-full")]
+    #[test]
+    fn full_registry_includes_obscure_mic() {
+        // Present only in the full registry, not in the curated set.
+        assert!(mic_by_code("DRSP").is_some());
     }
 }
