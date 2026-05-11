@@ -14,21 +14,21 @@ pub struct Mic {
     /// Whether this entry is an operating MIC or a market segment MIC.
     mic_type: MicType,
     /// Full registered name of the market or venue.
-    market_name: String,
+    market_name: &'static str,
     /// Legal entity that operates the venue.
-    legal_entity_name: Option<String>,
+    legal_entity_name: Option<&'static str>,
     /// 20-character ISO 17442 Legal Entity Identifier of the operator.
     lei_code: Option<[u8; 20]>,
     /// Category of market (e.g. regulated market, MTF, OTF, SI).
     market_category_code: MarketCategoryCode,
     /// Common acronym for the venue, if any.
-    acronym: Option<String>,
+    acronym: Option<&'static str>,
     /// ISO 3166-1 alpha-2 country code of the venue's jurisdiction.
     iso_country_code: [u8; 2],
     /// City where the venue is located.
-    city: String,
+    city: &'static str,
     /// Public website URL of the venue.
-    website: Option<String>,
+    website: Option<&'static str>,
     /// Current registry status of the MIC.
     status: MicStatus,
     /// Date the MIC was created, as `YYYYMMDD`.
@@ -40,47 +40,47 @@ pub struct Mic {
     /// Date the MIC expired or will expire, as `YYYYMMDD`.
     expiry_date: Option<Date>,
     /// Free-form notes published with the registry entry.
-    comments: Option<String>,
+    comments: Option<&'static str>,
 }
 
 impl Mic {
-    pub fn new(
+    pub const fn new(
         code: [u8; 4],
         operating: [u8; 4],
-        market_name: &str,
+        market_name: &'static str,
         mic_type: MicType,
-        legal_entity_name: Option<&str>,
+        legal_entity_name: Option<&'static str>,
         lei_code: Option<[u8; 20]>,
         market_category_code: MarketCategoryCode,
-        acronym: Option<&str>,
+        acronym: Option<&'static str>,
         iso_country_code: [u8; 2],
-        city: &str,
-        website: Option<&str>,
+        city: &'static str,
+        website: Option<&'static str>,
         status: MicStatus,
         creation_date: Date,
         last_update_date: Date,
         last_validation_date: Option<Date>,
         expiry_date: Option<Date>,
-        comments: Option<&str>,
+        comments: Option<&'static str>,
     ) -> Self {
         Mic {
             code,
             operating,
             mic_type,
-            market_name: String::from(market_name),
-            legal_entity_name: legal_entity_name.map(String::from),
+            market_name,
+            legal_entity_name,
             lei_code,
             market_category_code,
-            acronym: acronym.map(String::from),
+            acronym,
             iso_country_code,
-            city: String::from(city),
-            website: website.map(String::from),
+            city,
+            website,
             status,
             creation_date,
             last_update_date,
             last_validation_date,
             expiry_date,
-            comments: comments.map(String::from),
+            comments,
         }
     }
 }
@@ -321,7 +321,7 @@ impl Display for Date {
 /// here as needed.
 impl Mic {
     /// NASDAQ - ALL MARKETS (operating MIC).
-    pub fn xnas() -> Self {
+    pub const fn xnas() -> Self {
         Mic::new(
             *b"XNAS",
             *b"XNAS",
