@@ -7,6 +7,7 @@ use crate::{
 };
 
 /// Represents a trading instrument.
+#[derive(Debug, PartialEq, Eq)]
 pub enum Instrument {
     Stock(Stock),
     Futures(FuturesContract),
