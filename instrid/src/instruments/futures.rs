@@ -6,7 +6,7 @@ use crate::mic::Mic;
 use crate::tenor::Tenor;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Futures {
+pub struct FuturesContract {
     base: Asset,
     quote: Asset,
     mic: Mic,
@@ -15,7 +15,7 @@ pub struct Futures {
     day: Option<u8>,
 }
 
-impl Futures {
+impl FuturesContract {
     pub const fn new(
         base: Asset,
         quote: Asset,
@@ -35,7 +35,7 @@ impl Futures {
     }
 }
 
-impl BaseInstrument for Futures {
+impl BaseInstrument for FuturesContract {
     fn base(&self) -> &Asset {
         &self.base
     }
@@ -49,7 +49,7 @@ impl BaseInstrument for Futures {
     }
 }
 
-impl Display for Futures {
+impl Display for FuturesContract {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -77,7 +77,7 @@ mod tests {
 
     #[test]
     fn display_without_day() {
-        let f = Futures::new(
+        let f = FuturesContract::new(
             Asset::new("CL", AssetClass::Commodity),
             Asset::new("USD", AssetClass::Currency),
             Mic::xnas(),
@@ -93,7 +93,7 @@ mod tests {
 
     #[test]
     fn display_with_day() {
-        let f = Futures::new(
+        let f = FuturesContract::new(
             Asset::new("CL", AssetClass::Commodity),
             Asset::new("USD", AssetClass::Currency),
             Mic::xnas(),

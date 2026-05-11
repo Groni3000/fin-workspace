@@ -1,8 +1,13 @@
-use crate::{asset::Asset, instruments::stock::Stock, mic::Mic};
+use crate::{
+    asset::Asset,
+    instruments::{futures::FuturesContract, stock::Stock},
+    mic::Mic,
+};
 
 /// Represents a trading instrument.
 pub enum Instrument {
     Stock(Stock),
+    Futures(FuturesContract),
 }
 
 /// Trait that shows that an `Instrument` is uniquely identified in the most general way.
@@ -24,18 +29,21 @@ impl BaseInstrument for Instrument {
     fn base(&self) -> &Asset {
         match self {
             Instrument::Stock(stock) => stock.base(),
+            Instrument::Futures(futures) => futures.base(),
         }
     }
 
     fn quote(&self) -> &Asset {
         match self {
             Instrument::Stock(stock) => stock.quote(),
+            Instrument::Futures(futures) => futures.quote(),
         }
     }
 
     fn mic(&self) -> &Mic {
         match self {
             Instrument::Stock(stock) => stock.mic(),
+            Instrument::Futures(futures) => futures.mic(),
         }
     }
 }
