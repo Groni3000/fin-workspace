@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     asset::Asset,
     instruments::{futures::FuturesContract, stock::Stock},
@@ -16,7 +18,7 @@ pub enum Instrument {
 ///     - We buy `base` asset
 ///     - Using `quote` asset
 ///     - On `mic` venue
-pub trait BaseInstrument {
+pub trait TradedInstrument {
     /// Returns a reference to the base asset of this instrument.
     fn base(&self) -> &Asset;
     /// Returns a reference to the quote asset of this instrument.
@@ -25,7 +27,7 @@ pub trait BaseInstrument {
     fn mic(&self) -> &Mic;
 }
 
-impl BaseInstrument for Instrument {
+impl TradedInstrument for Instrument {
     fn base(&self) -> &Asset {
         match self {
             Instrument::Stock(stock) => stock.base(),
@@ -44,6 +46,15 @@ impl BaseInstrument for Instrument {
         match self {
             Instrument::Stock(stock) => stock.mic(),
             Instrument::Futures(futures) => futures.mic(),
+        }
+    }
+}
+
+impl Display for Instrument {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Instrument::Stock(s) => s.fmt(f),
+            Instrument::Futures(fu) => fu.fmt(f),
         }
     }
 }

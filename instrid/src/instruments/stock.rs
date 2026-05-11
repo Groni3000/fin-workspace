@@ -1,5 +1,5 @@
 use crate::asset::Asset;
-use crate::instrument::BaseInstrument;
+use crate::instrument::TradedInstrument;
 use crate::mic::Mic;
 use std::fmt::Display;
 
@@ -16,7 +16,7 @@ impl Stock {
     }
 }
 
-impl BaseInstrument for Stock {
+impl TradedInstrument for Stock {
     fn base(&self) -> &Asset {
         &self.base
     }

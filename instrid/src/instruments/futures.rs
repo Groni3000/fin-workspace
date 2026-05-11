@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::asset::Asset;
-use crate::instrument::BaseInstrument;
+use crate::instrument::TradedInstrument;
 use crate::mic::Mic;
 use crate::tenor::Tenor;
 
@@ -35,7 +35,7 @@ impl FuturesContract {
     }
 }
 
-impl BaseInstrument for FuturesContract {
+impl TradedInstrument for FuturesContract {
     fn base(&self) -> &Asset {
         &self.base
     }
