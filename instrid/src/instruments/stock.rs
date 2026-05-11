@@ -1,8 +1,7 @@
-use std::fmt::Display;
-
 use crate::asset::Asset;
 use crate::instrument::BaseInstrument;
 use crate::mic::Mic;
+use std::fmt::Display;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Stock {
