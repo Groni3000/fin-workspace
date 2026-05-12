@@ -6,6 +6,10 @@ description = "Financial instrument identification types"
 license = "Apache-2.0"
 
 [dependencies]
+rust_decimal = "1.42.0"
+
+[dev-dependencies]
+rust_decimal_macros = "1.40.0"
 
 [build-dependencies]
 csv = { version = "1" }

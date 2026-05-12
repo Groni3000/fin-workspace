@@ -3,9 +3,11 @@ use std::fmt::Display;
 use crate::{asset::Asset, mic::Mic};
 
 pub mod futures;
+pub mod options;
 pub mod stock;
 
 pub use futures::FuturesContract;
+pub use options::{ExerciseStyle, OptionContract, OptionKind};
 pub use stock::Stock;
 
 /// Represents a trading instrument.
@@ -13,6 +15,7 @@ pub use stock::Stock;
 pub enum Instrument {
     Stock(Stock),
     Futures(FuturesContract),
+    Option(OptionContract),
 }
 
 /// Trait that shows that an `Instrument` is uniquely identified in the most general way.
@@ -35,6 +38,7 @@ impl TradedInstrument for Instrument {
         match self {
             Instrument::Stock(stock) => stock.base(),
             Instrument::Futures(futures) => futures.base(),
+            Instrument::Option(option) => option.base(),
         }
     }
 
@@ -42,6 +46,7 @@ impl TradedInstrument for Instrument {
         match self {
             Instrument::Stock(stock) => stock.quote(),
             Instrument::Futures(futures) => futures.quote(),
+            Instrument::Option(option) => option.quote(),
         }
     }
 
@@ -49,6 +54,7 @@ impl TradedInstrument for Instrument {
         match self {
             Instrument::Stock(stock) => stock.mic(),
             Instrument::Futures(futures) => futures.mic(),
+            Instrument::Option(option) => option.mic(),
         }
     }
 }
@@ -58,6 +64,7 @@ impl Display for Instrument {
         match self {
             Instrument::Stock(s) => s.fmt(f),
             Instrument::Futures(fu) => fu.fmt(f),
+            Instrument::Option(option) => option.fmt(f),
         }
     }
 }
