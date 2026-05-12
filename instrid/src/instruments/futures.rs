@@ -53,6 +53,14 @@ impl FuturesContract {
     pub fn tenor(&self) -> Tenor {
         self.tenor
     }
+
+    pub fn year(&self) -> u16 {
+        self.year
+    }
+
+    pub fn day(&self) -> Option<u8> {
+        self.day
+    }
 }
 
 impl TradedInstrument for FuturesContract {

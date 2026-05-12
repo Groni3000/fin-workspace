@@ -34,6 +34,25 @@ pub enum ListedTenorsError {
 }
 
 impl ListedTenors {
+    /// Build a listing from a non-empty, duplicate-free set of tenors.
+    /// The input is sorted chronologically.
+    ///
+    /// ```
+    /// use futchain::ListedTenors;
+    /// use instrid::prelude::Tenor;
+    ///
+    /// // Quarterly cycle, given in arbitrary order — stored sorted.
+    /// let quarterly = ListedTenors::new(vec![
+    ///     Tenor::December,
+    ///     Tenor::March,
+    ///     Tenor::September,
+    ///     Tenor::June,
+    /// ]).unwrap();
+    ///
+    /// assert_eq!(quarterly.first(), Tenor::March);
+    /// assert_eq!(quarterly.last(), Tenor::December);
+    /// assert_eq!(quarterly.len(), 4);
+    /// ```
     pub fn new(tenors: Vec<Tenor>) -> Result<Self, ListedTenorsError> {
         // Not empty
         if tenors.is_empty() {
@@ -72,6 +91,26 @@ impl ListedTenors {
     pub fn find(&self, tenor: &Tenor) -> Option<usize> {
         self.buffer.iter().position(|t| t == tenor)
     }
+
+    pub fn len(&self) -> usize {
+        self.buffer.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.buffer.is_empty()
+    }
+
+    pub fn first(&self) -> Tenor {
+        self.buffer[0]
+    }
+
+    pub fn last(&self) -> Tenor {
+        self.buffer[self.buffer.len() - 1]
+    }
+
+    pub fn nth(&self, i: usize) -> Option<Tenor> {
+        self.buffer.get(i).copied()
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -100,5 +139,31 @@ impl<'a> FutChain<'a> {
 
     pub fn listed_tenors(&self) -> &ListedTenors {
         self.listing
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_rejects_empty() {
+        assert!(matches!(
+            ListedTenors::new(vec![]),
+            Err(ListedTenorsError::Empty),
+        ));
+    }
+
+    #[test]
+    fn new_rejects_duplicates() {
+        let err = ListedTenors::new(vec![Tenor::March, Tenor::March, Tenor::June])
+            .expect_err("duplicates should be rejected");
+        match err {
+            ListedTenorsError::Duplicate(dups) => {
+                assert_eq!(dups.get(&Tenor::March), Some(&2));
+                assert!(!dups.contains_key(&Tenor::June));
+            }
+            other => panic!("expected Duplicate, got {other:?}"),
+        }
     }
 }
