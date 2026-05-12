@@ -46,9 +46,25 @@ let cl_dec25 = FuturesContract::new(
     None,                          // unknown/unspecified day-of-month
 );
 
+let aapl_call = OptionContract::new(
+    Asset::new("AAPL", AssetClass::Equity),
+    Asset::new("USD", AssetClass::Currency),
+    Mic::xnas(),
+    2025, Tenor::December, 19,     // exact expiry (required for options)
+    OptionKind::Call,
+    ExerciseStyle::American,
+    dec!(200.00),
+);
+
 println!("{spy}");                 // Stock:(Equity)SPY/(Currency)USD@ARCX
 println!("{cl_dec25}");            // Futures:(Commodity)CL/(Currency)USD@XNYM 2025-12
+println!("{aapl_call}");           // Option:(Equity)AAPL/(Currency)USD@XNAS 2025-12-19 American::Call#200
 ```
+
+`OptionContract` uses [`rust_decimal::Decimal`] for the strike to avoid
+floating-point precision issues. Unlike `FuturesContract`, the expiry day is
+**required**: weeklies, EOM, and 0DTE options can share a `(year, month)`
+with different strikes/kinds at different dates, so the day is part of identity.
 
 ## MICs
 
@@ -93,7 +109,9 @@ This trades ~2s of compile time for venue coverage you can't get otherwise.
 | `AssetClass` | Equity, Commodity, Currency, FixedIncome, RealEstate, Index |
 | `Mic` | ISO 10383 venue identifier + registry metadata |
 | `Tenor` | Calendar month (Jan–Dec) for contract expiries |
-| `Stock`, `FuturesContract` | Concrete `TradedInstrument` implementors |
+| `Stock`, `FuturesContract`, `OptionContract` | Concrete `TradedInstrument` implementors |
+| `OptionKind` | `Call` / `Put` |
+| `ExerciseStyle` | `European` / `American` / `Bermudan` |
 | `Instrument` | Enum over the concrete kinds, also implements `TradedInstrument` |
 | `TradedInstrument` | Trait: `base() -> &Asset`, `quote() -> &Asset`, `mic() -> &Mic` |
 
