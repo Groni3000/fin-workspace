@@ -317,32 +317,6 @@ impl Display for Date {
 
 include!(concat!(env!("OUT_DIR"), "/mic_generated.rs"));
 
-/// Hand-written constructors for commonly used MICs.
-impl Mic {
-    /// NASDAQ - ALL MARKETS (operating MIC).
-    pub const fn xnas() -> Self {
-        Mic::new(
-            *b"XNAS",
-            *b"XNAS",
-            "NASDAQ - ALL MARKETS",
-            MicType::Operating,
-            Some("NASDAQ, INC."),
-            Some(*b"549300L8X1Q78ERXFD06"),
-            MarketCategoryCode::Rmkt,
-            Some("NASDAQ"),
-            *b"US",
-            "NEW YORK",
-            Some("WWW.NASDAQ.COM"),
-            MicStatus::Updated,
-            Date::new(2005, 6, 27),
-            Date::new(2026, 4, 27),
-            Some(Date::new(2026, 4, 27)),
-            None,
-            None,
-        )
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

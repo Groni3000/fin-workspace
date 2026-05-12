@@ -25,6 +25,7 @@ fn main() {
         .expect("build.rs: failed to read ISO10383_MIC.csv");
 
     let mut arms = String::new();
+    let mut ctors = String::new();
     let mut count = 0usize;
 
     for record in reader.records() {
@@ -35,12 +36,26 @@ fn main() {
             continue;
         }
         let code_bytes: [u8; 4] = code.as_bytes().try_into().unwrap();
+        let is_curated = CURATED.iter().any(|c| **c == code_bytes);
 
-        if !full && !CURATED.iter().any(|c| **c == code_bytes) {
+        if !full && !is_curated {
             continue;
         }
 
-        write_arm(&mut arms, &row, &code_bytes);
+        let expr = mic_expr(&row, &code_bytes);
+
+        writeln!(arms, "        \"{code}\" => Some({expr}),").unwrap();
+
+        if is_curated {
+            let fn_name = code.to_ascii_lowercase();
+            let market_name = field(&row, 3);
+            writeln!(
+                ctors,
+                "    /// {market_name} (`{code}`).\n    pub const fn {fn_name}() -> Self {{ {expr} }}",
+            )
+            .unwrap();
+        }
+
         count += 1;
     }
 
@@ -59,6 +74,10 @@ pub fn mic_by_code(code: &str) -> Option<Mic> {{
 {arms}        _ => None,
     }}
 }}
+
+/// Curated MIC constructors. Always compiled in regardless of features.
+impl Mic {{
+{ctors}}}
 "#,
         csv = CSV_PATH,
     );
@@ -72,64 +91,31 @@ fn field<'a>(row: &'a csv::StringRecord, idx: usize) -> &'a str {
     row.get(idx).unwrap_or("").trim()
 }
 
-fn write_arm(out: &mut String, row: &csv::StringRecord, code: &[u8; 4]) {
-    let operating = field(row, 1);
-    let mic_type = field(row, 2);
-    let market_name = field(row, 3);
-    let legal_entity = field(row, 4);
-    let lei = field(row, 5);
-    let category = field(row, 6);
-    let acronym = field(row, 7);
-    let country = field(row, 8);
-    let city = field(row, 9);
-    let website = field(row, 10);
-    let status = field(row, 11);
-    let creation = field(row, 12);
-    let last_update = field(row, 13);
-    let last_validation = field(row, 14);
-    let expiry = field(row, 15);
-    let comments = field(row, 16);
-
-    writeln!(
-        out,
-        "        \"{code}\" => Some(Mic::new(\
-            *b\"{code}\", \
-            {operating}, \
-            {market_name}, \
-            {mic_type}, \
-            {legal_entity}, \
-            {lei}, \
-            {category}, \
-            {acronym}, \
-            {country}, \
-            {city}, \
-            {website}, \
-            {status}, \
-            {creation}, \
-            {last_update}, \
-            {last_validation}, \
-            {expiry}, \
-            {comments}\
-        )),",
-        code = std::str::from_utf8(code).unwrap(),
-        operating = code4_lit(operating),
-        market_name = str_lit(market_name),
-        mic_type = mic_type_lit(mic_type),
-        legal_entity = opt_str_lit(legal_entity),
-        lei = opt_lei_lit(lei),
-        category = category_lit(category),
-        acronym = opt_str_lit(acronym),
-        country = code2_lit(country),
-        city = str_lit(city),
-        website = opt_str_lit(website),
-        status = status_lit(status),
-        creation = date_lit(creation).expect("missing creation date"),
-        last_update = date_lit(last_update).expect("missing last_update date"),
-        last_validation = opt_date_lit(last_validation),
-        expiry = opt_date_lit(expiry),
-        comments = opt_str_lit(comments),
+fn mic_expr(row: &csv::StringRecord, code: &[u8; 4]) -> String {
+    let code_str = std::str::from_utf8(code).unwrap();
+    format!(
+        "Mic::new(*b\"{code}\", {operating}, {market_name}, {mic_type}, \
+         {legal_entity}, {lei}, {category}, {acronym}, {country}, {city}, \
+         {website}, {status}, {creation}, {last_update}, {last_validation}, \
+         {expiry}, {comments})",
+        code = code_str,
+        operating = code4_lit(field(row, 1)),
+        mic_type = mic_type_lit(field(row, 2)),
+        market_name = str_lit(field(row, 3)),
+        legal_entity = opt_str_lit(field(row, 4)),
+        lei = opt_lei_lit(field(row, 5)),
+        category = category_lit(field(row, 6)),
+        acronym = opt_str_lit(field(row, 7)),
+        country = code2_lit(field(row, 8)),
+        city = str_lit(field(row, 9)),
+        website = opt_str_lit(field(row, 10)),
+        status = status_lit(field(row, 11)),
+        creation = date_lit(field(row, 12)).expect("missing creation date"),
+        last_update = date_lit(field(row, 13)).expect("missing last_update date"),
+        last_validation = opt_date_lit(field(row, 14)),
+        expiry = opt_date_lit(field(row, 15)),
+        comments = opt_str_lit(field(row, 16)),
     )
-    .unwrap();
 }
 
 fn str_lit(s: &str) -> String {
