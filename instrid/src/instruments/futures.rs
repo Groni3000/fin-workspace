@@ -5,7 +5,7 @@ use crate::instruments::TradedInstrument;
 use crate::mic::Mic;
 use crate::tenor::Tenor;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct FuturesContract {
     base: Asset,
     quote: Asset,
@@ -32,6 +32,26 @@ impl FuturesContract {
             tenor,
             day,
         }
+    }
+
+    pub fn with_year(self, year: u16) -> Self {
+        Self { year, ..self }
+    }
+
+    pub fn with_tenor(self, tenor: Tenor) -> Self {
+        Self { tenor, ..self }
+    }
+
+    pub fn with_year_tenor(self, year: u16, tenor: Tenor) -> Self {
+        Self {
+            year,
+            tenor,
+            ..self
+        }
+    }
+
+    pub fn tenor(&self) -> Tenor {
+        self.tenor
     }
 }
 

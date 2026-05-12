@@ -5,7 +5,7 @@ use std::{fmt::Display, str::FromStr};
 /// Identifies a securities trading exchange, regulated market, or
 /// other trading venue, along with descriptive metadata published
 /// in the ISO MIC registry.
-#[derive(Debug, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Mic {
     /// Four-character MIC assigned to the venue (e.g. `XNAS`).
     code: [u8; 4],
@@ -96,7 +96,7 @@ impl Display for Mic {
 }
 
 /// Distinguishes top-level operating MICs from their market segments.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MicType {
     /// Operating MIC: identifies the venue itself.
     Operating,
@@ -126,7 +126,7 @@ impl FromStr for MicType {
 }
 
 /// Lifecycle status of a MIC entry in the ISO registry.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MicStatus {
     /// Currently in use.
     Active,
@@ -166,7 +166,7 @@ impl FromStr for MicStatus {
 /// The `Unknown` variant carries any 4-character code not recognised by this
 /// enum, so registry entries with newly-introduced categories can still be
 /// represented round-trip.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MarketCategoryCode {
     /// `APPA` — Approved Publication Arrangement (MiFID II trade publication).
     Appa,

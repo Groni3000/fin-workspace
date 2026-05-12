@@ -9,7 +9,7 @@ use std::fmt::Display;
 ///     - USD, Currency
 ///     - BTC, Currency
 ///     - S&P 500, Index (cash settled)
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Asset {
     name: &'static str,
     category: AssetClass,
@@ -28,7 +28,7 @@ impl Display for Asset {
 }
 
 /// Represents the class or type of an asset (e.g., equity, commodity, currency, etc.).
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AssetClass {
     /// Shares, ETFs, REITs - ownership stakes in companies or funds.
     Equity,
