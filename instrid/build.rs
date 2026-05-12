@@ -49,9 +49,16 @@ fn main() {
         if is_curated {
             let fn_name = code.to_ascii_lowercase();
             let market_name = field(&row, 3);
+            let mic_type = field(&row, 2);
+            let operating = field(&row, 1);
+            let kind = match mic_type {
+                "OPRT" => "operating".to_string(),
+                "SGMT" => format!("segment of `{operating}`"),
+                other => panic!("unknown MIC type: {other:?}"),
+            };
             writeln!(
                 ctors,
-                "    /// {market_name} (`{code}`).\n    pub const fn {fn_name}() -> Self {{ {expr} }}",
+                "    /// {market_name} (`{code}`, {kind}).\n    pub const fn {fn_name}() -> Self {{ {expr} }}",
             )
             .unwrap();
         }
