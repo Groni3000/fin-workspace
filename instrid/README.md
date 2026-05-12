@@ -1,141 +1,164 @@
 # instrid
 
-Financial instrument identification types for Rust.
+Strongly-typed financial-instrument identification for Rust.
 
-## Why
+## What it solves
 
-Every trading system needs to answer a basic question: **what are we trading?**
-Before you can price, route, or backtest anything, you need a way to name
-instruments that is compact, unambiguous, and cheap to pass around.
+Every trading system has to answer "what are we trading?" before it can price,
+route, risk-check, report, or backtest anything. The answer comes at two
+granularities, and most type systems blur them into one:
 
-`instrid` provides exactly that — small, stack-allocated value types that
-identify financial instruments. No heap allocations, no runtime overhead,
-no dependencies. Just plain data that tells you what something *is*, not
-what to *do* with it.
+- **Entity-level identity** — "this is AAPL, an equity". Useful for grouping
+  exposure across venues, computing P&L by ticker, or building reference data
+  keyed by issuer.
+- **Venue-level identity** — "this is AAPL on NASDAQ Global Select (`XNGS`)".
+  Required for execution, market-data subscriptions, regulatory reporting,
+  and disambiguating dual-listed names.
 
-## Design principles
+`instrid` keeps both visible in the type system:
 
-**Identification, not behavior.** These types carry identity — base asset,
-exchange, contract month — but no market data, no pricing logic, no connection
-state. A `Future` knows it's `CL/USD@NYMEX#2025-JUN`, but it doesn't know the
-current price or how to place an order. Business logic belongs in downstream
-crates (like `fin-futures`).
+- [`Asset`] carries the entity (`name + AssetClass`).
+- [`TradedInstrument`] carries the venue-level identity: `(base: Asset, quote:
+  Asset, mic: Mic)` plus the contract kind (stock, futures, …). Two trades on
+  the same `TradedInstrument` are arbitrage-free against each other; two trades
+  sharing only an `Asset` may not be.
 
-**Value semantics everywhere.** All types are `Copy + Clone`. They live on the
-stack, fit in registers, and can be passed by value without worrying about
-ownership. An `Asset` is 9 bytes. An `Instrument` is 27 bytes. You can embed
-them in structs, use them as map keys, or store millions of them in a `Vec`
-without a single allocation per item.
+That's the whole product. No prices, no orders, no connection state. Just
+identity, with enough structure to compose into bigger things.
 
-**Parse what you display.** Every type round-trips through `Display` and
-`FromStr`. If you can print it, you can parse it back. This makes logging,
-serialization, and debugging straightforward — the string representation *is*
-the canonical format.
+## Quick start
+
+```rust
+use instrid::prelude::*;
+
+let spy = Stock::new(
+    Asset::new("SPY", AssetClass::Equity),
+    Asset::new("USD", AssetClass::Currency),
+    Mic::arcx(),                   // NYSE Arca — where SPY actually lists
+);
+
+let cl_dec25 = FuturesContract::new(
+    Asset::new("CL", AssetClass::Commodity),
+    Asset::new("USD", AssetClass::Currency),
+    Mic::xnym(),                   // NYMEX
+    2025,
+    Tenor::December,
+    None,                          // unknown/unspecified day-of-month
+);
+
+println!("{spy}");                 // Stock:(Equity)SPY/(Currency)USD@ARCX
+println!("{cl_dec25}");            // Futures:(Commodity)CL/(Currency)USD@XNYM 2025-12
+```
+
+## MICs
+
+The ISO 10383 Market Identifier Code registry (~2800 venues) is parsed at
+build time via `build.rs`. Two access patterns are exposed:
+
+**Common MICs as named constructors** — always compiled in (~30 entries),
+discoverable via LSP autocomplete, doc-strings include the venue's full name
+and whether it's an operating or segment MIC:
+
+```rust
+let nasdaq: Mic  = Mic::xnas();   // operating MIC
+let bats:   Mic  = Mic::bats();   // segment of XCBO
+```
+
+**Lookup by string** — for codes you only have at runtime (parsing a trade feed,
+a config file, a FIX message):
+
+```rust
+use instrid::mic::mic_by_code;
+
+assert!(mic_by_code("XNAS").is_some());
+assert!(mic_by_code("ZZZZ").is_none());      // unknown
+assert!(mic_by_code("XNA").is_none());       // wrong length
+```
+
+By default `mic_by_code` covers only the curated ~30. Enable the `mic-full`
+feature to include the full registry:
+
+```toml
+[dependencies]
+instrid = { version = "*", features = ["mic-full"] }
+```
+
+This trades ~2s of compile time for venue coverage you can't get otherwise.
 
 ## Types
 
-### Primitives
+| Type | What it represents |
+|---|---|
+| `Asset` | Tradable or settle-able entity: `(name, AssetClass)` |
+| `AssetClass` | Equity, Commodity, Currency, FixedIncome, RealEstate, Index |
+| `Mic` | ISO 10383 venue identifier + registry metadata |
+| `Tenor` | Calendar month (Jan–Dec) for contract expiries |
+| `Stock`, `FuturesContract` | Concrete `TradedInstrument` implementors |
+| `Instrument` | Enum over the concrete kinds, also implements `TradedInstrument` |
+| `TradedInstrument` | Trait: `base() -> &Asset`, `quote() -> &Asset`, `mic() -> &Mic` |
 
-`Asset` and `Exchange` store 1-8 uppercase ASCII characters in a fixed `[u8; 8]`
-buffer. No heap `String`, no lifetimes.
+Every type has a `Display` impl. `Mic`, `MicType`, `MicStatus`,
+`MarketCategoryCode`, `Date`, and `Tenor` also implement `FromStr` so registry
+data round-trips through strings.
 
-```rust
-use instrid::asset::Asset;
-use instrid::exchange::Exchange;
+## Use cases
 
-// Compile-time constants
-const BTC: Asset = Asset::BTC;
-const CME: Exchange = Exchange::CME;
+**Grouping fills.** `HashMap<Asset, Position>` aggregates exposure across
+venues; `HashMap<Mic, ...>` slices by venue; `HashMap<Instrument, ...>` keeps
+both. Pick the granularity the question demands.
 
-// Runtime parsing
-let eth: Asset = "ETH".parse().unwrap();
-```
-
-Built-in constants: `Asset::{BTC, ETH, USD, EUR, GBP, JPY, USDT}`,
-`Exchange::{CME, CBOT, NYMEX, NASDAQ, NYSE, BINANCE}`.
-
-### Tenor
-
-An enum representing contract months (January through December). Ordinal values
-1-12, with `Ord` derived so months sort in calendar order.
-
-```rust
-use instrid::tenor::Tenor;
-
-let month = Tenor::March;
-assert_eq!(month.ordinal(), 3);
-assert_eq!(month.max_days(), 31);
-assert_eq!(format!("{month}"), "MAR");
-```
-
-### Instrument
-
-The fundamental building block — a `(base, quote, exchange)` triple.
-All composite types embed this.
+**Composing FIX / venue-specific symbols in a downstream crate.** Each venue
+has its own quirks for the `Symbol(55)` tag. Exante uses
+`EQ.SPY.ARCX` — Asset class + ticker + MIC, which is exactly the data
+`instrid` already encodes. A small adapter crate translates:
 
 ```rust
-use instrid::instrument::Instrument;
-
-let inst: Instrument = "BTC/USDT@BINANCE".parse().unwrap();
-assert_eq!(format!("{inst}"), "BTC/USDT@BINANCE");
+// pseudocode, in a separate `instrid-adapters` crate
+fn exante_symbol(s: &Stock) -> String {
+    format!("{}.{}.{}",
+        asset_class_prefix(s.base().category()),   // "EQ"
+        s.base().name(),                            // "SPY"
+        s.mic())                                    // "ARCX"
+}
 ```
 
-### Stock
+Other venues need different shapes; each adapter is a thin function over the
+same `instrid` types.
 
-A thin wrapper around `Instrument`. Exists so your type system distinguishes
-a stock from a raw instrument when it matters.
+**Listed-tenor generators (future work in a separate crate).** Most venues
+publish only a subset of calendar months for any given product (e.g. CL trades
+all 12, ES trades the four quarterly cycle months plus serials). A separate
+crate could carry a `ListedTenors` table per product and generate the next
+`FuturesContract` from "current date" without `instrid` itself having to know
+about it. `instrid` provides the building blocks; iteration logic lives where
+the venue-specific data does.
 
-### Future
+**Backtests.** A backtester typically holds `Vec<(Timestamp, Instrument,
+Side, Qty, Price)>`. `Instrument` here is the venue-precise identity; the
+`Asset`-level group-by happens at the analysis layer. Because `instrid`'s
+types are plain data (no allocations beyond the `Mic` metadata strings,
+which are `&'static str`), millions of records fit cheaply.
 
-An instrument with a contract date (year, month, optional day) and optional
-multiplier:
+## Limitation: you bring the data
 
-```rust
-use instrid::future::Future;
+`instrid` has the *types* but no reference-data catalogue. To call
+`Stock::new(Asset::new("SPY", AssetClass::Equity), ..., Mic::arcx())`, you
+have to *know* that SPY is an equity and lists on NYSE Arca. There is no
+`Stock::from_ticker("SPY")` and there won't be — that's a reference-data
+problem, solved by Bloomberg/Refinitiv/OpenFIGI feeds or by your own internal
+DB, neither of which belongs in a types crate.
 
-let cl: Future = "CL/USD@NYMEX#2025-JUN".parse().unwrap();
-let es: Future = "ES/USD@CME#2025-SEP-15*50".parse().unwrap();
+The practical pattern: bootstrap an internal DB the first time you encounter
+each instrument, persisted somehow (sqlite, CSV, whatever fits). The
+`Display` output is a reasonable serialization key — it's stable and unique
+per `TradedInstrument` — but `instrid` doesn't yet provide `FromStr` for the
+composite instrument types, so today you'd need to define your own
+(de)serialization. That's likely to land as the project matures.
 
-// Futures are ordered by expiration date
-assert!(cl < es);
-```
+## Why not just use strings?
 
-Format: `BASE/QUOTE@EXCHANGE#YYYY-MMM[-DD][*MULT]`
-
-### OptionContract
-
-A future extended with option type (call/put) and strike price:
-
-```rust
-use instrid::option_contract::OptionContract;
-
-let opt: OptionContract = "ES/USD@CME#2025-SEP:CALL$4500".parse().unwrap();
-```
-
-Format: `BASE/QUOTE@EXCHANGE#YYYY-MMM[-DD][*MULT]:CALL|PUT$STRIKE`
-
-Named `OptionContract` (not `Option`) to avoid collision with `std::option::Option`.
-
-### TradeInstrument trait
-
-All instrument types implement `TradeInstrument`, providing uniform access
-to `base()`, `quote()`, and `exchange()`. Use it when you need to write code
-that works across instrument types.
-
-## Eq, Hash, and Ord
-
-| Type | `Eq + Hash` | `Ord` | Why |
-|------|:-----------:|:-----:|-----|
-| `Asset`, `Exchange`, `Tenor` | Yes | Yes | Pure integer/enum data |
-| `Instrument`, `Stock` | Yes | - | Composed of `Eq` types |
-| `Future`, `OptionContract` | No | No | Contain `f64` (multiplier, strike) |
-
-`Future` and `OptionContract` implement `PartialEq` and `PartialOrd` (by
-expiration date). They cannot implement `Eq`/`Hash` because `f64` does not.
-
-## Validation
-
-- **Multiplier** must be positive and finite
-- **Strike** must be non-negative and finite
-- **Day** is validated against the month (e.g., Feb maxes at 29, Apr at 30)
-- **Asset/Exchange** codes must be 1-8 uppercase ASCII characters
+Because then every consumer reinvents parsing, every comparison is
+string-equality with all the edge cases that implies, and every grouping
+question (by ticker? by venue? by both?) requires regex. `instrid` makes
+the layers structural so the type system enforces the distinction the
+business actually cares about.
