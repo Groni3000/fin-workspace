@@ -76,6 +76,16 @@ fn main() {
 ///
 /// Returns `None` for any code that isn't an exact 4-character match
 /// against a known MIC.
+///
+/// # Examples
+///
+/// ```
+/// use instrid::mic::mic_by_code;
+///
+/// assert!(mic_by_code("XNAS").is_some());
+/// assert!(mic_by_code("ZZZZ").is_none());
+/// assert!(mic_by_code("XNA").is_none());   // wrong length
+/// ```
 pub fn mic_by_code(code: &str) -> Option<Mic> {{
     match code {{
 {arms}        _ => None,
