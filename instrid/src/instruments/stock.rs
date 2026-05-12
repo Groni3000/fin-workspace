@@ -1,5 +1,5 @@
 use crate::asset::Asset;
-use crate::instrument::TradedInstrument;
+use crate::instruments::TradedInstrument;
 use crate::mic::Mic;
 use std::fmt::Display;
 
