@@ -394,6 +394,26 @@ mod tests {
     }
 
     #[test]
+    fn advance_by_listing_len_adds_one_year() {
+        let listing = quarterly();
+        let start = es(2026, Tenor::June, None);
+        let mut chain = FutChain::new(start, &listing).unwrap();
+        chain.advance_by(listing.len());
+        assert_eq!(chain.contract().tenor(), start.tenor());
+        assert_eq!(chain.contract().year(), start.year() + 1);
+    }
+
+    #[test]
+    fn retreat_by_listing_len_subtracts_one_year() {
+        let listing = quarterly();
+        let start = es(2026, Tenor::June, None);
+        let mut chain = FutChain::new(start, &listing).unwrap();
+        chain.retreat_by(listing.len());
+        assert_eq!(chain.contract().tenor(), start.tenor());
+        assert_eq!(chain.contract().year(), start.year() - 1);
+    }
+
+    #[test]
     fn advance_by_matches_repeated_advance() {
         let listing = quarterly();
         let start = es(2026, Tenor::September, None);
