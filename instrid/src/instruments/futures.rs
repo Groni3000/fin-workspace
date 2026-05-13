@@ -35,17 +35,26 @@ impl FuturesContract {
     }
 
     pub fn with_year(self, year: u16) -> Self {
-        Self { year, ..self }
+        Self {
+            year,
+            day: None,
+            ..self
+        }
     }
 
     pub fn with_tenor(self, tenor: Tenor) -> Self {
-        Self { tenor, ..self }
+        Self {
+            tenor,
+            day: None,
+            ..self
+        }
     }
 
     pub fn with_year_tenor(self, year: u16, tenor: Tenor) -> Self {
         Self {
             year,
             tenor,
+            day: None,
             ..self
         }
     }
