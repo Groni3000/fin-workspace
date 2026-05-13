@@ -180,3 +180,8 @@ string-equality with all the edge cases that implies, and every grouping
 question (by ticker? by venue? by both?) requires regex. `instrid` makes
 the layers structural so the type system enforces the distinction the
 business actually cares about.
+
+## License
+
+Licensed under either of MIT ([LICENSE-MIT](../LICENSE-MIT)) or Apache-2.0
+([LICENSE-APACHE](../LICENSE-APACHE)) at your option.
