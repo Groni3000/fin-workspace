@@ -161,6 +161,19 @@ impl<'a> FutChain<'a> {
         );
     }
 
+    /// Advance the cursor `n` times. `n == 0` is a no-op.
+    ///
+    /// Implemented as a simple loop over [`advance`](Self::advance). For typical
+    /// `n` (tens to hundreds, e.g. backtest windows) this is microseconds. If
+    /// profiling ever shows this in a hot loop, swap the body for one-shot
+    /// modular math — the API stays identical. Until then, we prefer reuse over
+    /// bloating already-busy code.
+    pub fn advance_by(&mut self, n: usize) {
+        for _ in 0..n {
+            self.advance();
+        }
+    }
+
     pub fn retreat(&mut self) {
         let listing = self.listing;
         let idx = listing
@@ -180,6 +193,18 @@ impl<'a> FutChain<'a> {
                 .expect("year underflow on retreat"),
             next_tenor,
         );
+    }
+
+    /// Retreat the cursor `n` times. `n == 0` is a no-op.
+    ///
+    /// Implemented as a simple loop over [`retreat`](Self::retreat). Same
+    /// trade-off as [`advance_by`](Self::advance_by) — if it ever shows up in a
+    /// hot loop we'll swap the body for one-shot modular math, but realistically
+    /// it won't, and reuse beats bloat in already-busy code.
+    pub fn retreat_by(&mut self, n: usize) {
+        for _ in 0..n {
+            self.retreat();
+        }
     }
 }
 
@@ -306,6 +331,79 @@ mod tests {
         let listing = quarterly();
         let mut chain = FutChain::new(es(0, Tenor::March, None), &listing).unwrap();
         chain.retreat(); // March year 0 -> December year -1 → underflow
+    }
+
+    #[test]
+    fn advance_by_zero_is_noop() {
+        let listing = quarterly();
+        let start = es(2026, Tenor::June, None);
+        let mut chain = FutChain::new(start, &listing).unwrap();
+        chain.advance_by(0);
+        assert_eq!(chain.contract(), &start);
+    }
+
+    #[test]
+    fn advance_by_steps_through_year_boundary() {
+        let listing = quarterly();
+        // Start at Mar 2026, take 5 steps: Jun, Sep, Dec, Mar+1, Jun+1.
+        let mut chain = FutChain::new(es(2026, Tenor::March, None), &listing).unwrap();
+        chain.advance_by(5);
+        assert_eq!(chain.contract().tenor(), Tenor::June);
+        assert_eq!(chain.contract().year(), 2027);
+    }
+
+    #[test]
+    fn retreat_by_zero_is_noop() {
+        let listing = quarterly();
+        let start = es(2026, Tenor::June, None);
+        let mut chain = FutChain::new(start, &listing).unwrap();
+        chain.retreat_by(0);
+        assert_eq!(chain.contract(), &start);
+    }
+
+    #[test]
+    fn retreat_by_steps_through_year_boundary() {
+        let listing = quarterly();
+        // Start at Jun 2026, take 5 steps back: Mar, Dec-1, Sep-1, Jun-1, Mar-1.
+        let mut chain = FutChain::new(es(2026, Tenor::June, None), &listing).unwrap();
+        chain.retreat_by(5);
+        assert_eq!(chain.contract().tenor(), Tenor::March);
+        assert_eq!(chain.contract().year(), 2025);
+    }
+
+    #[test]
+    fn advance_by_wraps_multiple_years() {
+        let listing = quarterly();
+        // Mar 2026 + 9 steps = 9/4 = 2 full years, 9%4 = 1 → Jun 2028.
+        let mut chain = FutChain::new(es(2026, Tenor::March, None), &listing).unwrap();
+        chain.advance_by(9);
+        assert_eq!(chain.contract().tenor(), Tenor::June);
+        assert_eq!(chain.contract().year(), 2028);
+    }
+
+    #[test]
+    fn retreat_by_wraps_multiple_years() {
+        let listing = quarterly();
+        // Jun 2026 - 9 steps. Each year is 4 steps. 9 = 4+4+1: back through
+        // Mar 2026, Dec 2025, Sep 2025, Jun 2025, Mar 2025, Dec 2024, Sep 2024,
+        // Jun 2024, Mar 2024 → land on Mar 2024.
+        let mut chain = FutChain::new(es(2026, Tenor::June, None), &listing).unwrap();
+        chain.retreat_by(9);
+        assert_eq!(chain.contract().tenor(), Tenor::March);
+        assert_eq!(chain.contract().year(), 2024);
+    }
+
+    #[test]
+    fn advance_by_matches_repeated_advance() {
+        let listing = quarterly();
+        let start = es(2026, Tenor::September, None);
+        let mut by = FutChain::new(start, &listing).unwrap();
+        let mut loop_ = FutChain::new(start, &listing).unwrap();
+        by.advance_by(7);
+        for _ in 0..7 {
+            loop_.advance();
+        }
+        assert_eq!(by.contract(), loop_.contract());
     }
 
     #[test]
