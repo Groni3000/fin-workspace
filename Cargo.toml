@@ -3,6 +3,5 @@
 members = ["futchain",
     "instrid",
     "futchain",
-    # "fin-futures",
 ]
 resolver = "2"
