@@ -78,6 +78,36 @@ impl ListedTenors {
         Ok(Self { buffer: tenors })
     }
 
+    /// Returns quarterly tenor listing.
+    pub fn quarterly() -> Self {
+        Self::new(vec![
+            Tenor::March,
+            Tenor::June,
+            Tenor::September,
+            Tenor::December,
+        ])
+        .unwrap()
+    }
+
+    /// Returns 12-monthly tenor listing.
+    pub fn monthly() -> Self {
+        Self::new(vec![
+            Tenor::January,
+            Tenor::February,
+            Tenor::March,
+            Tenor::April,
+            Tenor::May,
+            Tenor::June,
+            Tenor::July,
+            Tenor::August,
+            Tenor::September,
+            Tenor::October,
+            Tenor::November,
+            Tenor::December,
+        ])
+        .unwrap()
+    }
+
     pub fn contains(&self, tenor: Tenor) -> bool {
         self.buffer.contains(&tenor)
     }

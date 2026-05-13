@@ -109,16 +109,6 @@ mod tests {
     use crate::listing::ListedTenors;
     use instrid::prelude::{Asset, AssetClass, Mic, Tenor};
 
-    fn quarterly() -> ListedTenors {
-        ListedTenors::new(vec![
-            Tenor::March,
-            Tenor::June,
-            Tenor::September,
-            Tenor::December,
-        ])
-        .unwrap()
-    }
-
     fn es(year: u16, tenor: Tenor, day: Option<u8>) -> FuturesContract {
         FuturesContract::new(
             Asset::new("ES", AssetClass::Index),
@@ -132,7 +122,7 @@ mod tests {
 
     #[test]
     fn advance_within_year() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         let mut chain = FutChain::new(es(2026, Tenor::March, None), &listing).unwrap();
         chain.advance();
         assert_eq!(chain.contract().tenor(), Tenor::June);
@@ -141,7 +131,7 @@ mod tests {
 
     #[test]
     fn advance_wraps_year() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         let mut chain = FutChain::new(es(2026, Tenor::December, None), &listing).unwrap();
         chain.advance();
         assert_eq!(chain.contract().tenor(), Tenor::March);
@@ -150,7 +140,7 @@ mod tests {
 
     #[test]
     fn retreat_within_year() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         let mut chain = FutChain::new(es(2026, Tenor::June, None), &listing).unwrap();
         chain.retreat();
         assert_eq!(chain.contract().tenor(), Tenor::March);
@@ -159,7 +149,7 @@ mod tests {
 
     #[test]
     fn retreat_wraps_year() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         let mut chain = FutChain::new(es(2026, Tenor::March, None), &listing).unwrap();
         chain.retreat();
         assert_eq!(chain.contract().tenor(), Tenor::December);
@@ -168,7 +158,7 @@ mod tests {
 
     #[test]
     fn advance_then_retreat_returns_to_origin() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         let start = es(2026, Tenor::December, None);
         let mut chain = FutChain::new(start, &listing).unwrap();
         chain.advance();
@@ -178,7 +168,7 @@ mod tests {
 
     #[test]
     fn advance_clears_day() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         let mut chain = FutChain::new(es(2026, Tenor::March, Some(20)), &listing).unwrap();
         chain.advance();
         assert_eq!(chain.contract().day(), None);
@@ -186,7 +176,7 @@ mod tests {
 
     #[test]
     fn retreat_clears_day() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         let mut chain = FutChain::new(es(2026, Tenor::June, Some(20)), &listing).unwrap();
         chain.retreat();
         assert_eq!(chain.contract().day(), None);
@@ -194,7 +184,7 @@ mod tests {
 
     #[test]
     fn new_rejects_contract_with_unlisted_tenor() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         // January is not in the quarterly cycle.
         let err = FutChain::new(es(2026, Tenor::January, None), &listing).unwrap_err();
         assert_eq!(err, FutChainError::ContractTenorNotListed);
@@ -203,14 +193,14 @@ mod tests {
     #[test]
     #[should_panic(expected = "year underflow on retreat")]
     fn retreat_panics_at_year_zero() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         let mut chain = FutChain::new(es(0, Tenor::March, None), &listing).unwrap();
         chain.retreat(); // March year 0 -> December year -1 → underflow
     }
 
     #[test]
     fn advance_by_zero_is_noop() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         let start = es(2026, Tenor::June, None);
         let mut chain = FutChain::new(start, &listing).unwrap();
         chain.advance_by(0);
@@ -219,7 +209,7 @@ mod tests {
 
     #[test]
     fn advance_by_steps_through_year_boundary() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         // Start at Mar 2026, take 5 steps: Jun, Sep, Dec, Mar+1, Jun+1.
         let mut chain = FutChain::new(es(2026, Tenor::March, None), &listing).unwrap();
         chain.advance_by(5);
@@ -229,7 +219,7 @@ mod tests {
 
     #[test]
     fn retreat_by_zero_is_noop() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         let start = es(2026, Tenor::June, None);
         let mut chain = FutChain::new(start, &listing).unwrap();
         chain.retreat_by(0);
@@ -238,7 +228,7 @@ mod tests {
 
     #[test]
     fn retreat_by_steps_through_year_boundary() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         // Start at Jun 2026, take 5 steps back: Mar, Dec-1, Sep-1, Jun-1, Mar-1.
         let mut chain = FutChain::new(es(2026, Tenor::June, None), &listing).unwrap();
         chain.retreat_by(5);
@@ -248,7 +238,7 @@ mod tests {
 
     #[test]
     fn advance_by_wraps_multiple_years() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         // Mar 2026 + 9 steps = 9/4 = 2 full years, 9%4 = 1 → Jun 2028.
         let mut chain = FutChain::new(es(2026, Tenor::March, None), &listing).unwrap();
         chain.advance_by(9);
@@ -258,7 +248,7 @@ mod tests {
 
     #[test]
     fn retreat_by_wraps_multiple_years() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         // Jun 2026 - 9 steps. Each year is 4 steps. 9 = 4+4+1: back through
         // Mar 2026, Dec 2025, Sep 2025, Jun 2025, Mar 2025, Dec 2024, Sep 2024,
         // Jun 2024, Mar 2024 → land on Mar 2024.
@@ -270,7 +260,7 @@ mod tests {
 
     #[test]
     fn advance_by_listing_len_adds_one_year() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         let start = es(2026, Tenor::June, None);
         let mut chain = FutChain::new(start, &listing).unwrap();
         chain.advance_by(listing.len());
@@ -280,7 +270,7 @@ mod tests {
 
     #[test]
     fn retreat_by_listing_len_subtracts_one_year() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         let start = es(2026, Tenor::June, None);
         let mut chain = FutChain::new(start, &listing).unwrap();
         chain.retreat_by(listing.len());
@@ -290,7 +280,7 @@ mod tests {
 
     #[test]
     fn advance_by_matches_repeated_advance() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         let start = es(2026, Tenor::September, None);
         let mut by = FutChain::new(start, &listing).unwrap();
         let mut loop_ = FutChain::new(start, &listing).unwrap();
@@ -304,7 +294,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "year overflow on advance")]
     fn advance_panics_at_year_max() {
-        let listing = quarterly();
+        let listing = ListedTenors::quarterly();
         let mut chain = FutChain::new(es(u16::MAX, Tenor::December, None), &listing).unwrap();
         chain.advance(); // December year MAX -> March year MAX+1 → overflow
     }
