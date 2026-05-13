@@ -140,11 +140,53 @@ impl<'a> FutChain<'a> {
     pub fn listed_tenors(&self) -> &ListedTenors {
         self.listing
     }
+
+    pub fn advance(&mut self) {
+        let listing = self.listing;
+        let idx = listing
+            .find(&self.cursor.tenor())
+            .expect("invariant: cursor.tenor() is in listing");
+        let next_idx = (idx + 1) % listing.len();
+        // wrap => next year
+        let additional_year = if next_idx < idx { 1 } else { 0 };
+        let next_tenor = listing
+            .nth(next_idx)
+            .expect("invariant: next tenor is in listing");
+        self.cursor = self.cursor.with_year_tenor(
+            self.cursor
+                .year()
+                .checked_add(additional_year)
+                .expect("year overflow on advance"),
+            next_tenor,
+        );
+    }
+
+    pub fn retreat(&mut self) {
+        let listing = self.listing;
+        let idx = listing
+            .find(&self.cursor.tenor())
+            .expect("invariant: cursor.tenor() is in listing");
+        // if idx == 0 => idx - 1 means error => checked_sub
+        let next_idx = idx.checked_sub(1).unwrap_or(listing.len() - 1);
+        // wrap => previous year
+        let excess_year = if next_idx > idx { 1 } else { 0 };
+        let next_tenor = listing
+            .nth(next_idx)
+            .expect("invariant: next tenor is in listing");
+        self.cursor = self.cursor.with_year_tenor(
+            self.cursor
+                .year()
+                .checked_sub(excess_year)
+                .expect("year underflow on retreat"),
+            next_tenor,
+        );
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use instrid::prelude::{Asset, AssetClass, Mic};
 
     #[test]
     fn new_rejects_empty() {
@@ -165,5 +207,112 @@ mod tests {
             }
             other => panic!("expected Duplicate, got {other:?}"),
         }
+    }
+
+    fn quarterly() -> ListedTenors {
+        ListedTenors::new(vec![
+            Tenor::March,
+            Tenor::June,
+            Tenor::September,
+            Tenor::December,
+        ])
+        .unwrap()
+    }
+
+    fn es(year: u16, tenor: Tenor, day: Option<u8>) -> FuturesContract {
+        FuturesContract::new(
+            Asset::new("ES", AssetClass::Index),
+            Asset::new("USD", AssetClass::Currency),
+            Mic::xcme(),
+            year,
+            tenor,
+            day,
+        )
+    }
+
+    #[test]
+    fn advance_within_year() {
+        let listing = quarterly();
+        let mut chain = FutChain::new(es(2026, Tenor::March, None), &listing).unwrap();
+        chain.advance();
+        assert_eq!(chain.contract().tenor(), Tenor::June);
+        assert_eq!(chain.contract().year(), 2026);
+    }
+
+    #[test]
+    fn advance_wraps_year() {
+        let listing = quarterly();
+        let mut chain = FutChain::new(es(2026, Tenor::December, None), &listing).unwrap();
+        chain.advance();
+        assert_eq!(chain.contract().tenor(), Tenor::March);
+        assert_eq!(chain.contract().year(), 2027);
+    }
+
+    #[test]
+    fn retreat_within_year() {
+        let listing = quarterly();
+        let mut chain = FutChain::new(es(2026, Tenor::June, None), &listing).unwrap();
+        chain.retreat();
+        assert_eq!(chain.contract().tenor(), Tenor::March);
+        assert_eq!(chain.contract().year(), 2026);
+    }
+
+    #[test]
+    fn retreat_wraps_year() {
+        let listing = quarterly();
+        let mut chain = FutChain::new(es(2026, Tenor::March, None), &listing).unwrap();
+        chain.retreat();
+        assert_eq!(chain.contract().tenor(), Tenor::December);
+        assert_eq!(chain.contract().year(), 2025);
+    }
+
+    #[test]
+    fn advance_then_retreat_returns_to_origin() {
+        let listing = quarterly();
+        let start = es(2026, Tenor::December, None);
+        let mut chain = FutChain::new(start, &listing).unwrap();
+        chain.advance();
+        chain.retreat();
+        assert_eq!(chain.contract(), &start);
+    }
+
+    #[test]
+    fn advance_clears_day() {
+        let listing = quarterly();
+        let mut chain = FutChain::new(es(2026, Tenor::March, Some(20)), &listing).unwrap();
+        chain.advance();
+        assert_eq!(chain.contract().day(), None);
+    }
+
+    #[test]
+    fn retreat_clears_day() {
+        let listing = quarterly();
+        let mut chain = FutChain::new(es(2026, Tenor::June, Some(20)), &listing).unwrap();
+        chain.retreat();
+        assert_eq!(chain.contract().day(), None);
+    }
+
+    #[test]
+    fn new_rejects_contract_with_unlisted_tenor() {
+        let listing = quarterly();
+        // January is not in the quarterly cycle.
+        let err = FutChain::new(es(2026, Tenor::January, None), &listing).unwrap_err();
+        assert_eq!(err, FutChainError::ContractTenorNotListed);
+    }
+
+    #[test]
+    #[should_panic(expected = "year underflow on retreat")]
+    fn retreat_panics_at_year_zero() {
+        let listing = quarterly();
+        let mut chain = FutChain::new(es(0, Tenor::March, None), &listing).unwrap();
+        chain.retreat(); // March year 0 -> December year -1 → underflow
+    }
+
+    #[test]
+    #[should_panic(expected = "year overflow on advance")]
+    fn advance_panics_at_year_max() {
+        let listing = quarterly();
+        let mut chain = FutChain::new(es(u16::MAX, Tenor::December, None), &listing).unwrap();
+        chain.advance(); // December year MAX -> March year MAX+1 → overflow
     }
 }
