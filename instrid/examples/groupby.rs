@@ -86,17 +86,20 @@ fn main() {
     // ---
 
     println!(
-        "**signed cashflow**:\n{:#?}",
+        "**signed cashflow by base**:\n{:#?}",
         signed_cashflow_by_base(&fills)
     );
-    println!("**grouped by quote**:\n{:#?}", grouped_by_quote(&fills));
     println!(
-        "**grouped by asset class**:\n{:#?}",
+        "**signed cashflow by quote**:\n{:#?}",
+        signed_cashflow_by_quote(&fills)
+    );
+    println!(
+        "**fills grouped by asset class**:\n{:#?}",
         fills_by_asset_class(&fills)
     );
     println!(
-        "**cashflow by asset class**:\n{:#?}",
-        cashflow_by_asset_class(&fills)
+        "**signed cashflow by asset class**:\n{:#?}",
+        signed_cashflow_by_asset_class(&fills)
     );
 }
 
@@ -119,8 +122,14 @@ impl<'a> Fill<'a> {
         }
     }
 
-    pub fn cashflow(&self) -> f64 {
-        self.quantity as f64 * self.price
+    /// Signed cashflow
+    ///
+    ///- Positive cashflow = cash into your account (you received money) → selling
+    ///- Negative cashflow = cash out of your account (you paid money) → buying
+    ///
+    /// When the sum of quantities is zero, this is realized pnl.
+    pub fn signed_cashflow(&self) -> f64 {
+        -self.quantity as f64 * self.price
     }
 }
 
@@ -141,27 +150,29 @@ pub fn signed_cashflow_by_base<'a>(
             .entry(base)
             .or_insert(HashMap::<&'a Asset, f64>::new())
             .entry(quote)
-            .or_insert(0.0) += fill.cashflow();
+            .or_insert(0.0) += fill.signed_cashflow();
     }
 
     cashflow_by_base
 }
 
 /// Groups by quote asset.
-pub fn grouped_by_quote<'a>(fills: &[Fill<'a>]) -> HashMap<&'a Asset, HashMap<&'a Asset, f64>> {
-    let mut cashflow_by_base = HashMap::new();
+pub fn signed_cashflow_by_quote<'a>(
+    fills: &[Fill<'a>],
+) -> HashMap<&'a Asset, HashMap<&'a Asset, f64>> {
+    let mut cashflow_by_quote = HashMap::new();
     for fill in fills {
         let base = fill.instrument.base();
         let quote = fill.instrument.quote();
 
-        *cashflow_by_base
+        *cashflow_by_quote
             .entry(quote)
             .or_insert(HashMap::<&'a Asset, f64>::new())
             .entry(base)
-            .or_insert(0.0) += fill.cashflow();
+            .or_insert(0.0) += fill.signed_cashflow();
     }
 
-    cashflow_by_base
+    cashflow_by_quote
 }
 
 /// Just bucketing fills by asset class.
@@ -180,14 +191,17 @@ pub fn fills_by_asset_class<'a, 'b>(
     grouped
 }
 
-pub fn cashflow_by_asset_class<'a>(fills: &[Fill<'a>]) -> HashMap<(AssetClass, &'a Asset), f64> {
+/// Groups cashflow by asset class and quote asset.
+pub fn signed_cashflow_by_asset_class<'a>(
+    fills: &[Fill<'a>],
+) -> HashMap<(AssetClass, &'a Asset), f64> {
     let mut grouped = HashMap::new();
 
     for fill in fills {
         let base_class = fill.instrument.base().class();
         let quote = fill.instrument.quote();
 
-        *grouped.entry((base_class, quote)).or_insert(0.0) += fill.cashflow();
+        *grouped.entry((base_class, quote)).or_insert(0.0) += fill.signed_cashflow();
     }
 
     grouped
