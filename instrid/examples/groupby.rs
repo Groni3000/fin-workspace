@@ -94,6 +94,10 @@ fn main() {
         "**grouped by asset class**:\n{:#?}",
         fills_by_asset_class(&fills)
     );
+    println!(
+        "**cashflow by asset class**:\n{:#?}",
+        cashflow_by_asset_class(&fills)
+    );
 }
 
 /// Simple struct representing a fill on an instrument.
@@ -169,6 +173,20 @@ pub fn fills_by_asset_class<'a, 'b>(
         let class = base.class();
 
         grouped.entry(class).or_insert_with(Vec::new).push(fill);
+    }
+
+    grouped
+}
+
+pub fn cashflow_by_asset_class<'a>(fills: &[Fill<'a>]) -> HashMap<(AssetClass, &'a Asset), f64> {
+    let mut grouped = HashMap::new();
+
+    for fill in fills {
+        let base_class = fill.instrument.base().class();
+        let quote = fill.instrument.quote();
+        let cashflow = fill.quantity as f64 * fill.price;
+
+        *grouped.entry((base_class, quote)).or_insert(0.0) += cashflow;
     }
 
     grouped
