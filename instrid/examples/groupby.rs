@@ -118,6 +118,10 @@ impl<'a> Fill<'a> {
             price,
         }
     }
+
+    pub fn cashflow(&self) -> f64 {
+        self.quantity as f64 * self.price
+    }
 }
 
 // --- Groupby demo function|
@@ -132,13 +136,12 @@ pub fn signed_cashflow_by_base<'a>(
     for fill in fills {
         let base = fill.instrument.base();
         let quote = fill.instrument.quote();
-        let cashflow = fill.quantity as f64 * fill.price;
 
         *cashflow_by_base
             .entry(base)
             .or_insert(HashMap::<&'a Asset, f64>::new())
             .entry(quote)
-            .or_insert(0.0) += cashflow;
+            .or_insert(0.0) += fill.cashflow();
     }
 
     cashflow_by_base
@@ -150,13 +153,12 @@ pub fn grouped_by_quote<'a>(fills: &[Fill<'a>]) -> HashMap<&'a Asset, HashMap<&'
     for fill in fills {
         let base = fill.instrument.base();
         let quote = fill.instrument.quote();
-        let cashflow = fill.quantity as f64 * fill.price;
 
         *cashflow_by_base
             .entry(quote)
             .or_insert(HashMap::<&'a Asset, f64>::new())
             .entry(base)
-            .or_insert(0.0) += cashflow;
+            .or_insert(0.0) += fill.cashflow();
     }
 
     cashflow_by_base
@@ -184,9 +186,8 @@ pub fn cashflow_by_asset_class<'a>(fills: &[Fill<'a>]) -> HashMap<(AssetClass, &
     for fill in fills {
         let base_class = fill.instrument.base().class();
         let quote = fill.instrument.quote();
-        let cashflow = fill.quantity as f64 * fill.price;
 
-        *grouped.entry((base_class, quote)).or_insert(0.0) += cashflow;
+        *grouped.entry((base_class, quote)).or_insert(0.0) += fill.cashflow();
     }
 
     grouped
