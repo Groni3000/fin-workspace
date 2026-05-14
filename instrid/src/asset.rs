@@ -35,6 +35,7 @@ impl Display for Asset {
 }
 
 /// Represents the class or type of an asset (e.g., equity, commodity, currency, etc.).
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AssetClass {
     /// Shares, ETFs, REITs - ownership stakes in companies or funds.
@@ -77,8 +78,27 @@ mod tests {
         let name = "AAPL";
         let asset_class = AssetClass::Equity;
         let aapl = Asset::new(name, asset_class);
-        dbg!(&aapl);
+
         assert_eq!(&aapl.name, &name);
         assert_eq!(&aapl.class, &AssetClass::Equity);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_asset_class_serialization() {
+        let asset_class = AssetClass::Equity;
+        let serialized = serde_json::to_string(&asset_class).expect("expected serializable value");
+
+        assert_eq!(serialized, "\"Equity\"");
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_asset_class_deserialization() {
+        let serialized = "\"Equity\"";
+        let asset_class: AssetClass =
+            serde_json::from_str(serialized).expect("expected deserializable value");
+
+        assert_eq!(asset_class, AssetClass::Equity);
     }
 }

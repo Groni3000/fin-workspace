@@ -7,9 +7,11 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 rust_decimal = "1.42.0"
+serde = { version = "1", optional = true, features = ["derive"] }
 
 [dev-dependencies]
 rust_decimal_macros = "1.40.0"
+serde_json = { version = "1" }
 
 [build-dependencies]
 csv = { version = "1" }
@@ -17,3 +19,4 @@ csv = { version = "1" }
 [features]
 default = []
 mic-full = []
+serde = ["dep:serde"]
