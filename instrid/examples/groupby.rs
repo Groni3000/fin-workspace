@@ -90,6 +90,10 @@ fn main() {
         signed_cashflow_by_base(&fills)
     );
     println!("**grouped by quote**:\n{:#?}", grouped_by_quote(&fills));
+    println!(
+        "**grouped by asset class**:\n{:#?}",
+        fills_by_asset_class(&fills)
+    );
 }
 
 /// Simple struct representing a fill on an instrument.
@@ -152,4 +156,20 @@ pub fn grouped_by_quote<'a>(fills: &[Fill<'a>]) -> HashMap<&'a Asset, HashMap<&'
     }
 
     cashflow_by_base
+}
+
+/// Just bucketing fills by asset class.
+pub fn fills_by_asset_class<'a, 'b>(
+    fills: &'b [Fill<'a>],
+) -> HashMap<AssetClass, Vec<&'b Fill<'a>>> {
+    let mut grouped = HashMap::new();
+
+    for fill in fills.iter() {
+        let base = fill.instrument.base();
+        let class = base.class();
+
+        grouped.entry(class).or_insert_with(Vec::new).push(fill);
+    }
+
+    grouped
 }

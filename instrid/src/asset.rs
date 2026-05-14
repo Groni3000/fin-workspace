@@ -12,18 +12,25 @@ use std::fmt::Display;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Asset {
     name: &'static str,
-    category: AssetClass,
+    class: AssetClass,
 }
 
 impl Asset {
     pub const fn new(name: &'static str, category: AssetClass) -> Self {
-        Self { name, category }
+        Self {
+            name,
+            class: category,
+        }
+    }
+
+    pub fn class(&self) -> AssetClass {
+        self.class
     }
 }
 
 impl Display for Asset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}){}", self.category, self.name)
+        write!(f, "({}){}", self.class, self.name)
     }
 }
 
@@ -72,6 +79,6 @@ mod tests {
         let aapl = Asset::new(name, asset_class);
         dbg!(&aapl);
         assert_eq!(&aapl.name, &name);
-        assert_eq!(&aapl.category, &AssetClass::Equity);
+        assert_eq!(&aapl.class, &AssetClass::Equity);
     }
 }
