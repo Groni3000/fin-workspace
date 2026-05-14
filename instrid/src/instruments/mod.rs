@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use crate::{asset::Asset, mic::Mic};
 
@@ -59,12 +59,30 @@ impl TradedInstrument for Instrument {
     }
 }
 
+impl From<Stock> for Instrument {
+    fn from(s: Stock) -> Self {
+        Self::Stock(s)
+    }
+}
+
+impl From<FuturesContract> for Instrument {
+    fn from(c: FuturesContract) -> Self {
+        Self::Futures(c)
+    }
+}
+
+impl From<OptionContract> for Instrument {
+    fn from(o: OptionContract) -> Self {
+        Self::Option(o)
+    }
+}
+
 impl Display for Instrument {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Instrument::Stock(s) => s.fmt(f),
-            Instrument::Futures(fu) => fu.fmt(f),
-            Instrument::Option(option) => option.fmt(f),
+            Instrument::Stock(s) => std::fmt::Display::fmt(s, f),
+            Instrument::Futures(fu) => std::fmt::Display::fmt(fu, f),
+            Instrument::Option(option) => std::fmt::Display::fmt(option, f),
         }
     }
 }
