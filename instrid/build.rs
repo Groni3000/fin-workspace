@@ -11,6 +11,7 @@ const CURATED: &[&[u8; 4]] = &[
     b"XNAS", b"XNYS", b"ARCX", b"BATS", b"IEXG", b"XASE", b"XCME", b"XCBT", b"XCBO", b"XNYM",
     b"XCEC", b"XLON", b"XPAR", b"XAMS", b"XBRU", b"XLIS", b"XETR", b"XFRA", b"XMIL", b"XSWX",
     b"XTKS", b"XHKG", b"XSHG", b"XSHE", b"XKRX", b"XASX", b"XBOM", b"XNSE", b"XTSE", b"XTSX",
+    b"XEUR", b"XLBM", b"XSGE",
 ];
 
 fn main() {
