@@ -89,6 +89,7 @@ fn main() {
         "**signed cashflow**:\n{:#?}",
         signed_cashflow_by_base(&fills)
     );
+    println!("**grouped by quote**:\n{:#?}", grouped_by_quote(&fills));
 }
 
 /// Simple struct representing a fill on an instrument.
@@ -129,6 +130,24 @@ pub fn signed_cashflow_by_base<'a>(
             .entry(base)
             .or_insert(HashMap::<&'a Asset, f64>::new())
             .entry(quote)
+            .or_insert(0.0) += cashflow;
+    }
+
+    cashflow_by_base
+}
+
+/// Groups by quote asset.
+pub fn grouped_by_quote<'a>(fills: &[Fill<'a>]) -> HashMap<&'a Asset, HashMap<&'a Asset, f64>> {
+    let mut cashflow_by_base = HashMap::new();
+    for fill in fills {
+        let base = fill.instrument.base();
+        let quote = fill.instrument.quote();
+        let cashflow = fill.quantity as f64 * fill.price;
+
+        *cashflow_by_base
+            .entry(quote)
+            .or_insert(HashMap::<&'a Asset, f64>::new())
+            .entry(base)
             .or_insert(0.0) += cashflow;
     }
 
