@@ -140,8 +140,8 @@ mod tests {
 
     fn aapl_call_200_dec25() -> OptionContract {
         OptionContract::new(
-            Asset::new("AAPL", AssetClass::Equity),
-            Asset::new("USD", AssetClass::Currency),
+            Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
+            Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
             2025,
             Tenor::December,
@@ -164,8 +164,8 @@ mod tests {
     fn call_and_put_differ() {
         let call = aapl_call_200_dec25();
         let put = OptionContract::new(
-            Asset::new("AAPL", AssetClass::Equity),
-            Asset::new("USD", AssetClass::Currency),
+            Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
+            Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
             2025,
             Tenor::December,
@@ -181,8 +181,8 @@ mod tests {
     fn style_distinguishes_contracts() {
         let american = aapl_call_200_dec25();
         let european = OptionContract::new(
-            Asset::new("AAPL", AssetClass::Equity),
-            Asset::new("USD", AssetClass::Currency),
+            Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
+            Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
             2025,
             Tenor::December,
@@ -198,8 +198,8 @@ mod tests {
     fn different_strikes_differ() {
         let strike_200 = aapl_call_200_dec25();
         let strike_210 = OptionContract::new(
-            Asset::new("AAPL", AssetClass::Equity),
-            Asset::new("USD", AssetClass::Currency),
+            Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
+            Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
             2025,
             Tenor::December,

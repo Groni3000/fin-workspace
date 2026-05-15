@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+type AssetName = crate::inline_str::InlineStr<12>;
+
 /// Represents an asset (e.g., equity, commodity, currency, etc.).
 ///
 /// Asset - an entity that can be traded or cash settled.
@@ -12,13 +14,23 @@ use std::fmt::Display;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Asset {
-    name: &'static str,
+    name: AssetName,
     class: AssetClass,
 }
 
 impl Asset {
-    pub const fn new(name: &'static str, class: AssetClass) -> Self {
-        Self { name, class }
+    pub const fn new(
+        name: &'static str,
+        class: AssetClass,
+    ) -> Result<Self, crate::inline_str::InlineStrError> {
+        let asset_name = match AssetName::new(name) {
+            Ok(name) => name,
+            Err(e) => return Err(e),
+        };
+        Ok(Self {
+            name: asset_name,
+            class,
+        })
     }
     pub fn class(&self) -> AssetClass {
         self.class
@@ -27,7 +39,7 @@ impl Asset {
 
 impl Display for Asset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}){}", self.class, self.name)
+        write!(f, "({}){}", self.class, self.name.as_str())
     }
 }
 
@@ -74,9 +86,9 @@ mod tests {
     fn test_asset_new() {
         let name = "AAPL";
         let asset_class = AssetClass::Equity;
-        let aapl = Asset::new(name, asset_class);
+        let aapl = Asset::new(name, asset_class).expect("Asset got incorrect parameters");
 
-        assert_eq!(&aapl.name, &name);
+        assert_eq!(&aapl.name.as_str(), &name);
         assert_eq!(&aapl.class, &AssetClass::Equity);
     }
 
@@ -102,7 +114,8 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_asset_serialization() {
-        let asset = Asset::new("USD", AssetClass::Currency);
+        let asset =
+            Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters");
         let serialized = serde_json::to_string(&asset).expect("expected serializable value");
 
         assert_eq!(serialized, r#"{"name":"USD","class":"Currency"}"#);
@@ -115,7 +128,7 @@ mod tests {
         // We can deserialize a `&'static str`
         let asset: Asset = serde_json::from_str(serialized).expect("expected deserializable value");
 
-        assert_eq!(asset.name, "USD");
+        assert_eq!(asset.name.as_str(), "USD");
         assert_eq!(asset.class, AssetClass::Currency);
     }
 
@@ -125,21 +138,12 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_asset_deserialization_from_runtime_buffer() {
+        let expected =
+            Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters");
         let bytes: Vec<u8> = br#"{"name":"USD","class":"Currency"}"#.to_vec();
         let owned: String = String::from_utf8(bytes).unwrap();
+        let deserialized: Asset = serde_json::from_str(&owned).expect("...");
 
-        // ❌ Uncomment to observe the failure:
-        // let asset: Asset = serde_json::from_str(&owned).expect("...");
-        //
-        // error[E0597]: `owned` does not live long enough
-        //   argument requires that `owned` is borrowed for `'static`
-        //
-        let _ = owned;
-        //
-        // Cow<'static, str> would work, but we would loose
-        // `Copy` for Asset => FuturesContract => We would have
-        // a lot of problems with cursor in futchain...
-        //
-        // Yikes :(
+        assert_eq!(deserialized, expected);
     }
 }

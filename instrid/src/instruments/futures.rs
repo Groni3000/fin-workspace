@@ -115,8 +115,8 @@ mod tests {
     #[test]
     fn display_without_day() {
         let f = FuturesContract::new(
-            Asset::new("CL", AssetClass::Commodity),
-            Asset::new("USD", AssetClass::Currency),
+            Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
+            Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
             2026,
             Tenor::June,
@@ -131,8 +131,8 @@ mod tests {
     #[test]
     fn display_with_day() {
         let f = FuturesContract::new(
-            Asset::new("CL", AssetClass::Commodity),
-            Asset::new("USD", AssetClass::Currency),
+            Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
+            Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
             2026,
             Tenor::June,

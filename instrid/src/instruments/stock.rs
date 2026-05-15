@@ -45,8 +45,8 @@ mod tests {
     #[test]
     fn test_stock_display() {
         let stock = Stock::new(
-            Asset::new("AAPL", AssetClass::Equity),
-            Asset::new("USD", AssetClass::Currency),
+            Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
+            Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
         );
 

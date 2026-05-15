@@ -45,10 +45,7 @@ impl LastNthBDayOfPrevMonth {
 
 impl EndOfTrading for LastNthBDayOfPrevMonth {
     fn calculate(&self, contract: &FuturesContract) -> NaiveDate {
-        let start = month_start(
-            contract.year() as i32,
-            contract.tenor().ordinal() as u32,
-        );
+        let start = month_start(contract.year() as i32, contract.tenor().ordinal() as u32);
         let date = add_business_days(start, -(self.n.get() as i32));
         self.offset.apply(date)
     }
@@ -61,8 +58,8 @@ mod tests {
 
     fn gc(year: u16, tenor: Tenor) -> FuturesContract {
         FuturesContract::new(
-            Asset::new("GC", AssetClass::Commodity),
-            Asset::new("USD", AssetClass::Currency),
+            Asset::new("GC", AssetClass::Commodity).expect("Asset got incorrect parameters"),
+            Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnym(),
             year,
             tenor,

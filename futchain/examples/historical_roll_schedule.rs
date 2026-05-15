@@ -38,8 +38,8 @@ fn main() {
     // start somewhere safely in the past and roll forward to the first
     // not-yet-expired contract.
     let seed = FuturesContract::new(
-        Asset::new("GC", AssetClass::Commodity),
-        Asset::new("USD", AssetClass::Currency),
+        Asset::new("GC", AssetClass::Commodity).expect("Asset got incorrect parameters"),
+        Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xnym(),
         2023,
         Tenor::December,

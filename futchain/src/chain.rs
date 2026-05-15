@@ -111,8 +111,8 @@ mod tests {
 
     fn es(year: u16, tenor: Tenor, day: Option<u8>) -> FuturesContract {
         FuturesContract::new(
-            Asset::new("ES", AssetClass::Index),
-            Asset::new("USD", AssetClass::Currency),
+            Asset::new("ES", AssetClass::Index).expect("Asset got incorrect parameters"),
+            Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xcme(),
             year,
             tenor,

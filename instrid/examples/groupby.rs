@@ -15,26 +15,26 @@ use instrid::prelude::*;
 fn main() {
     // --- Instruments you trade
     let aapl_xnas = Instrument::Stock(Stock::new(
-        Asset::new("AAPL", AssetClass::Equity),
-        Asset::new("USD", AssetClass::Currency),
+        Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
+        Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xnas(),
     ));
     let aapl_xlon = Instrument::Stock(Stock::new(
-        Asset::new("AAPL", AssetClass::Equity),
-        Asset::new("USD", AssetClass::Currency),
+        Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
+        Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xlon(),
     ));
     let es_cme = Instrument::Futures(FuturesContract::new(
-        Asset::new("ES", AssetClass::Index),
-        Asset::new("USD", AssetClass::Currency),
+        Asset::new("ES", AssetClass::Index).expect("Asset got incorrect parameters"),
+        Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xcme(),
         2026,
         Tenor::June,
         None,
     ));
     let fdax_eurex = Instrument::Futures(FuturesContract::new(
-        Asset::new("FDX", AssetClass::Index),
-        Asset::new("EUR", AssetClass::Currency),
+        Asset::new("FDX", AssetClass::Index).expect("Asset got incorrect parameters"),
+        Asset::new("EUR", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xeur(),
         2026,
         Tenor::June,
@@ -47,22 +47,22 @@ fn main() {
 
     // Canonical XAU quote: LBMA Gold Price, USD.
     let xau_usd = Instrument::Stock(Stock::new(
-        Asset::new("XAU", AssetClass::Commodity),
-        Asset::new("USD", AssetClass::Currency),
+        Asset::new("XAU", AssetClass::Commodity).expect("Asset got incorrect parameters"),
+        Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xlbm(),
     ));
     // Same LBMA gold, quoted in EUR by the FX desk.
     let xau_eur = Instrument::Stock(Stock::new(
-        Asset::new("XAU", AssetClass::Commodity),
-        Asset::new("EUR", AssetClass::Currency),
+        Asset::new("XAU", AssetClass::Commodity).expect("Asset got incorrect parameters"),
+        Asset::new("EUR", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xlbm(),
     ));
     // Shanghai Gold Exchange, CNY (onshore yuan). Materially different
     // market from LBMA due to China's capital controls — the Shanghai-London
     // spread is a real, tradable basis, not a quote conversion.
     let xau_cny = Instrument::Stock(Stock::new(
-        Asset::new("XAU", AssetClass::Commodity),
-        Asset::new("CNY", AssetClass::Currency),
+        Asset::new("XAU", AssetClass::Commodity).expect("Asset got incorrect parameters"),
+        Asset::new("CNY", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xsge(),
     ));
     // ---
