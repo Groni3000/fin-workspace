@@ -9,6 +9,7 @@ use std::fmt::Display;
 ///     - USD, Currency
 ///     - BTC, Currency
 ///     - S&P 500, Index (cash settled)
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Asset {
     name: &'static str,
@@ -16,13 +17,9 @@ pub struct Asset {
 }
 
 impl Asset {
-    pub const fn new(name: &'static str, category: AssetClass) -> Self {
-        Self {
-            name,
-            class: category,
-        }
+    pub const fn new(name: &'static str, class: AssetClass) -> Self {
+        Self { name, class }
     }
-
     pub fn class(&self) -> AssetClass {
         self.class
     }
@@ -100,5 +97,49 @@ mod tests {
             serde_json::from_str(serialized).expect("expected deserializable value");
 
         assert_eq!(asset_class, AssetClass::Equity);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_asset_serialization() {
+        let asset = Asset::new("USD", AssetClass::Currency);
+        let serialized = serde_json::to_string(&asset).expect("expected serializable value");
+
+        assert_eq!(serialized, r#"{"name":"USD","class":"Currency"}"#);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_asset_deserialization() {
+        let serialized = r#"{"name":"USD","class":"Currency"}"#;
+        // We can deserialize a `&'static str`
+        let asset: Asset = serde_json::from_str(serialized).expect("expected deserializable value");
+
+        assert_eq!(asset.name, "USD");
+        assert_eq!(asset.class, AssetClass::Currency);
+    }
+
+    /// Demonstrates the `&'static str` limitation: deserializing from a
+    /// runtime-owned buffer (here a `Vec<u8>`) does not compile, because the
+    /// borrow into that buffer is not `'static`.
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_asset_deserialization_from_runtime_buffer() {
+        let bytes: Vec<u8> = br#"{"name":"USD","class":"Currency"}"#.to_vec();
+        let owned: String = String::from_utf8(bytes).unwrap();
+
+        // ❌ Uncomment to observe the failure:
+        // let asset: Asset = serde_json::from_str(&owned).expect("...");
+        //
+        // error[E0597]: `owned` does not live long enough
+        //   argument requires that `owned` is borrowed for `'static`
+        //
+        let _ = owned;
+        //
+        // Cow<'static, str> would work, but we would loose
+        // `Copy` for Asset => FuturesContract => We would have
+        // a lot of problems with cursor in futchain...
+        //
+        // Yikes :(
     }
 }
