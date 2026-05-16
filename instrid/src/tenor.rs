@@ -2,6 +2,7 @@ use std::fmt;
 use std::str::FromStr;
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(into = "u8", try_from = "u8"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Tenor {
     January = 1,
@@ -16,6 +17,34 @@ pub enum Tenor {
     October = 10,
     November = 11,
     December = 12,
+}
+
+impl TryFrom<u8> for Tenor {
+    type Error = &'static str;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Tenor::January),
+            2 => Ok(Tenor::February),
+            3 => Ok(Tenor::March),
+            4 => Ok(Tenor::April),
+            5 => Ok(Tenor::May),
+            6 => Ok(Tenor::June),
+            7 => Ok(Tenor::July),
+            8 => Ok(Tenor::August),
+            9 => Ok(Tenor::September),
+            10 => Ok(Tenor::October),
+            11 => Ok(Tenor::November),
+            12 => Ok(Tenor::December),
+            _ => Err("invalid tenor value"),
+        }
+    }
+}
+
+impl Into<u8> for Tenor {
+    fn into(self) -> u8 {
+        self.ordinal()
+    }
 }
 
 impl Tenor {
@@ -131,7 +160,7 @@ mod tests {
     fn test_tenor_serialization() {
         let tenor = Tenor::January;
         let serialized = serde_json::to_string(&tenor).expect("tenor should be serializable");
-        let expected = String::from("\"January\"");
+        let expected = String::from("1");
 
         assert_eq!(serialized, expected);
     }
@@ -139,7 +168,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_tenor_deserialization() {
-        let serialized = String::from("\"January\"");
+        let serialized = String::from("1");
         let tenor: Tenor =
             serde_json::from_str(&serialized).expect("tenor should be deserializable");
         assert_eq!(tenor, Tenor::January);
