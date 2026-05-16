@@ -81,6 +81,7 @@ impl Display for AssetClass {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::_assert_owned;
 
     #[test]
     fn test_asset_new() {
@@ -113,6 +114,12 @@ mod tests {
 
     #[cfg(feature = "serde")]
     #[test]
+    fn test_asset_is_owned() {
+        _assert_owned::<Asset>();
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
     fn test_asset_serialization() {
         let asset =
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters");
@@ -132,18 +139,9 @@ mod tests {
         assert_eq!(asset.class, AssetClass::Currency);
     }
 
-    /// Demonstrates the `&'static str` limitation: deserializing from a
-    /// runtime-owned buffer (here a `Vec<u8>`) does not compile, because the
-    /// borrow into that buffer is not `'static`.
     #[cfg(feature = "serde")]
     #[test]
     fn test_asset_deserialization_from_runtime_buffer() {
-        let expected =
-            Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters");
-        let bytes: Vec<u8> = br#"{"name":"USD","class":"Currency"}"#.to_vec();
-        let owned: String = String::from_utf8(bytes).unwrap();
-        let deserialized: Asset = serde_json::from_str(&owned).expect("...");
-
-        assert_eq!(deserialized, expected);
+        _assert_owned::<Asset>();
     }
 }
