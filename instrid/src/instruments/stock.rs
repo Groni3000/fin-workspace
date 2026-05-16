@@ -62,6 +62,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "serde")]
     #[test]
     fn test_stock_serialize() {
         let stock = aapl();
@@ -71,6 +72,7 @@ mod tests {
         assert_eq!(expected, serialized);
     }
 
+    #[cfg(feature = "serde")]
     #[test]
     fn test_stock_deserialize() {
         let expected = aapl();
@@ -81,6 +83,7 @@ mod tests {
         assert_eq!(expected, deserialized);
     }
 
+    #[cfg(feature = "serde")]
     #[test]
     fn test_stock_is_owned() {
         _assert_owned::<Stock>();
