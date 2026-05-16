@@ -4,6 +4,7 @@ use rust_decimal::Decimal;
 
 use crate::{asset::Asset, mic::Mic, prelude::TradedInstrument, tenor::Tenor};
 
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Debug, PartialEq, Eq)]
 pub struct OptionContract {
     base: Asset,
@@ -20,6 +21,7 @@ pub struct OptionContract {
 /// Represents the kind of option contract, either a Put or a Call.
 ///
 /// **Exercise style agnostic.**
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Debug, PartialEq, Eq)]
 pub enum OptionKind {
     /// Put = right to **sell** the underlying at the strike,
@@ -47,6 +49,7 @@ impl Display for OptionKind {
 
 /// Represents the exercise style of an option contract,
 /// determining when the right can be exercised.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExerciseStyle {
     /// European = the right can be exercised only at the expiration date.
@@ -133,6 +136,8 @@ impl Display for OptionContract {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "serde")]
+    use crate::_assert_owned;
     use crate::asset::AssetClass;
     use rust_decimal_macros::dec;
 
@@ -215,5 +220,58 @@ mod tests {
     fn strike_display_trims_trailing_zeros() {
         let s = aapl_call_200_dec25().to_string();
         assert!(s.ends_with("#200"), "expected '#200' suffix, got: {s}");
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_option_serialize() {
+        let opt = aapl_call_200_dec25();
+        let serialized = serde_json::to_string(&opt).unwrap();
+        let expected = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200.00\"}";
+
+        assert_eq!(serialized, expected);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_option_deserialize() {
+        let serialized = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200.00\"}";
+        let expected = aapl_call_200_dec25();
+        let deserialized: OptionContract = serde_json::from_str(serialized).unwrap();
+
+        assert_eq!(deserialized, expected);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_option_kind_serialize() {
+        assert_eq!(serde_json::to_string(&OptionKind::Call).unwrap(), "\"Call\"");
+        assert_eq!(serde_json::to_string(&OptionKind::Put).unwrap(), "\"Put\"");
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_exercise_style_serialize() {
+        assert_eq!(serde_json::to_string(&ExerciseStyle::European).unwrap(), "\"European\"");
+        assert_eq!(serde_json::to_string(&ExerciseStyle::American).unwrap(), "\"American\"");
+        assert_eq!(serde_json::to_string(&ExerciseStyle::Bermudan).unwrap(), "\"Bermudan\"");
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_option_is_owned() {
+        _assert_owned::<OptionContract>();
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_option_kind_is_owned() {
+        _assert_owned::<OptionKind>();
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_exercise_style_is_owned() {
+        _assert_owned::<ExerciseStyle>();
     }
 }
