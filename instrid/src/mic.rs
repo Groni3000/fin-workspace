@@ -343,6 +343,177 @@ impl<'de> Deserialize<'de> for Mic {
 
 include!(concat!(env!("OUT_DIR"), "/mic_generated.rs"));
 
+// --- MIC registry: embedded binary blob, parsed once on first lookup. ---
+//
+// The full registry is not emitted as Rust source: a single expression
+// containing thousands of `Mic::new(...)` calls is very slow for
+// rust-analyzer to type-check on every edit that touches `Mic`. Instead
+// we ship two `&'static [u8]` blobs and build a `HashMap<[u8;4], Mic>`
+// lazily on first call.
+//
+// `&'static str` fields of `Mic` are reconstructed as slices of the
+// `MIC_STRINGS` blob — slicing a `'static` byte slice yields a `'static`
+// string slice, so no allocation or leaking is required.
+
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
+static MIC_RECORDS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/mic_records.bin"));
+static MIC_STRINGS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/mic_strings.bin"));
+
+// Keep in sync with the layout documented in build.rs.
+const RECORD_SIZE: usize = 96;
+
+static REGISTRY: OnceLock<HashMap<[u8; 4], Mic>> = OnceLock::new();
+
+fn registry() -> &'static HashMap<[u8; 4], Mic> {
+    REGISTRY.get_or_init(|| {
+        debug_assert_eq!(
+            MIC_RECORDS.len() % RECORD_SIZE,
+            0,
+            "MIC_RECORDS not a multiple of RECORD_SIZE",
+        );
+        let n = MIC_RECORDS.len() / RECORD_SIZE;
+        let mut map = HashMap::with_capacity(n);
+        for i in 0..n {
+            let rec = &MIC_RECORDS[i * RECORD_SIZE..(i + 1) * RECORD_SIZE];
+            let mic = parse_record(rec);
+            map.insert(mic.code, mic);
+        }
+        map
+    })
+}
+
+/// Returns the registry record for a MIC code, if known to this build.
+///
+/// By default only common MICs are compiled in (~30 entries).
+/// Enable the `mic-full` feature for the full ISO 10383 registry.
+///
+/// Returns `None` for any code that isn't an exact 4-character match
+/// against a known MIC.
+///
+/// # Examples
+///
+/// ```
+/// use instrid::mic::mic_by_code;
+///
+/// assert!(mic_by_code("XNAS").is_some());
+/// assert!(mic_by_code("ZZZZ").is_none());
+/// assert!(mic_by_code("XNA").is_none());   // wrong length
+/// ```
+pub fn mic_by_code(code: &str) -> Option<Mic> {
+    let bytes: &[u8; 4] = code.as_bytes().try_into().ok()?;
+    registry().get(bytes).copied()
+}
+
+fn parse_record(r: &[u8]) -> Mic {
+    let code: [u8; 4] = r[0..4].try_into().unwrap();
+    let operating: [u8; 4] = r[4..8].try_into().unwrap();
+    let mic_type = match r[8] {
+        0 => MicType::Operating,
+        1 => MicType::Segment,
+        b => panic!("invalid mic_type byte: {b}"),
+    };
+    let market_name = read_str(&r[9..15]);
+    let legal_entity_name = read_opt_str(&r[15..22]);
+    let lei_code = read_opt_lei(&r[22..43]);
+    let market_category_code = read_category(&r[43..48]);
+    let acronym = read_opt_str(&r[48..55]);
+    let iso_country_code: [u8; 2] = r[55..57].try_into().unwrap();
+    let city = read_str(&r[57..63]);
+    let website = read_opt_str(&r[63..70]);
+    let status = match r[70] {
+        0 => MicStatus::Active,
+        1 => MicStatus::Expired,
+        2 => MicStatus::Updated,
+        3 => MicStatus::Mock,
+        b => panic!("invalid status byte: {b}"),
+    };
+    let creation_date = read_date(&r[71..75]);
+    let last_update_date = read_date(&r[75..79]);
+    let last_validation_date = read_opt_date(&r[79..84]);
+    let expiry_date = read_opt_date(&r[84..89]);
+    let comments = read_opt_str(&r[89..96]);
+
+    Mic {
+        code,
+        operating,
+        mic_type,
+        market_name,
+        legal_entity_name,
+        lei_code,
+        market_category_code,
+        acronym,
+        iso_country_code,
+        city,
+        website,
+        status,
+        creation_date,
+        last_update_date,
+        last_validation_date,
+        expiry_date,
+        comments,
+    }
+}
+
+fn read_str(field: &[u8]) -> &'static str {
+    // 4 bytes offset + 2 bytes len
+    let off = u32::from_le_bytes(field[0..4].try_into().unwrap()) as usize;
+    let len = u16::from_le_bytes(field[4..6].try_into().unwrap()) as usize;
+    std::str::from_utf8(&MIC_STRINGS[off..off + len]).expect("invalid UTF-8 in MIC string pool")
+}
+
+fn read_opt_str(field: &[u8]) -> Option<&'static str> {
+    if field[0] == 0 {
+        return None;
+    }
+    Some(read_str(&field[1..7]))
+}
+
+fn read_opt_lei(field: &[u8]) -> Option<[u8; 20]> {
+    if field[0] == 0 {
+        return None;
+    }
+    Some(field[1..21].try_into().unwrap())
+}
+
+fn read_category(field: &[u8]) -> MarketCategoryCode {
+    let unknown: [u8; 4] = field[1..5].try_into().unwrap();
+    match field[0] {
+        0 => MarketCategoryCode::Appa,
+        1 => MarketCategoryCode::Arms,
+        2 => MarketCategoryCode::Casp,
+        3 => MarketCategoryCode::Ctps,
+        4 => MarketCategoryCode::Dcms,
+        5 => MarketCategoryCode::Idqs,
+        6 => MarketCategoryCode::Mltf,
+        7 => MarketCategoryCode::Nspd,
+        8 => MarketCategoryCode::Otfs,
+        9 => MarketCategoryCode::Othr,
+        10 => MarketCategoryCode::Rmkt,
+        11 => MarketCategoryCode::Rmos,
+        12 => MarketCategoryCode::Sefs,
+        13 => MarketCategoryCode::Sint,
+        14 => MarketCategoryCode::Trfs,
+        15 => MarketCategoryCode::Unknown(unknown),
+        b => panic!("invalid category tag: {b}"),
+    }
+}
+
+fn read_date(field: &[u8]) -> Date {
+    let year = u16::from_le_bytes(field[0..2].try_into().unwrap());
+    let month = field[2];
+    let day = field[3];
+    Date::new(year, month, day)
+}
+
+fn read_opt_date(field: &[u8]) -> Option<Date> {
+    if field[0] == 0 {
+        return None;
+    }
+    Some(read_date(&field[1..5]))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
