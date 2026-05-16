@@ -1,6 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Tenor {
     January = 1,
@@ -116,5 +117,37 @@ impl fmt::Display for Tenor {
             Tenor::December => "DEC",
         };
         f.write_str(s)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[cfg(feature = "serde")]
+    use crate::_assert_owned;
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_tenor_serialization() {
+        let tenor = Tenor::January;
+        let serialized = serde_json::to_string(&tenor).expect("tenor should be serializable");
+        let expected = String::from("\"January\"");
+
+        assert_eq!(serialized, expected);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_tenor_deserialization() {
+        let serialized = String::from("\"January\"");
+        let tenor: Tenor =
+            serde_json::from_str(&serialized).expect("tenor should be deserializable");
+        assert_eq!(tenor, Tenor::January);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_tenor_is_owned() {
+        _assert_owned::<Tenor>();
     }
 }
