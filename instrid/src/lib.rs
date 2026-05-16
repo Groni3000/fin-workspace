@@ -18,3 +18,7 @@ pub mod prelude {
     pub use crate::mic::{Date, MarketCategoryCode, Mic, MicStatus, MicType, mic_by_code};
     pub use crate::tenor::Tenor;
 }
+
+/// Used to check if deserialized value owns data
+#[cfg(feature = "serde")]
+pub(crate) fn _assert_owned<T: serde::de::DeserializeOwned>() {}
