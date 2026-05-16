@@ -39,6 +39,7 @@ impl Display for Stock {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "serde")]
     use crate::_assert_owned;
     use crate::asset::AssetClass;
 

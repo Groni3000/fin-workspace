@@ -517,6 +517,7 @@ fn read_opt_date(field: &[u8]) -> Option<Date> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "serde")]
     use crate::_assert_owned;
 
     #[test]
