@@ -109,6 +109,8 @@ impl Display for FuturesContract {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "serde")]
+    use crate::_assert_owned;
     use crate::asset::AssetClass;
 
     use super::*;
@@ -125,6 +127,17 @@ mod tests {
         )
     }
 
+    fn cl_with_day() -> FuturesContract {
+        FuturesContract::new(
+            Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
+            Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
+            Mic::xnas(),
+            2026,
+            Tenor::June,
+            Some(20),
+        )
+    }
+
     #[test]
     fn display_without_day() {
         let f = cl();
@@ -136,10 +149,56 @@ mod tests {
 
     #[test]
     fn display_with_day() {
-        let f = cl();
+        let f = cl_with_day();
         assert_eq!(
             f.to_string(),
             "Futures:(Commodity)CL/(Currency)USD@XNAS 2026-06-20",
         );
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_futures_serialize() {
+        let f = cl();
+        let serialized = serde_json::to_string(&f).unwrap();
+        let expected = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2026,\"tenor\":6,\"day\":null}";
+
+        assert_eq!(serialized, expected);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_futures_deserialize() {
+        let serialized = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2026,\"tenor\":6,\"day\":null}";
+        let expected = cl();
+        let deserialized: FuturesContract = serde_json::from_str(serialized).unwrap();
+
+        assert_eq!(deserialized, expected);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_futures_with_day_serialize() {
+        let f = cl_with_day();
+        let serialized = serde_json::to_string(&f).unwrap();
+        let expected = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2026,\"tenor\":6,\"day\":20}";
+
+        assert_eq!(serialized, expected);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_futures_with_day_deserialize() {
+        let serialized = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2026,\"tenor\":6,\"day\":20}";
+        let expected = cl_with_day();
+        let deserialized: FuturesContract = serde_json::from_str(serialized).unwrap();
+
+        assert_eq!(deserialized, expected);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_futures_is_owned() {
+        _assert_owned::<FuturesContract>();
     }
 }
