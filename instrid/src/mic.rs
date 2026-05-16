@@ -517,6 +517,7 @@ fn read_opt_date(field: &[u8]) -> Option<Date> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::_assert_owned;
 
     #[test]
     fn xnas_lookup_returns_some() {
@@ -581,5 +582,11 @@ mod tests {
         let expected = mic_by_code("DRSP").expect("Mic not found");
 
         assert_eq!(mic, expected);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_mic_is_owned() {
+        _assert_owned::<Mic>();
     }
 }
