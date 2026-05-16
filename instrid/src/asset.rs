@@ -141,7 +141,7 @@ mod tests {
 
     #[cfg(feature = "serde")]
     #[test]
-    fn test_asset_deserialization_from_runtime_buffer() {
+    fn test_asset_owned() {
         _assert_owned::<Asset>();
     }
 }
