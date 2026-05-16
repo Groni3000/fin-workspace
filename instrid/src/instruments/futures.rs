@@ -5,6 +5,7 @@ use crate::instruments::TradedInstrument;
 use crate::mic::Mic;
 use crate::tenor::Tenor;
 
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct FuturesContract {
     base: Asset,
@@ -112,16 +113,21 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn display_without_day() {
-        let f = FuturesContract::new(
+    // fixtures
+    fn cl() -> FuturesContract {
+        FuturesContract::new(
             Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
             2026,
             Tenor::June,
             None,
-        );
+        )
+    }
+
+    #[test]
+    fn display_without_day() {
+        let f = cl();
         assert_eq!(
             f.to_string(),
             "Futures:(Commodity)CL/(Currency)USD@XNAS 2026-06",
@@ -130,14 +136,7 @@ mod tests {
 
     #[test]
     fn display_with_day() {
-        let f = FuturesContract::new(
-            Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
-            Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            Mic::xnas(),
-            2026,
-            Tenor::June,
-            Some(20),
-        );
+        let f = cl();
         assert_eq!(
             f.to_string(),
             "Futures:(Commodity)CL/(Currency)USD@XNAS 2026-06-20",
