@@ -1,3 +1,5 @@
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use std::{fmt::Display, str::FromStr};
 
 /// Market Identifier Code (MIC) record as defined by ISO 10383.
@@ -315,6 +317,30 @@ impl Display for Date {
     }
 }
 
+#[cfg(feature = "serde")]
+impl Serialize for Mic {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(
+            std::str::from_utf8(self.code.as_slice())
+                .map_err(|_err| serde::ser::Error::custom("Code should be a valid UTF-8"))?,
+        )
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for Mic {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s: &str = Deserialize::deserialize(deserializer)?;
+        mic_by_code(s).ok_or_else(|| serde::de::Error::custom(format!("MIC not found: {s}")))
+    }
+}
+
 include!(concat!(env!("OUT_DIR"), "/mic_generated.rs"));
 
 #[cfg(test)]
@@ -343,5 +369,46 @@ mod tests {
     fn full_registry_includes_obscure_mic() {
         // Present only in the full registry, not in the curated set.
         assert!(mic_by_code("DRSP").is_some());
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn serialize_curated_mic() {
+        let mic = Mic::xcec();
+        let serialized = serde_json::to_string(&mic).expect("Mic should be serializable");
+        let expected = "\"XCEC\"";
+
+        assert_eq!(serialized, expected);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn deserialize_curated_mic() {
+        let str_mic = "\"XCEC\"";
+        let mic: Mic = serde_json::from_str(str_mic).expect("Mic should be deserializable");
+        let expected = Mic::xcec();
+
+        assert_eq!(mic, expected);
+    }
+
+    #[cfg(all(feature = "mic-full", feature = "serde"))]
+    #[test]
+    fn serialize_full_registry_mic() {
+        // Present only in the full registry, not in the curated set.
+        let mic = mic_by_code("DRSP").expect("Mic not found");
+        let serialized = serde_json::to_string(&mic).expect("Mic should be serializable");
+        let expected = "\"DRSP\"";
+
+        assert_eq!(serialized, expected);
+    }
+
+    #[cfg(all(feature = "mic-full", feature = "serde"))]
+    #[test]
+    fn deserialize_full_registry_mic() {
+        let mic_str = "\"DRSP\"";
+        let mic: Mic = serde_json::from_str(&mic_str).expect("Mic should be deserializable");
+        let expected = mic_by_code("DRSP").expect("Mic not found");
+
+        assert_eq!(mic, expected);
     }
 }
