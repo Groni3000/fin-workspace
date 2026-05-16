@@ -19,6 +19,12 @@ pub enum Tenor {
     December = 12,
 }
 
+impl From<Tenor> for u8 {
+    fn from(value: Tenor) -> Self {
+        value as u8
+    }
+}
+
 impl TryFrom<u8> for Tenor {
     type Error = &'static str;
 
@@ -38,12 +44,6 @@ impl TryFrom<u8> for Tenor {
             12 => Ok(Tenor::December),
             _ => Err("invalid tenor value"),
         }
-    }
-}
-
-impl Into<u8> for Tenor {
-    fn into(self) -> u8 {
-        self.ordinal()
     }
 }
 
