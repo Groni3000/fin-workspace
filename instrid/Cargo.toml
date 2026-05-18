@@ -6,7 +6,7 @@ description = "Financial instrument identification types"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rust_decimal = {version = "1.42.0", features = ["serde"]}
+rust_decimal = "1.42.0"
 serde = { version = "1", optional = true, features = ["derive"] }
 
 [dev-dependencies]
@@ -19,4 +19,4 @@ csv = { version = "1" }
 [features]
 default = []
 mic-full = []
-serde = ["dep:serde"]
+serde = ["dep:serde", "rust_decimal/serde"]
