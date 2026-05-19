@@ -127,22 +127,24 @@ weekday.
 
 | Rule | Used by (examples) |
 |---|---|
-| `NthWeekdayOfCurrentMonth { n, weekday, offset }` | ES, NQ, FDAX, NKD (3rd Fri); BTC, ETH, MET (last Fri); 6E, 6B, 6A, 6C (3rd Wed −2 BDay) |
-| `LastNthBDayOfPrevMonth { n, offset }` | GC, HG, ZS, RB, HO, SI, SB, ZW (`n = 1`); NG (`n = 3`) |
+| `NthWeekdayOfCurrentMonth { n, weekday, offset }` | ES, NQ, FDAX, NKD (3rd Fri); BTC, ETH, MET (last Fri); 6E, 6B, 6A, 6C (3rd Wed −2 BDay); LE (1st Fri) |
+| `NthWeekdayOfNextMonth { n, weekday, offset }` | VX (3rd Fri of next month, −30 calendar days) |
+| `LastNthBDayOfPrevMonth { n, offset }` | GC, HG, PL, ZS, RB, HO, SI, SB, ZW (`n = 1`); NG (`n = 3`); KC (`n = 7`) |
+| `NthBDayOfCurrentMonth { n, offset }` | HE (`n = 10`) |
+| `NthBDayPriorToOrdinalDayOfPrevMonth { ordinal_day, n, offset }` | CL (`ordinal_day = 25`, `n = 3`) |
+| `NthCalendarDayOfCurrentMonth { n, mode, offset }` | FGBL (`n = 10`, `Succeeding`) |
 
-Both rules are `#[derive(Debug, Clone, Copy)]`. More rules are planned for
-the products whose specs the current two don't cover (`LastNthBDayOfMonth`
-for ZB, calendar-day rules for VX, etc.).
+All rules are `#[derive(Debug, Clone, Copy)]`.
 
-`LastNthBDayOfPrevMonth.n` is a `NonZeroU8` — `n = 0` would silently mean
-"first day of the contract month" and produce nonsense. For literal values:
+Several rules take a `NonZeroU8` for `n` — `n = 0` would silently mean
+"first day of the contract month" (or worse) and produce nonsense. For
+literal values use `from_u8`, which panics on `0` at runtime, or fails at
+compile time in a `const` context. For runtime input, build a `NonZeroU8`
+upstream and call `new`.
 
 ```rust
 LastNthBDayOfPrevMonth::from_u8(3, DateOffset::BusinessDays(-1))
 ```
-
-`from_u8` panics on `0` at runtime, or fails at compile time in a `const`
-context. For runtime input, build a `NonZeroU8` upstream and call `new`.
 
 ## Scope
 
