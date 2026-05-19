@@ -2,6 +2,7 @@ use chrono::{Datelike, Duration, NaiveDate, Weekday};
 use instrid::prelude::FuturesContract;
 
 pub mod last_nth_bday_of_prev_month;
+pub mod nth_bday_of_current_month;
 pub mod nth_weekday_of_current_month;
 pub mod nth_weekday_of_next_month;
 
