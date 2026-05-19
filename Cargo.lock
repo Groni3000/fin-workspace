@@ -656,6 +656,11 @@ dependencies = [
 [[package]]
 name = "tradeprim"
 version = "0.1.0"
+dependencies = [
+ "instrid",
+ "rust_decimal",
+ "rust_decimal_macros",
+]
 
 [[package]]
 name = "unicode-ident"

@@ -1,14 +1,33 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+use std::fmt::Display;
+
+use instrid::prelude::*;
+use rust_decimal::Decimal;
+
+#[derive(Debug)]
+pub struct Amount<'a> {
+    quantity: Decimal,
+    asset: &'a Asset,
+}
+
+impl Display for Amount<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.quantity, self.asset.name())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rust_decimal_macros::dec;
 
     #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+    fn test_amount_display() {
+        let asset =
+            Asset::new("BTC", AssetClass::Currency).expect("Asset got incorrect parameters");
+        let amount = Amount {
+            quantity: dec!(1.5),
+            asset: &asset,
+        };
+        assert_eq!(format!("{}", amount), "1.5 BTC");
     }
 }
