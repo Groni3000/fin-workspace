@@ -14,6 +14,8 @@
 //! longer than 12 chars (at least to my knowledge),
 //! we can build our own bounded string representation
 
+use std::fmt::Display;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +32,12 @@ use serde::{Deserialize, Serialize};
 pub struct InlineStr<const N: usize> {
     buffer: [u8; N],
     len: u8, // assume N <= 255
+}
+
+impl<const N: usize> Display for InlineStr<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
