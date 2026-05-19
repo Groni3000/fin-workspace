@@ -3,12 +3,16 @@ use instrid::prelude::FuturesContract;
 
 pub mod last_nth_bday_of_prev_month;
 pub mod nth_bday_of_current_month;
+pub mod nth_bday_prior_to_ordinal_day_of_prev_month;
+pub mod nth_calendar_day_of_current_month;
 pub mod nth_weekday_of_current_month;
 pub mod nth_weekday_of_next_month;
-pub mod nth_bday_prior_to_ordinal_day_of_prev_month;
-
 pub use last_nth_bday_of_prev_month::LastNthBDayOfPrevMonth;
+pub use nth_bday_of_current_month::NthBDayOfCurrentMonth;
+pub use nth_bday_prior_to_ordinal_day_of_prev_month::NthBDayPriorToOrdinalDayOfPrevMonth;
+pub use nth_calendar_day_of_current_month::{NonBusinessDayAdjust, NthCalendarDayOfCurrentMonth};
 pub use nth_weekday_of_current_month::NthWeekdayOfCurrentMonth;
+pub use nth_weekday_of_next_month::NthWeekdayOfNextMonth;
 
 /// Computes the *end-of-trading* date for a given futures contract.
 ///
