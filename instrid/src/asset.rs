@@ -35,6 +35,10 @@ impl Asset {
     pub fn class(&self) -> AssetClass {
         self.class
     }
+
+    pub fn name(&self) -> crate::inline_str::InlineStr<12> {
+        self.name
+    }
 }
 
 impl Display for Asset {
