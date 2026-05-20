@@ -1,17 +1,65 @@
-use std::fmt::Display;
+use std::{
+    fmt::Display,
+    ops::{Add, Neg, Sub},
+};
 
 use instrid::prelude::*;
 use rust_decimal::Decimal;
 
-#[derive(Debug)]
-pub struct Amount<'a> {
+#[derive(Debug, Clone, Copy)]
+pub struct Amount {
     quantity: Decimal,
-    asset: &'a Asset,
+    asset: Asset,
 }
 
-impl Display for Amount<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Amount {
+    pub fn new(quantity: Decimal, asset: Asset) -> Self {
+        Self { quantity, asset }
+    }
+
+    /// Adds two amounts if they have the same asset, otherwise returns `None`.
+    pub fn try_add(self, rhs: Amount) -> Option<Self> {
+        if self.asset != rhs.asset {
+            return None;
+        }
+        Some(Self::new(self.quantity + rhs.quantity, self.asset))
+    }
+
+    // TODO: try_sub
+}
+
+impl Display for Amount {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{} {}", self.quantity, self.asset.name())
+    }
+}
+
+impl Add for Amount {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        assert_eq!(self.asset, rhs.asset);
+        Amount {
+            quantity: self.quantity + rhs.quantity,
+            asset: self.asset,
+        }
+    }
+}
+
+impl Neg for Amount {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Self::new(-self.quantity, self.asset)
+    }
+}
+
+impl Sub for Amount {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        assert_eq!(self.asset, rhs.asset);
+        Self::new(self.quantity - rhs.quantity, self.asset)
     }
 }
 
@@ -26,8 +74,40 @@ mod tests {
             Asset::new("BTC", AssetClass::Currency).expect("Asset got incorrect parameters");
         let amount = Amount {
             quantity: dec!(1.5),
-            asset: &asset,
+            asset,
         };
         assert_eq!(format!("{}", amount), "1.5 BTC");
+    }
+
+    #[test]
+    fn test_neg() {
+        let asset =
+            Asset::new("BTC", AssetClass::Currency).expect("Asset got incorrect parameters");
+        let amount = Amount::new(dec!(1.5), asset);
+        let neg_amount = -amount;
+        assert_eq!(format!("{}", neg_amount), "-1.5 BTC");
+        assert_eq!(neg_amount.quantity, dec!(-1.5));
+    }
+
+    #[test]
+    fn test_add() {
+        let asset =
+            Asset::new("BTC", AssetClass::Currency).expect("Asset got incorrect parameters");
+        let amount1 = Amount::new(dec!(1.5), asset);
+        let amount2 = Amount::new(dec!(2.0), asset);
+        let sum = amount1 + amount2;
+        assert_eq!(format!("{}", sum), "3.5 BTC");
+        assert_eq!(sum.quantity, dec!(3.5));
+    }
+
+    #[test]
+    fn test_sub() {
+        let asset =
+            Asset::new("BTC", AssetClass::Currency).expect("Asset got incorrect parameters");
+        let amount1 = Amount::new(dec!(3.0), asset);
+        let amount2 = Amount::new(dec!(2.5), asset);
+        let diff = amount1 - amount2;
+        assert_eq!(format!("{}", diff), "0.5 BTC");
+        assert_eq!(diff.quantity, dec!(0.5));
     }
 }
