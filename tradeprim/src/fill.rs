@@ -22,7 +22,7 @@ pub struct Fill {
     instrument: Arc<Instrument>,
     quantity: Quantity,
     price: Price,
-    fee: Option<Price>,
+    fee: Option<Amount>,
 }
 
 impl Price {
@@ -46,7 +46,7 @@ impl Fill {
         instrument: Arc<Instrument>,
         quantity: Quantity,
         price: Price,
-        fee: Option<Price>,
+        fee: Option<Amount>,
     ) -> Self {
         Self {
             timestamp,
@@ -72,7 +72,7 @@ impl Fill {
             instrument,
             quantity: Quantity::new(quantity, base).unwrap(),
             price: Price::new(price, quote),
-            fee: fee.map(|f| Price::new(f, quote)),
+            fee: fee.map(|f| Amount::new(f, quote)),
         }
     }
 }
