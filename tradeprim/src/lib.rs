@@ -51,14 +51,6 @@ impl Amount {
         Some(Self::new(self.quantity - rhs.quantity, self.asset))
     }
 
-    /// Multiplies two amounts if they have the same asset, otherwise returns `None`.
-    pub fn try_mul(self, rhs: Amount) -> Option<Self> {
-        if self.asset != rhs.asset {
-            return None;
-        }
-        Some(Self::new(self.quantity * rhs.quantity, self.asset))
-    }
-
     pub fn quantity(&self) -> Decimal {
         self.quantity
     }
