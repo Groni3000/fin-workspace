@@ -1,3 +1,4 @@
+pub mod fill;
 use std::{
     fmt::Display,
     ops::{Add, Mul, Neg, Sub},
