@@ -1,26 +1,55 @@
-use crate::Amount;
+use crate::{Amount, Side};
 use chrono::{DateTime, Utc};
 use instrid::prelude::*;
 use rust_decimal::Decimal;
-use std::sync::Arc;
+use std::{error::Error, fmt::Display, sync::Arc};
 
 /// Represents a price of an asset.
 ///
-/// Can be negative, zero, or positive.
-#[derive(Debug)]
+/// Can be negative, zero (spreads), or positive.
+#[derive(Debug, Clone, Copy)]
 pub struct Price(Amount);
+
+impl Price {
+    pub fn value(self) -> Decimal {
+        self.0.quantity
+    }
+
+    pub fn asset(self) -> Asset {
+        self.0.asset
+    }
+
+    pub fn amount(self) -> Amount {
+        self.0
+    }
+}
 
 /// Represents a quantity of an asset.
 ///
 /// A quantity is a positive, non-zero amount of an asset.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Quantity(Amount);
 
-#[derive(Debug)]
+impl Quantity {
+    pub fn value(self) -> Decimal {
+        self.0.quantity
+    }
+
+    pub fn asset(self) -> Asset {
+        self.0.asset
+    }
+
+    pub fn amount(self) -> Amount {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Fill {
     timestamp: DateTime<Utc>,
     instrument: Arc<Instrument>,
     quantity: Quantity,
+    side: Side,
     price: Price,
     fee: Option<Amount>,
 }
@@ -33,28 +62,70 @@ impl Price {
 
 impl Quantity {
     pub fn new(value: Decimal, asset: Asset) -> Option<Self> {
-        match value.is_sign_positive() && !value.is_zero() {
-            true => Some(Self(Amount::new(value, asset))),
-            false => None,
-        }
+        (value > Decimal::ZERO).then(|| Self(Amount::new(value, asset)))
     }
 }
 
+/// Errors that can occur when creating a `Fill`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FillError {
+    QuantityAssetMismatch { expected: Asset, got: Asset },
+    PriceAssetMismatch { expected: Asset, got: Asset },
+    FeeAssetMismatch { expected: Asset, got: Asset },
+}
+
+impl Display for FillError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self, f)
+    }
+}
+
+impl Error for FillError {}
+
 impl Fill {
+    /// Creates a [`Fill`](crate::fill::Fill). Validates [`Asset`](instrid::prelude::Asset)s
+    /// - instrument base asset is the same as the fill quantity asset.
+    /// - instrument quote asset is the same as the fill price asset and fee (if present).
     pub fn new(
         timestamp: DateTime<Utc>,
         instrument: Arc<Instrument>,
         quantity: Quantity,
+        side: Side,
         price: Price,
         fee: Option<Amount>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, FillError> {
+        let base = *instrument.base();
+        let quote = *instrument.quote();
+
+        if base != quantity.asset() {
+            return Err(FillError::QuantityAssetMismatch {
+                expected: base,
+                got: quantity.asset(),
+            });
+        }
+        if quote != price.asset() {
+            return Err(FillError::PriceAssetMismatch {
+                expected: quote,
+                got: price.asset(),
+            });
+        }
+        if let Some(fee) = fee {
+            if fee.asset != quote {
+                return Err(FillError::FeeAssetMismatch {
+                    expected: quote,
+                    got: fee.asset,
+                });
+            }
+        }
+
+        Ok(Self {
             timestamp,
             instrument,
             quantity,
+            side,
             price,
             fee,
-        }
+        })
     }
 
     /// Creates a `Fill` from raw values, validating that the quantity is positive and non-zero.
@@ -62,11 +133,12 @@ impl Fill {
         timestamp: DateTime<Utc>,
         instrument: Arc<Instrument>,
         quantity: Decimal,
+        side: Side,
         price: Decimal,
         fee: Option<Decimal>,
     ) -> Option<Self> {
-        let base = instrument.base().clone();
-        let quote = instrument.quote().clone();
+        let base = *instrument.base();
+        let quote = *instrument.quote();
         let qty = Quantity::new(quantity, base)?;
         let price = Price::new(price, quote);
         let fee = fee.map(|f| Amount::new(f, quote));
@@ -75,8 +147,33 @@ impl Fill {
             timestamp,
             instrument,
             quantity: qty,
+            side,
             price,
             fee,
         })
+    }
+
+    pub fn timestamp(&self) -> DateTime<Utc> {
+        self.timestamp
+    }
+
+    pub fn instrument(&self) -> &Instrument {
+        &self.instrument
+    }
+
+    pub fn quantity(&self) -> Quantity {
+        self.quantity
+    }
+
+    pub fn side(&self) -> Side {
+        self.side
+    }
+
+    pub fn price(&self) -> Price {
+        self.price
+    }
+
+    pub fn fee(&self) -> Option<Amount> {
+        self.fee
     }
 }
