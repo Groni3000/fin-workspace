@@ -112,6 +112,41 @@ impl Mul for Amount {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Side {
+    Buy,
+    Sell,
+}
+
+impl Side {
+    pub fn sign(self) -> Decimal {
+        self.into()
+    }
+
+    pub fn opposite(self) -> Self {
+        match self {
+            Self::Buy => Self::Sell,
+            Self::Sell => Self::Buy,
+        }
+    }
+}
+
+impl From<Side> for Decimal {
+    fn from(s: Side) -> Self {
+        match s {
+            Side::Buy => Decimal::ONE,
+            Side::Sell => Decimal::NEGATIVE_ONE,
+        }
+    }
+}
+
+impl Neg for Side {
+    type Output = Self;
+    fn neg(self) -> Self {
+        self.opposite()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
