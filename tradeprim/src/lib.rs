@@ -51,11 +51,11 @@ impl Amount {
         Some(Self::new(self.quantity - rhs.quantity, self.asset))
     }
 
-    pub fn quantity(&self) -> Decimal {
+    pub fn quantity(self) -> Decimal {
         self.quantity
     }
 
-    pub fn asset(&self) -> Asset {
+    pub fn asset(self) -> Asset {
         self.asset
     }
 }
