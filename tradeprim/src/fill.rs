@@ -57,22 +57,26 @@ impl Fill {
         }
     }
 
+    /// Creates a `Fill` from raw values, validating that the quantity is positive and non-zero.
     pub fn from_raw(
         timestamp: DateTime<Utc>,
         instrument: Arc<Instrument>,
         quantity: Decimal,
         price: Decimal,
         fee: Option<Decimal>,
-    ) -> Self {
+    ) -> Option<Self> {
         let base = instrument.base().clone();
         let quote = instrument.quote().clone();
+        let qty = Quantity::new(quantity, base)?;
+        let price = Price::new(price, quote);
+        let fee = fee.map(|f| Amount::new(f, quote));
 
-        Self {
+        Some(Self {
             timestamp,
             instrument,
-            quantity: Quantity::new(quantity, base).unwrap(),
-            price: Price::new(price, quote),
-            fee: fee.map(|f| Amount::new(f, quote)),
-        }
+            quantity: qty,
+            price,
+            fee,
+        })
     }
 }
