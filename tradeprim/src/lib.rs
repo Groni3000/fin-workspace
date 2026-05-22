@@ -6,6 +6,23 @@ use std::{
 use instrid::prelude::*;
 use rust_decimal::Decimal;
 
+/// Represents an amount of a particular asset.
+///
+/// A particular interesting implication of this
+/// structure is that you can use it for
+/// - base asset - representing quantity
+/// - quote asset - representing value/price of base asset
+///
+/// But... The most important thing about representing
+/// a base asset "Amount" is it being `> 0`, so unfortunately
+/// it's not recommended to use this for representing base asset.
+///
+/// So, we will probably wrap this struct into a wrapper with
+/// invariants that ensure `> 0` quantity.
+///
+/// Note: if you care about size => you'd probably want to
+/// drop `asset` "label" which will reduce the size from
+/// 32 -> 16 bytes.
 #[derive(Debug, Clone, Copy)]
 pub struct Amount {
     quantity: Decimal,
