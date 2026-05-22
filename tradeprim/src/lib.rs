@@ -1,6 +1,6 @@
 use std::{
     fmt::Display,
-    ops::{Add, Neg, Sub},
+    ops::{Add, Mul, Neg, Sub},
 };
 
 use instrid::prelude::*;
@@ -42,7 +42,29 @@ impl Amount {
         Some(Self::new(self.quantity + rhs.quantity, self.asset))
     }
 
-    // TODO: try_sub
+    /// Subtracts two amounts if they have the same asset, otherwise returns `None`.
+    pub fn try_sub(self, rhs: Amount) -> Option<Self> {
+        if self.asset != rhs.asset {
+            return None;
+        }
+        Some(Self::new(self.quantity - rhs.quantity, self.asset))
+    }
+
+    /// Multiplies two amounts if they have the same asset, otherwise returns `None`.
+    pub fn try_mul(self, rhs: Amount) -> Option<Self> {
+        if self.asset != rhs.asset {
+            return None;
+        }
+        Some(Self::new(self.quantity * rhs.quantity, self.asset))
+    }
+
+    pub fn quantity(&self) -> Decimal {
+        self.quantity
+    }
+
+    pub fn asset(&self) -> Asset {
+        self.asset
+    }
 }
 
 impl Display for Amount {
@@ -77,6 +99,15 @@ impl Sub for Amount {
     fn sub(self, rhs: Self) -> Self::Output {
         assert_eq!(self.asset, rhs.asset);
         Self::new(self.quantity - rhs.quantity, self.asset)
+    }
+}
+
+impl Mul for Amount {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        assert_eq!(self.asset, rhs.asset);
+        Self::new(self.quantity * rhs.quantity, self.asset)
     }
 }
 
