@@ -1,7 +1,7 @@
 pub mod fill;
 use std::{
     fmt::Display,
-    ops::{Add, Mul, Neg, Sub},
+    ops::{Add, Neg, Sub},
 };
 
 use instrid::prelude::*;
@@ -100,15 +100,6 @@ impl Sub for Amount {
     fn sub(self, rhs: Self) -> Self::Output {
         assert_eq!(self.asset, rhs.asset);
         Self::new(self.quantity - rhs.quantity, self.asset)
-    }
-}
-
-impl Mul for Amount {
-    type Output = Self;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        assert_eq!(self.asset, rhs.asset);
-        Self::new(self.quantity * rhs.quantity, self.asset)
     }
 }
 
