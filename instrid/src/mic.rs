@@ -1,5 +1,6 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use std::cmp::Eq;
 use std::{fmt::Display, str::FromStr};
 
 /// Market Identifier Code (MIC) record as defined by ISO 10383.
@@ -7,7 +8,8 @@ use std::{fmt::Display, str::FromStr};
 /// Identifies a securities trading exchange, regulated market, or
 /// other trading venue, along with descriptive metadata published
 /// in the ISO MIC registry.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Mic {
     /// Four-character MIC assigned to the venue (e.g. `XNAS`).
     code: [u8; 4],
@@ -86,6 +88,14 @@ impl Mic {
         }
     }
 }
+
+impl PartialEq for Mic {
+    fn eq(&self, other: &Self) -> bool {
+        self.code == other.code
+    }
+}
+
+impl Eq for Mic {}
 
 impl Display for Mic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
