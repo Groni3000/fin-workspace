@@ -1,0 +1,2 @@
+[cargo]
+features = ["serde", "mic-full"]
