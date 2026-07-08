@@ -405,6 +405,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "oms"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "instrid",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -848,7 +856,6 @@ dependencies = [
 name = "tradeprim"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "proptest",
  "rust_decimal",
  "rust_decimal_macros",
