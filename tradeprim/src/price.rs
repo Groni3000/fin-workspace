@@ -86,7 +86,7 @@ impl FromStr for Price {
         let is_negative = integer.starts_with('-');
 
         let parsed_integer =
-            i64::from_str(integer).map_err(|x| ParsePriceError::ParseIntError(x))?;
+            i64::from_str(integer).map_err(ParsePriceError::ParseIntError)?;
         if parsed_integer > Price::MAX_INTEGER_PART || parsed_integer < -Price::MAX_INTEGER_PART {
             return Err(ParsePriceError::OutOfBounds);
         }
@@ -99,8 +99,22 @@ impl FromStr for Price {
         }
         let remaining_precision = Price::PRECISION - used_precision as u32;
         let parsed_fraction =
-            i64::from_str(fraction).map_err(|x| ParsePriceError::ParseIntError(x))?;
-        let adjusted_fraction = parsed_fraction * 10_i64.pow(remaining_precision);
+            i64::from_str(fraction).map_err(ParsePriceError::ParseIntError)?;
+        // Powers of ten indexed by remaining precision (0..=PRECISION), so the
+        // per-parse scaling is a table lookup instead of a runtime `pow`.
+        const POW10: [i64; Price::PRECISION as usize + 1] = [
+            1,
+            10,
+            100,
+            1_000,
+            10_000,
+            100_000,
+            1_000_000,
+            10_000_000,
+            100_000_000,
+            1_000_000_000,
+        ];
+        let adjusted_fraction = parsed_fraction * POW10[remaining_precision as usize];
 
         let combined = match is_negative {
             true => -(parsed_integer * Price::SCALE + adjusted_fraction),
