@@ -9,13 +9,26 @@ strongly-typed primitives for it, and composes with the others without
 forcing a particular framework on the caller.
 
 ## Crates
+### [`tradeprim`](./tradeprim) — primitive types for trading
+
+Price, Quantity, Notional, ... - those basic types implemented here.
+Currently work in progress.
 
 ### [`instrid`](./instrid) — strongly-typed instrument identity
 
 Distinguishes *entity-level* identity (`AAPL`, an equity) from *venue-level*
-identity (`AAPL @ XNGS`). `Asset`, `Mic`, `TradedInstrument`, and concrete
-kinds (`Stock`, `FuturesContract`, `OptionContract`). No prices, no orders —
-just identity with enough structure to compose into bigger things.
+identity (`AAPL @ XNGS`). `Asset`, `Mic`, `Tenor`, `TradedInstrument`, the
+`Instrument` enum, and concrete kinds (`Stock`, `FuturesContract`,
+`OptionContract`). No prices, no orders — just identity with enough structure
+to compose into bigger things.
+
+Features:
+- `mic-full` — embeds the full ISO 10383 MIC registry (~2800 entries) as a
+  packed binary blob, lazily parsed into a lookup map on first `mic_by_code`
+  call. Off by default; the ~30 curated `Mic::xnas()`-style constants are
+  always available.
+- `serde` — `Serialize`/`Deserialize` for every public identity type, with
+  compile-time `DeserializeOwned` checks (no borrowed fields).
 
 ### [`futchain`](./futchain) — futures chain navigation + end-of-trading rules
 
@@ -25,14 +38,11 @@ A `FutChain` cursor walks a `FuturesContract` through a `ListedTenors` cycle
 (*third Friday*, *last business day of prior month*, etc.). Chain and rule
 are independent — glue them together with a `while` loop.
 
-## Layout
 
-```
-fin-workspace/
-├── Cargo.toml          # workspace root
-├── instrid/            # instrument identity
-└── futchain/           # chains + EOT rules
-```
+### [`oms`](./oms) — order management system
+
+This crate will be a thin communication-layer between Strategy and Executor.
+
 
 ## Working in the workspace
 
@@ -45,17 +55,10 @@ cargo run -p futchain --example historical_roll_schedule
 
 ## Design principles
 
-- **One concept per crate.** `instrid` is identity; `futchain` is the chain
-  and its calendar rules. They depend in one direction.
+- **Easy to grasp.** each crate is relatively small.
 - **Strongly-typed inputs over stringly-typed ones.** `Tenor::March`, not
-  `"H"`. `NonZeroU8`, not `u8` with a runtime check buried somewhere.
-- **Stateless rules.** An `EndOfTrading` impl holds parameters, not state.
-  One instance applies to every contract in a chain.
-- **Defensive arithmetic at the seams.** Year over/underflow on chain
-  navigation panics with a clear message instead of silently wrapping `u16`.
-- **Narrow scope, on purpose.** No holiday calendar in `futchain`. No order
-  routing in `instrid`. These are downstream concerns; keeping them out
-  keeps the primitives reusable.
+- **Balance between performance and assumptions.** There may be
+some assumptions about data (struct invariants) to make code more efficient.
 
 ## License
 
