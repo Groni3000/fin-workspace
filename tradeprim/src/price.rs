@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, num::ParseIntError, str::FromStr};
 
 /// Has fixed scale and max value.
 ///
@@ -17,12 +17,15 @@ pub struct Price {
 }
 
 impl Price {
+    pub const PRECISION: u32 = 9;
     /// 1e9
-    pub const SCALE: i64 = 1_000_000_000;
-    /// 1e6 (real), 1e9 (Scale)
-    pub const MAX_RAW: i64 = 1_000_000_000_000_000;
-    /// 1e6 (real), 1e9 (Scale)
-    pub const MIN_RAW: i64 = -1_000_000_000_000_000;
+    pub const SCALE: i64 = 10_i64.pow(Price::PRECISION);
+    /// 1e6
+    pub const MAX_INTEGER_PART: i64 = 1_000_000;
+    /// 1_000_000.999_999_999 (max integer part with a full fraction)
+    pub const MAX_RAW: i64 = Price::MAX_INTEGER_PART * Price::SCALE + (Price::SCALE - 1);
+    /// -1_000_000.999_999_999
+    pub const MIN_RAW: i64 = -Price::MAX_RAW;
     /// zero value
     pub const ZERO: Self = Self { value: 0 };
 
@@ -32,6 +35,10 @@ impl Price {
         }
 
         Some(Self { value })
+    }
+
+    fn new_unchecked(value: i64) -> Self {
+        Self { value }
     }
 
     pub fn value(self) -> i64 {
@@ -54,6 +61,53 @@ impl From<Price> for f64 {
 impl From<Price> for i64 {
     fn from(value: Price) -> Self {
         value.value
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParsePriceError {
+    InvalidFormat,
+    OutOfBounds,
+    PrecisionError(usize),
+    ParseIntError(ParseIntError),
+}
+
+impl FromStr for Price {
+    type Err = ParsePriceError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (integer, fraction) = s.split_once('.').unwrap_or((s, "000000000"));
+        let (integer, fraction) = (integer.trim(), fraction.trim());
+        // Check below needed to not accept and parse `-0.-1`
+        // The fraction part would be parsed no problem
+        if fraction.starts_with('-') {
+            return Err(ParsePriceError::InvalidFormat);
+        }
+        let is_negative = integer.starts_with('-');
+
+        let parsed_integer =
+            i64::from_str(integer).map_err(|x| ParsePriceError::ParseIntError(x))?;
+        if parsed_integer > Price::MAX_INTEGER_PART || parsed_integer < -Price::MAX_INTEGER_PART {
+            return Err(ParsePriceError::OutOfBounds);
+        }
+        // We do it after min/max check because i64::MIN.abs() would panic
+        let parsed_integer = parsed_integer.abs();
+
+        let used_precision = fraction.len();
+        if used_precision > Price::PRECISION as usize {
+            return Err(ParsePriceError::PrecisionError(used_precision));
+        }
+        let remaining_precision = Price::PRECISION - used_precision as u32;
+        let parsed_fraction =
+            i64::from_str(fraction).map_err(|x| ParsePriceError::ParseIntError(x))?;
+        let adjusted_fraction = parsed_fraction * 10_i64.pow(remaining_precision);
+
+        let combined = match is_negative {
+            true => -(parsed_integer * Price::SCALE + adjusted_fraction),
+            false => parsed_integer * Price::SCALE + adjusted_fraction,
+        };
+
+        Ok(Price::new_unchecked(combined))
     }
 }
 
@@ -87,16 +141,14 @@ mod tests {
 
     #[test]
     fn test_price_new() {
-        let max_raw_price = 1_000_000_000_000_000;
-        let max_price = Price::new(max_raw_price).unwrap();
+        let max_price = Price::new(Price::MAX_RAW).unwrap();
         assert_eq!(Price::MAX_RAW, max_price.value);
 
-        let min_raw_price = -1_000_000_000_000_000;
-        let min_price = Price::new(min_raw_price).unwrap();
+        let min_price = Price::new(Price::MIN_RAW).unwrap();
         assert_eq!(Price::MIN_RAW, min_price.value);
 
-        let invalid_price = 1_000_000_000_000_001;
-        assert!(Price::new(invalid_price).is_none());
+        assert!(Price::new(Price::MAX_RAW + 1).is_none());
+        assert!(Price::new(Price::MIN_RAW - 1).is_none());
     }
 
     #[test]
@@ -164,7 +216,6 @@ mod tests {
         let price: Result<Price, FromF64Error> = TryInto::try_into(raw);
         assert!(price.is_ok_and(|x| x == Price::ZERO));
 
-        // closest to threshold of 0.001
         let raw = 0.000_000_000_000_9; // 0.0009 - Should not cause an error
         let price: Result<Price, FromF64Error> = TryInto::try_into(raw);
         assert!(price.is_ok_and(|x| x == Price::ZERO));
@@ -177,13 +228,13 @@ mod tests {
         let price: Result<Price, FromF64Error> = TryInto::try_into(raw);
         assert_matches!(price, Err(FromF64Error::OutOfBounds(_)));
 
-        let raw = 1_000_000.000000001; // out of bound by 1 digit
+        let raw = 1_000_000.000000001;
         let price: Result<Price, FromF64Error> = TryInto::try_into(raw);
-        assert_matches!(price, Err(FromF64Error::OutOfBounds(_)));
+        assert!(price.is_ok_and(|x| x.value == 1_000_000_000_000_001));
 
-        let raw = -1_000_000.000000001; // out of bound by 1 digit
+        let raw = -1_000_000.000000001;
         let price: Result<Price, FromF64Error> = TryInto::try_into(raw);
-        assert_matches!(price, Err(FromF64Error::OutOfBounds(_)));
+        assert!(price.is_ok_and(|x| x.value == -1_000_000_000_000_001));
 
         // NAN/INF/NEG_INF
         let raw = f64::NAN;
@@ -223,6 +274,37 @@ mod tests {
         }));
     }
 
+    #[test]
+    fn test_str_to_price_conversions() {
+        let input = "";
+        let price = Price::from_str(input);
+        assert_matches!(price, Err(ParsePriceError::ParseIntError(_)));
+
+        let input = "1";
+        let price = Price::from_str(input);
+        assert!(price.is_ok_and(|x| x.eq(&Price::new_unchecked(1_000_000_000))));
+
+        let input = "1.0";
+        let price = Price::from_str(input);
+        assert!(price.is_ok_and(|x| x.eq(&Price::new_unchecked(1_000_000_000))));
+
+        let input = "-1.0";
+        let price = Price::from_str(input);
+        assert!(price.is_ok_and(|x| x.eq(&Price::new_unchecked(-1_000_000_000))));
+
+        let input = "-0.5";
+        let price = Price::from_str(input);
+        assert!(price.is_ok_and(|x| x.eq(&Price::new_unchecked(-500_000_000))));
+
+        let input = "1.5";
+        let price = Price::from_str(input);
+        assert!(price.is_ok_and(|x| x.eq(&Price::new_unchecked(1_500_000_000))));
+
+        let input = "1.-5";
+        let price = Price::from_str(input);
+        assert_matches!(price, Err(ParsePriceError::InvalidFormat));
+    }
+
     proptest! {
         #[test]
         fn is_some_for_small_integers(s in (-10_i64..10_i64)) {
@@ -230,22 +312,22 @@ mod tests {
         }
 
         #[test]
-        fn is_some_for_large_positive_integers(s in (0_999_999_999_999_990_i64..1_000_000_000_000_001_i64)) {
+        fn is_some_for_large_positive_integers(s in (Price::MAX_RAW - 10)..=Price::MAX_RAW) {
             assert!(Price::new(s).is_some());
         }
 
         #[test]
-        fn is_none_for_large_positive_integers(s in (1_000_000_000_000_001_i64..1_000_000_000_000_011_i64)) {
+        fn is_none_for_large_positive_integers(s in (Price::MAX_RAW + 1)..=(Price::MAX_RAW + 11)) {
             assert!(Price::new(s).is_none());
         }
 
         #[test]
-        fn is_some_for_large_negative_integers(s in (-1_000_000_000_000_000_i64..-0_999_999_999_999_990_i64)) {
+        fn is_some_for_large_negative_integers(s in Price::MIN_RAW..=(Price::MIN_RAW + 10)) {
             assert!(Price::new(s).is_some());
         }
 
         #[test]
-        fn is_none_for_large_negative_integers(s in (-1_000_000_000_000_011_i64..=-1_000_000_000_000_001_i64)) {
+        fn is_none_for_large_negative_integers(s in (Price::MIN_RAW - 11)..=(Price::MIN_RAW - 1)) {
             assert!(Price::new(s).is_none());
         }
     }
@@ -276,6 +358,97 @@ mod tests {
                     "v={v} got={got:?}"
                 );
             }
+        }
+    }
+
+    // Canonical decimal string for a raw value: always 9 fractional digits.
+    fn raw_to_decimal_string(raw: i64) -> String {
+        let sign = if raw < 0 { "-" } else { "" };
+        let a = raw.unsigned_abs();
+        let int = a / Price::SCALE as u64;
+        let frac = a % Price::SCALE as u64;
+        format!("{sign}{int}.{frac:09}")
+    }
+
+    proptest! {
+        #[test]
+        fn str_for_in_range_raw(raw in Price::MIN_RAW..=Price::MAX_RAW) {
+            let s = raw_to_decimal_string(raw);
+            let got = Price::from_str(&s);
+            prop_assert!(
+                matches!(got, Ok(p) if p.value() == raw),
+                "s={s} raw={raw} got={got:?}"
+            );
+        }
+
+        // Correct scaling: 0.5 -> 500_000_000
+        #[test]
+        fn str_scales_fraction_by_position(
+            neg in any::<bool>(),
+            int in 0_i64..Price::MAX_INTEGER_PART,
+            len in 1_usize..=Price::PRECISION as usize,
+            seed in 0_u64..Price::SCALE as u64,
+        ) {
+            let frac = seed % 10_u64.pow(len as u32); // fits in `len` digits
+            let sign = if neg { "-" } else { "" };
+            let s = format!("{sign}{int}.{frac:0len$}"); // zero-pad to `len`
+            let magnitude =
+                int * Price::SCALE + frac as i64 * 10_i64.pow(Price::PRECISION - len as u32);
+            let expected = if neg { -magnitude } else { magnitude };
+            let got = Price::from_str(&s);
+            prop_assert!(
+                matches!(got, Ok(p) if p.value() == expected),
+                "s={s} expected={expected} got={got:?}"
+            );
+        }
+
+        // Precision: more than 9 fractional digits must be rejected.
+        #[test]
+        fn str_rejects_excess_precision(
+            int in 0_i64..Price::MAX_INTEGER_PART,
+            len in (Price::PRECISION as usize + 1)..=20_usize,
+            seed in any::<u64>(),
+        ) {
+            let frac: String = (0..len)
+                .map(|i| char::from(b'0' + ((seed >> (i % 60)) % 10) as u8))
+                .collect();
+            let s = format!("{int}.{frac}");
+            let got = Price::from_str(&s);
+            prop_assert!(
+                matches!(got, Err(ParsePriceError::PrecisionError(_))),
+                "s={s} got={got:?}"
+            );
+        }
+
+        // Bounds: an integer part beyond ±MAX_INTEGER_PART must be OutOfBounds
+        #[test]
+        fn str_rejects_large_integer_part(
+            int in (Price::MAX_INTEGER_PART + 1)..=1_000_000_000_i64,
+            neg in any::<bool>(),
+        ) {
+            let s = format!("{}{int}.0", if neg { "-" } else { "" });
+            let got = Price::from_str(&s);
+            prop_assert!(
+                matches!(got, Err(ParsePriceError::OutOfBounds)),
+                "s={s} got={got:?}"
+            );
+        }
+
+        // Boundary: integer part == MAX_INTEGER_PART with any fraction
+        #[test]
+        fn str_accepts_max_integer_with_fraction(
+            neg in any::<bool>(),
+            frac_units in 0_i64..Price::SCALE,   // full fractional range
+        ) {
+            let sign = if neg { "-" } else { "" };
+            let s = format!("{sign}{}.{frac_units:09}", Price::MAX_INTEGER_PART);
+            let magnitude = Price::MAX_INTEGER_PART * Price::SCALE + frac_units;
+            let expected = if neg { -magnitude } else { magnitude };
+            let got = Price::from_str(&s);
+            prop_assert!(
+                matches!(got, Ok(p) if p.value() == expected),
+                "s={s} expected={expected} got={got:?}"
+            );
         }
     }
 }
