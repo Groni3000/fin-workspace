@@ -2,10 +2,6 @@ use std::fmt::Display;
 
 /// Has fixed scale and max value.
 ///
-/// Overflow is not representable.
-///
-/// TryFrom<f64> is implemented. So no precision loss or too big numbers.
-///
 /// Initially, I thought to do something like this:
 /// - Price - Price -> PriceDelta<i64>
 /// - Price * Quantity<u64> -> Notional<i128?>
@@ -65,7 +61,6 @@ impl From<Price> for i64 {
 /// f64 field is the original value that caused the fail
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FromF64Error {
-    NotEnoughPrecision(f64),
     OutOfBounds(f64),
 }
 
@@ -76,17 +71,15 @@ impl TryFrom<f64> for Price {
         if !value.is_finite() {
             return Err(FromF64Error::OutOfBounds(value));
         }
-        let raw = value * Price::SCALE as f64;
-        let rounded = raw.round();
-        if (raw - rounded).abs() >= 1e-3 {
-            return Err(FromF64Error::NotEnoughPrecision(value));
-        }
-        Self::new(rounded as i64).ok_or_else(|| FromF64Error::OutOfBounds(value))
+        let raw = (value * Price::SCALE as f64).round() as i64;
+        Self::new(raw).ok_or_else(|| FromF64Error::OutOfBounds(value))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    // Bring the macros and other important things into scope.
+    use proptest::prelude::*;
     use std::assert_matches;
     use std::cmp::Ordering;
 
@@ -108,6 +101,10 @@ mod tests {
 
     #[test]
     fn test_f64_to_price_conversions() {
+        let raw = 65537.273030587;
+        let price: Result<Price, FromF64Error> = TryInto::try_into(raw);
+        assert!(price.is_ok_and(|x| x.value == 65537_273_030_587));
+
         // --- Normal cases
         let raw = 100.0;
         let price: Result<Price, FromF64Error> = TryInto::try_into(raw);
@@ -153,15 +150,15 @@ mod tests {
         // --- Error cases (too large/precision loss)
         let raw = 0.0000000001; // 1 digit out of precision
         let price: Result<Price, FromF64Error> = TryInto::try_into(raw);
-        assert!(price.is_err_and(|e| e == FromF64Error::NotEnoughPrecision(raw)));
+        assert!(price.is_ok_and(|x| x == Price::ZERO));
 
         let raw = -0.0000000001;
         let price: Result<Price, FromF64Error> = TryInto::try_into(raw);
-        assert!(price.is_err_and(|e| e == FromF64Error::NotEnoughPrecision(raw)));
+        assert!(price.is_ok_and(|x| x == Price::ZERO));
 
         let raw = 0.000000000001; // 0.001 - 3 digits out of precision
         let price: Result<Price, FromF64Error> = TryInto::try_into(raw);
-        assert!(price.is_err_and(|e| e == FromF64Error::NotEnoughPrecision(raw)));
+        assert!(price.is_ok_and(|x| x == Price::ZERO));
 
         let raw = 0.0000000000001; // 0.0001 - Should not cause an error
         let price: Result<Price, FromF64Error> = TryInto::try_into(raw);
@@ -224,5 +221,61 @@ mod tests {
             let expected_price = 0.000_000_099_f64;
             raw_price.total_cmp(&expected_price) == Ordering::Equal
         }));
+    }
+
+    proptest! {
+        #[test]
+        fn is_some_for_small_integers(s in (-10_i64..10_i64)) {
+            assert!(Price::new(s).is_some());
+        }
+
+        #[test]
+        fn is_some_for_large_positive_integers(s in (0_999_999_999_999_990_i64..1_000_000_000_000_001_i64)) {
+            assert!(Price::new(s).is_some());
+        }
+
+        #[test]
+        fn is_none_for_large_positive_integers(s in (1_000_000_000_000_001_i64..1_000_000_000_000_011_i64)) {
+            assert!(Price::new(s).is_none());
+        }
+
+        #[test]
+        fn is_some_for_large_negative_integers(s in (-1_000_000_000_000_000_i64..-0_999_999_999_999_990_i64)) {
+            assert!(Price::new(s).is_some());
+        }
+
+        #[test]
+        fn is_none_for_large_negative_integers(s in (-1_000_000_000_000_011_i64..=-1_000_000_000_000_001_i64)) {
+            assert!(Price::new(s).is_none());
+        }
+    }
+
+    proptest! {
+        // Normal case: every in-range raw value, turned into an f64 price and
+        // parsed back, must recover the exact same raw. (NAN/INF are covered by
+        // the unit test above.)
+        #[test]
+        fn f64_roundtrips_for_in_range_raw(raw in Price::MIN_RAW..=Price::MAX_RAW) {
+            let v = raw as f64 / Price::SCALE as f64;
+            let got = Price::try_from(v);
+            prop_assert!(
+                matches!(got, Ok(p) if p.value() == raw),
+                "v={v} raw={raw} got={got:?}"
+            );
+        }
+
+        // OutOfBounds: whole-number magnitudes just past ±1e6. Kept small enough
+        // that `major * SCALE` is an exact f64 integer, so the only reason to
+        // reject is the bounds check (not precision).
+        #[test]
+        fn out_of_bounds_for_large_magnitude(major in 1_000_001_i64..=2_000_000_i64) {
+            for v in [major as f64, -(major as f64)] {
+                let got = Price::try_from(v);
+                prop_assert!(
+                    matches!(got, Err(FromF64Error::OutOfBounds(_))),
+                    "v={v} got={got:?}"
+                );
+            }
+        }
     }
 }
