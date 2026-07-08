@@ -12,3 +12,5 @@ target
 **/mutants.out*/
 instrid/assets/.~lock.ISO10383_MIC.csv#
 instrid/docs/identifiers.md
+.zed/tasks.json
+NOTES.md
