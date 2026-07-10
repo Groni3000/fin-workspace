@@ -19,6 +19,12 @@ pub mod prelude {
     pub use crate::tenor::Tenor;
 }
 
-/// Used to check if deserialized value owns data
+/// Used to check that `T` borrows nothing from
+/// a deserializer input.
+///
+/// i.e. `T` does not hold any `&'de` reference-field.
+///
+/// **It says nothing about the process of deserialization.
+/// It just checks resulting type.**
 #[cfg(feature = "serde")]
 pub(crate) fn _assert_owned<T: serde::de::DeserializeOwned>() {}

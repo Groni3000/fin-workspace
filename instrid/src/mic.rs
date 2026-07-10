@@ -595,6 +595,7 @@ mod tests {
         assert_eq!(mic, expected);
     }
 
+    /// Mic should not borrow from a deserializer input
     #[cfg(feature = "serde")]
     #[test]
     fn test_mic_is_owned() {
