@@ -1,5 +1,7 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "serde")]
+use std::borrow::Cow;
 use std::cmp::Eq;
 use std::{fmt::Display, str::FromStr};
 
@@ -346,8 +348,8 @@ impl<'de> Deserialize<'de> for Mic {
     where
         D: serde::Deserializer<'de>,
     {
-        let s: &str = Deserialize::deserialize(deserializer)?;
-        mic_by_code(s).ok_or_else(|| serde::de::Error::custom(format!("MIC not found: {s}")))
+        let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
+        mic_by_code(&s).ok_or_else(|| serde::de::Error::custom(format!("MIC not found: {s}")))
     }
 }
 
@@ -526,6 +528,9 @@ fn read_opt_date(field: &[u8]) -> Option<Date> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "serde")]
+    use serde_json::json;
+
     use super::*;
     #[cfg(feature = "serde")]
     use crate::_assert_owned;
@@ -547,11 +552,42 @@ mod tests {
         assert!(mic_by_code("").is_none());
     }
 
+    /// Hits `visit_borrowed_str(&'de str)`
     #[cfg(feature = "mic-full")]
     #[test]
     fn full_registry_includes_obscure_mic() {
         // Present only in the full registry, not in the curated set.
         assert!(mic_by_code("DRSP").is_some());
+    }
+
+    /// Hits `visit_str(&str)`
+    #[cfg(feature = "serde")]
+    #[test]
+    fn deserialize_mic_from_reader() {
+        // from_reader can NEVER borrow from `'de` (bytes live in a read buffer),
+        let json = "\"XCEC\"";
+        let reader = std::io::Cursor::new(json.as_bytes().to_vec());
+        let mic: Mic = serde_json::from_reader(reader).expect("from_reader should work");
+        assert_eq!(mic, Mic::xcec());
+    }
+
+    /// Hits `visit_string(String)`
+    #[cfg(feature = "serde")]
+    #[test]
+    fn deserialize_mic_from_value() {
+        let val = json!("XCEC");
+        let mic: Mic = serde_json::from_value(val).expect("from_value should work");
+        assert_eq!(mic, Mic::xcec());
+    }
+
+    /// Hits `visit_borrowed_str(&'de str)`
+    #[cfg(feature = "serde")]
+    #[test]
+    fn deserialize_mic_from_value_ref() {
+        let input = "XCEC".to_string();
+        let val = json!(&input);
+        let mic: Mic = serde_json::from_value(val).expect("from_value should work");
+        assert_eq!(mic, Mic::xcec());
     }
 
     #[cfg(feature = "serde")]
