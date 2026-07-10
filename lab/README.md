@@ -9,30 +9,50 @@ A place where I experiment, trying to figure out what do I need to build next.
   stop/limit/stop-limit orders that the strategy want to be working.
 
   **BE CAREFUL** - this all is desired, not actual. For actual, you need to read
-  state from other concepts below (`OMS`, `Porfolio`)
+  state from other concepts below (`OMS`, `Portfolio`).
 
-- **Portfolio** - owns strategies, account information, positions, fills.
-  Emits orders to `RMS`, `OMS`.
-  Due to the fact it owns strategies, it can net some orders potentially lowering costs.
+- **Portfolio** - read-only accounting truth: account information, positions, fills,
+  realized/unrealized PnL. **Mutated ONLY by applying fills** (fed from `OMS`).
+  Does **not** own strategies and does **not** emit orders - it is fills-in / reads-out.
 
   **THE ONLY SOURCE OF TRUTH OF CURRENT EXPOSURE AND FILLED ORDERS**
+
+- **ExecutionLoop** - the gap worker. Reads desired state from every `Strategy`,
+  reads actual position (`Portfolio`) and open orders (`OMS`), computes
+  `gap = target - actual - working` per instrument, and emits proposed orders to `RMS`.
+
+  (Netting desires across strategies is possible here, but **deferred** - it drags in
+  fill-attribution: when a netted order fills, which strategy owns the PnL? Skip for now.)
 
 - **RMS** - reads order(s) that are meant to be sent, open orders,
   portfolio info (margin), risk rules. Allows or discards orders (with notification)
   based on these rules.
 
-- **OMS** - tracks order lifecycle. 1 order type per `(strategy, instrument)` in order
-  to eliminate spam orders risk. All filled orders are sent to `Portfolio`.
+- **OMS** - tracks order lifecycle. **Only 1 _unacknowledged command_ per `instrument`**
+  at a time. That means if I sent something and don't know yet what happened to it, I
+  don't send the next command for an instrument until the previous one is acknowledged
+  and in a known state or I re-query it.
+
+  Point is: if it goes silent, the only thing I definitely know is its `client_order_id` ->
+  I ask about it, never blindly resend (that's the spam trap). All subsequent commands
+  for that instrument are blocked until I get a response and understand what state it's in.
+
+  When we receive the response, we update the order status to known (for example, we received
+  order status = New) and treat it as a working order. Next order command now can be sent.
+
+  Fills go to `Portfolio`.
 
   **THE ONLY SOURCE OF TRUTH OF CURRENT WORKING ORDERS**
 
-- **Executor** - receives orders from `OMS` and executes them, sends trades reports back
-  to `OMS`.
+- **Executor** - receives orders from `OMS` and executes them, sends execution reports
+  back to `OMS`. (Backtest fill behaviour lives here)
 
-- **Reconciler** - reads desired position (`Strategy`), reads actual position (`Portfolio`),
-  reads desired orders (`Strategy`), reads open orders (`OMS`), and reconciles.
+- **Reconciler** - drift detection, **not** the gap loop. Compares _local believed_ state
+  (`Portfolio` positions, `OMS` working orders) against the _broker's reported_ state
+  (via `Executor`). On divergence beyond tolerance: halt and alert. Never auto-resolve
+  on data you suspect is bad.
 
-## Small description of concept idea
+## My thoughts about current tasks.
 
 - **Data stream** - the idea is to treat every data source as a stream of data.
   Need to figure out how to do that. Probably `Iterator<Item=Result<MarketData, FeedError>>`
@@ -44,26 +64,3 @@ A place where I experiment, trying to figure out what do I need to build next.
   min, max, step for both quantity and price.
   Also I need to know to which precision I need to round price.
   Quite a bummer tbh. Filling this shit out is error prone and boring...
-
-- **Executor** (or **BrokerAdapter**?) - orders are filled here. Emits execution reports.
-
-  In backtests it fills orders based on some strategy.
-  Examples of such `FillStrategy`:
-  - **naive** - everything fills.
-  - **probabilistic** - fills based on some probability distribution, therefore partial fills,
-    slippage.
-  - **look-ahead probabilistic** - takes some small frequency data and trying to
-    figure out the probability distribution based on traded volume and dominant traded side
-    and execute accordingly, probably too complex for me xD.
-  - **order book** - (though order book data feed needed).
-  - ... You can imagine a lot of strategies here. But for now,
-    let's start with the first two. First one just to get used to traits, second one to
-    have something +- realistic.
-
-- **OMS** - order management system.
-  - **order state machine** - (PendingNew→New→…→Filled/Rejected, IN_DOUBT).
-  - **position** - derived only from fills.
-  - **freeze-on-silence** - **per-symbol in-flight mutex**
-  - **reconciliation** - against the executor, **throttles** / **kill switch**.
-
-- ... Yet to be added
