@@ -1,4 +1,4 @@
-use lab::FrdCandle;
+use lab::{FrdCandle, OffsetCache};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -23,6 +23,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Reused buffer for each record.
     let mut line = String::new();
+    // One offset cache across all files: a date change (even backwards, when a
+    // new contract file starts) just triggers a recompute, which is correct.
+    let mut tz_cache = OffsetCache::new();
     for path in &files {
         let mut reader = BufReader::new(File::open(path)?);
 
@@ -37,8 +40,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 break;
             }
 
-            let candle =
-                FrdCandle::from_frd_csv_line_unchecked(&line).map_err(|e| e.to_string())?;
+            let candle = FrdCandle::from_frd_csv_line_unchecked(&line, &mut tz_cache)
+                .map_err(|e| e.to_string())?;
             lines += 1;
             last = Some(candle);
         }

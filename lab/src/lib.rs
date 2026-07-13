@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
 };
 
-use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, Offset, TimeZone, Utc};
 use chrono_tz::{Tz, US::Eastern as ExchangeTZ};
 use serde::{Deserialize, Serialize};
 use tradeprim::price::{ParsePriceError, Price};
@@ -49,8 +49,9 @@ impl FrdCandle {
         }
     }
 
-    // #[inline(always)]
-    pub fn unchecked_convert_str_with_tz_to_utc_timestamp(s: &str, tz: Tz) -> DateTime<Utc> {
+    /// Parse the fixed-width `YYYY-MM-DD HH:MM:SS` field into a naive local
+    /// datetime. Unchecked: assumes exactly that 19-byte ASCII layout.
+    pub fn parse_naive_frd_unchecked(s: &str) -> NaiveDateTime {
         let b = s.as_bytes();
 
         #[inline(always)]
@@ -65,15 +66,10 @@ impl FrdCandle {
         let min = d2(b, 14);
         let sec = d2(b, 17);
 
-        let naive = chrono::NaiveDate::from_ymd_opt(year as i32, month, day)
+        NaiveDate::from_ymd_opt(year as i32, month, day)
             .expect("valid date")
             .and_hms_opt(hour, min, sec)
-            .expect("valid time");
-
-        tz.from_local_datetime(&naive)
-            .single() // see hazard note; use .earliest() to tolerate overlaps
-            .expect("unambiguous local time")
-            .with_timezone(&Utc)
+            .expect("valid time")
     }
 
     fn convert_str_with_tz_to_utc_timestamp(
@@ -97,11 +93,14 @@ impl FrdCandle {
         Ok(utc_converted)
     }
 
-    pub fn from_frd_csv_line_unchecked(s: &str) -> Result<Self, FrdCandleParsingError> {
+    pub fn from_frd_csv_line_unchecked(
+        s: &str,
+        tz_cache: &mut OffsetCache,
+    ) -> Result<Self, FrdCandleParsingError> {
         let trimmed = s.trim_end();
 
-        let raw_ts = &trimmed[..19];
-        let utc_ts = Self::unchecked_convert_str_with_tz_to_utc_timestamp(raw_ts, ExchangeTZ);
+        let naive = Self::parse_naive_frd_unchecked(&trimmed[..19]);
+        let utc_ts = tz_cache.to_utc(naive, ExchangeTZ);
 
         // `,` is ommited
         let mut split = trimmed[20..].split(',');
@@ -196,6 +195,80 @@ impl FrdCandle {
 
     pub fn volume(&self) -> u64 {
         self.volume
+    }
+}
+
+// TODO: OffsetCache should have tests... A lot of tests...
+
+/// Instead of using chrono-tz's lookup table for Tz,
+/// we cache fixed offset and use it.
+///
+/// Each day we take `(day_start, day_end)` and check offsets.
+/// - If they are the same - use cached FixedOffset.
+/// - If they are different - recompute offset for each record for this day.
+///
+/// In such way we avoid redundant lookups to two days per year.
+pub struct OffsetCache {
+    date: Option<NaiveDate>,
+    offset: FixedOffset,
+    /// If this day is not a transition day - use FixedOffset
+    /// else - look up the offset for each record during this day.
+    constant_day: bool,
+}
+
+impl OffsetCache {
+    pub fn new() -> Self {
+        Self {
+            date: None,
+            offset: FixedOffset::east_opt(0).unwrap(),
+            constant_day: false,
+        }
+    }
+
+    /// Convert to Utc, using cached FixedOffset during `constant_day`
+    pub fn to_utc(&mut self, naive: NaiveDateTime, tz: Tz) -> DateTime<Utc> {
+        let date = naive.date();
+
+        if self.date != Some(date) {
+            // New day: take both ends, check their offsets.
+            let start = date.and_hms_opt(0, 0, 0).unwrap();
+            let end = date.and_hms_opt(23, 59, 59).unwrap();
+            let off_start = Self::lookup(tz, start);
+            let off_end = Self::lookup(tz, end);
+
+            self.date = Some(date);
+            self.constant_day = off_start == off_end;
+            self.offset = off_start;
+        }
+
+        if self.constant_day {
+            // Apply the fixed offset
+            self.offset
+                .from_local_datetime(&naive)
+                .single()
+                .expect("a fixed offset is never ambiguous")
+                .with_timezone(&Utc)
+        } else {
+            // Transition day: full, correct lookup for this row.
+            tz.from_local_datetime(&naive)
+                .single()
+                .expect("unambiguous local time")
+                .with_timezone(&Utc)
+        }
+    }
+
+    /// Get FixedOffset
+    fn lookup(tz: Tz, naive: NaiveDateTime) -> FixedOffset {
+        tz.offset_from_local_datetime(&naive)
+            .single()
+            .expect("midnight/end-of-day is never a DST transition for exchange zones")
+            .fix()
+    }
+}
+
+impl Default for OffsetCache {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
