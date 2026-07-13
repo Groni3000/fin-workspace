@@ -49,29 +49,6 @@ impl FrdCandle {
         }
     }
 
-    /// Parse the fixed-width `YYYY-MM-DD HH:MM:SS` field into a naive local
-    /// datetime. Unchecked: assumes exactly that 19-byte ASCII layout.
-    pub fn parse_naive_frd_unchecked(s: &str) -> NaiveDateTime {
-        let b = s.as_bytes();
-
-        #[inline(always)]
-        fn d2(b: &[u8], i: usize) -> u32 {
-            (b[i] - b'0') as u32 * 10 + (b[i + 1] - b'0') as u32
-        }
-
-        let year = d2(b, 0) * 100 + d2(b, 2); // "20","25" -> 2025
-        let month = d2(b, 5);
-        let day = d2(b, 8);
-        let hour = d2(b, 11);
-        let min = d2(b, 14);
-        let sec = d2(b, 17);
-
-        NaiveDate::from_ymd_opt(year as i32, month, day)
-            .expect("valid date")
-            .and_hms_opt(hour, min, sec)
-            .expect("valid time")
-    }
-
     fn convert_str_with_tz_to_utc_timestamp(
         raw_ts: &str,
         tz: Tz,
@@ -91,46 +68,6 @@ impl FrdCandle {
         };
 
         Ok(utc_converted)
-    }
-
-    pub fn from_frd_csv_line_unchecked(
-        s: &str,
-        tz_cache: &mut OffsetCache,
-    ) -> Result<Self, FrdCandleParsingError> {
-        let trimmed = s.trim_end();
-
-        let naive = Self::parse_naive_frd_unchecked(&trimmed[..19]);
-        let utc_ts = tz_cache.to_utc(naive, ExchangeTZ);
-
-        // `,` is ommited
-        let mut split = trimmed[20..].split(',');
-        let high = Price::from_str_unchecked(
-            split
-                .next()
-                .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
-        );
-        let low = Price::from_str_unchecked(
-            split
-                .next()
-                .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
-        );
-        let open = Price::from_str_unchecked(
-            split
-                .next()
-                .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
-        );
-        let close = Price::from_str_unchecked(
-            split
-                .next()
-                .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
-        );
-        let volume: u64 = split
-            .next()
-            .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Volume))?
-            .parse()
-            .map_err(|err| FrdCandleParsingError::VolumeParsingError(err))?;
-
-        Ok(FrdCandle::new(utc_ts, high, low, open, close, volume))
     }
 
     pub fn from_frd_csv_line(s: &str) -> Result<Self, FrdCandleParsingError> {
@@ -335,6 +272,92 @@ impl<'a> TryFrom<RawFrdCandle<'a>> for FrdCandle {
             close,
             volume,
         ))
+    }
+}
+
+/// It's better not to use it :/
+pub(crate) mod untested {
+    use crate::{FrdCandle, FrdCandleParsingError, FrdField, OffsetCache};
+    use chrono::{NaiveDate, NaiveDateTime};
+    use chrono_tz::US::Eastern as ExchangeTz;
+    use tradeprim::price::Price;
+
+    impl FrdCandle {
+        /// Parse the fixed-width `YYYY-MM-DD HH:MM:SS` field into a naive local
+        /// datetime. Unchecked: assumes exactly that 19-byte ASCII layout.
+        pub fn parse_naive_frd_unchecked(s: &str) -> NaiveDateTime {
+            let b = s.as_bytes();
+
+            #[inline(always)]
+            fn d2(b: &[u8], i: usize) -> u32 {
+                (b[i] - b'0') as u32 * 10 + (b[i + 1] - b'0') as u32
+            }
+
+            let year = d2(b, 0) * 100 + d2(b, 2); // "20","25" -> 2025
+            let month = d2(b, 5);
+            let day = d2(b, 8);
+            let hour = d2(b, 11);
+            let min = d2(b, 14);
+            let sec = d2(b, 17);
+
+            NaiveDate::from_ymd_opt(year as i32, month, day)
+                .expect("valid date")
+                .and_hms_opt(hour, min, sec)
+                .expect("valid time")
+        }
+
+        /// **DO NOT USE THIS FUNCTION**
+        ///
+        /// It is pretty much experimental, no validation, unsafe,
+        /// time logic is not tested,...
+        ///
+        /// Unless you are ok to uphold some invariants of valid data,
+        ///
+        /// **DO NOT USE THIS FUNCTION**
+        ///
+        /// _Though it can give you ~2x speedup ;)_
+        pub fn from_frd_csv_line_unchecked(
+            bytes: &[u8],
+            tz_cache: &mut OffsetCache,
+        ) -> Result<Self, FrdCandleParsingError> {
+            // SAFETY:
+            //     - assuming bytes are valid utf-8
+            let s = unsafe { str::from_utf8_unchecked(bytes) };
+            let trimmed = s.trim_end();
+
+            let naive = Self::parse_naive_frd_unchecked(&trimmed[..19]);
+            let utc_ts = tz_cache.to_utc(naive, ExchangeTz);
+
+            // `,` is ommited
+            let mut split = trimmed[20..].split(',');
+            let high = Price::from_str_unchecked(
+                split
+                    .next()
+                    .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
+            );
+            let low = Price::from_str_unchecked(
+                split
+                    .next()
+                    .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
+            );
+            let open = Price::from_str_unchecked(
+                split
+                    .next()
+                    .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
+            );
+            let close = Price::from_str_unchecked(
+                split
+                    .next()
+                    .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
+            );
+            let volume: u64 = split
+                .next()
+                .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Volume))?
+                .parse()
+                .map_err(|err| FrdCandleParsingError::VolumeParsingError(err))?;
+
+            Ok(FrdCandle::new(utc_ts, high, low, open, close, volume))
+        }
     }
 }
 
