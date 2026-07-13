@@ -14,3 +14,6 @@ instrid/assets/.~lock.ISO10383_MIC.csv#
 instrid/docs/identifiers.md
 .zed/tasks.json
 NOTES.md
+
+# Data
+lab/data/files/futures/frd/*.txt
