@@ -3,12 +3,14 @@
     "rust-analyzer": {
       "initialization_options": {
         "cargo": {
-          "features": ["serde", "mic-full"]
+          // "features": ["serde", "mic-full"]
+          "features": "all",
         },
         "check": {
-          "features": ["serde", "mic-full"]
-        }
-      }
-    }
-  }
+          // "features": ["serde", "mic-full"]
+          "features": "all",
+        },
+      },
+    },
+  },
 }
