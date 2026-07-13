@@ -23,8 +23,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Reused buffer for each record.
     let mut line = String::new();
-    // One offset cache across all files: a date change (even backwards, when a
-    // new contract file starts) just triggers a recompute, which is correct.
     for path in &files {
         let mut reader = BufReader::new(File::open(path)?);
 
