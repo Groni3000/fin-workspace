@@ -98,12 +98,13 @@ impl FrdCandle {
     }
 
     pub fn from_frd_csv_line_unchecked(s: &str) -> Result<Self, FrdCandleParsingError> {
-        let mut split = s.trim_end().split(',');
+        let trimmed = s.trim_end();
 
-        let raw_ts = split
-            .next()
-            .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Timestamp))?;
+        let raw_ts = &trimmed[..19];
         let utc_ts = Self::unchecked_convert_str_with_tz_to_utc_timestamp(raw_ts, ExchangeTZ);
+
+        // `,` is ommited
+        let mut split = trimmed[20..].split(',');
         let high = Price::from_str_unchecked(
             split
                 .next()
