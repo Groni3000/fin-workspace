@@ -52,6 +52,24 @@ impl Tenor {
         *self as u8
     }
 
+    /// Returns the futures code for this tenor (e.g. 'F' for January).
+    pub const fn code(&self) -> &char {
+        match self {
+            Tenor::January => &'F',
+            Tenor::February => &'G',
+            Tenor::March => &'H',
+            Tenor::April => &'J',
+            Tenor::May => &'K',
+            Tenor::June => &'M',
+            Tenor::July => &'N',
+            Tenor::August => &'Q',
+            Tenor::September => &'U',
+            Tenor::October => &'V',
+            Tenor::November => &'X',
+            Tenor::December => &'Z',
+        }
+    }
+
     /// Returns the maximum number of days in this month.
     ///
     /// February returns 29 (assumes leap year possibility since contract
