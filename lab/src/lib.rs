@@ -104,30 +104,26 @@ impl FrdCandle {
             .next()
             .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Timestamp))?;
         let utc_ts = Self::unchecked_convert_str_with_tz_to_utc_timestamp(raw_ts, ExchangeTZ);
-        let high = Price::from_str(
+        let high = Price::from_str_unchecked(
             split
                 .next()
                 .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
-        )
-        .map_err(|err| FrdCandleParsingError::PriceParsingError(err))?;
-        let low = Price::from_str(
+        );
+        let low = Price::from_str_unchecked(
             split
                 .next()
                 .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
-        )
-        .map_err(|err| FrdCandleParsingError::PriceParsingError(err))?;
-        let open = Price::from_str(
+        );
+        let open = Price::from_str_unchecked(
             split
                 .next()
                 .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
-        )
-        .map_err(|err| FrdCandleParsingError::PriceParsingError(err))?;
-        let close = Price::from_str(
+        );
+        let close = Price::from_str_unchecked(
             split
                 .next()
                 .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
-        )
-        .map_err(|err| FrdCandleParsingError::PriceParsingError(err))?;
+        );
         let volume: u64 = split
             .next()
             .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Volume))?
