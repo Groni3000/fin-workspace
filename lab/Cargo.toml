@@ -4,3 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = { version = "0.10.4" }
+serde = { version = "1", features = ["derive"] }
+tradeprim = { path = "../tradeprim" }
+
+[profile.release]
+debug = true
