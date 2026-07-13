@@ -1,49 +1,66 @@
 use lab::FrdCandle;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
+use std::path::Path;
 use std::time::Instant;
-use tradeprim::price::Price;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let quotes = File::open("lab/data/files/futures/frd/RB_Z25_1min.txt")?;
-    // let mut reader = BufReader::with_capacity(64 * 1024, quotes);
-    let mut reader = BufReader::new(quotes);
+    let dir = Path::new("lab/data/files/futures/frd");
 
-    // Compare buffer size performance implications
+    // Collect only the .txt data files
+    // sorted for a deterministic run order.
+    let mut files: Vec<_> = fs::read_dir(dir)?
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|ext| ext == "txt"))
+        .collect();
+    files.sort();
+
+    println!("Found {} data files in {}", files.len(), dir.display());
+
     let start = Instant::now();
+    let mut total_lines: u64 = 0;
 
+    // Reused buffer for each record.
     let mut line = String::new();
-    let mut counter = 0;
-    let each_n = 20_000;
-    loop {
-        match reader.read_line(&mut line) {
-            Ok(n) => {
-                if n == 0 {
-                    break;
-                }
+    for path in &files {
+        let mut reader = BufReader::new(File::open(path)?);
+
+        let file_start = Instant::now();
+        let mut lines: u64 = 0;
+        let mut last: Option<FrdCandle> = None;
+
+        loop {
+            line.clear();
+            let n = reader.read_line(&mut line)?;
+            if n == 0 {
+                break;
             }
-            Err(err) => println!("{:?}", err),
+
+            let candle =
+                FrdCandle::from_frd_csv_line_unchecked(&line).map_err(|e| e.to_string())?;
+            lines += 1;
+            last = Some(candle);
         }
 
-        // let candle = FrdCandle::from_frd_csv_line(&line).unwrap();
-        let candle = FrdCandle::from_frd_csv_line_unchecked(&line).unwrap();
-        counter += 1;
-        if counter % each_n == 0 {
-            println!("Processed {} lines", counter);
-            println!("Last processed: {}", line);
-            println!("Last candle: {:?}", candle);
-            println!(
-                "Last close: {}",
-                (candle.close().value() as f64 / Price::SCALE as f64)
-            );
-        }
-
-        line.clear();
+        total_lines += lines;
+        println!(
+            "{:<20} {:>8} lines in {:>10?}  last: {:?}",
+            path.file_name().unwrap().to_string_lossy(),
+            lines,
+            file_start.elapsed(),
+            last.map(|c| c.timestamp()),
+        );
     }
 
     let duration = start.elapsed();
-    println!("Time elapsed: {:?}", duration);
-    println!("Processed {} lines", counter);
+    println!("---");
+    println!(
+        "Parsed {} lines across {} files in {:?}",
+        total_lines,
+        files.len(),
+        duration
+    );
 
     Ok(())
 }
