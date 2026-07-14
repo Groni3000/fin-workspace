@@ -94,21 +94,6 @@ impl<T: BufRead> MarketData for FrdMdReader<T> {
     }
 }
 
-// impl<T: BufRead> RelevantPrice for Reader<T> {
-//     fn timestamp(&self) -> DateTime<Utc> {
-//         todo!()
-//     }
-//     fn last_price(&self) -> Price {
-//         todo!()
-//     }
-// }
-
-// impl<T: BufRead, K: RelevantPrice> MarketData<K> for Reader<T> {
-//     fn next_record(&mut self, buf: &mut String) -> Result<usize, std::io::Error> {
-//         self.inner.read_line(buf)
-//     }
-// }
-
 #[derive(Debug)]
 pub struct AggregatedCandle {
     timestamp: DateTime<Utc>,
