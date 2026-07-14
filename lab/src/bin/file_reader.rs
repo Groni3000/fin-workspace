@@ -5,12 +5,13 @@ use instrid::mic::Mic;
 use instrid::prelude::FuturesContract;
 use instrid::tenor::Tenor;
 use lab::FrdCandle;
+use lab::market_data::{FrdMdReader, MarketData, MdError, RelevantPrice};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), MdError> {
     let dir = Path::new("lab/data/files/futures/frd");
     let instrument: FuturesContract = FuturesContract::new(
         Asset::new("RB", instrid::asset::AssetClass::Commodity).expect("Failed to create Asset"),
@@ -28,40 +29,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut n_files: u64 = 0;
 
     // Reused buffer for each record.
-    let mut line = String::new();
     loop {
         let file_path = dir.join(get_frd_file_name(chain.contract()));
         if !file_path.is_file() {
             break;
         }
-        let file = File::open(&file_path).map_err(|e| e.to_string())?;
-        let mut reader = BufReader::new(file);
-        n_files += 1;
         println!("Reading file: {:?}", file_path);
-
-        let file_start = Instant::now();
-        let mut lines: u64 = 0;
-        let mut last: Option<FrdCandle> = None;
-
-        loop {
-            line.clear();
-            let n = reader.read_line(&mut line)?;
-            if n == 0 {
-                break;
-            }
-
-            let candle = FrdCandle::from_frd_csv_line(&line).map_err(|e| e.to_string())?;
-            lines += 1;
-            last = Some(candle);
-        }
-
-        total_lines += lines;
-        println!(
-            "{:>8} lines in {:>10?}  last: {:?}",
-            lines,
-            file_start.elapsed(),
-            last.map(|c| c.timestamp()),
-        );
+        let file = File::open(file_path)?;
+        let reader = BufReader::new(file);
+        let mut market_data = FrdMdReader::new(reader);
+        total_lines += process_contract(&mut market_data)?;
+        n_files += 1;
 
         chain.advance_by(1);
     }
@@ -70,8 +48,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("---");
     println!(
         "Total number of lines: {}\nTotal number of files: {}
-        Total duration: {:?}\nAverage amortized time per file: {:?}\n
-        Average amortized time per line: {:?}",
+Total duration: {:?}\nAverage amortized time per file: {:?}\n
+Average amortized time per line: {:?}",
         total_lines,
         n_files,
         duration,
@@ -89,4 +67,27 @@ fn get_frd_file_name(futures_contract: &FuturesContract) -> String {
         futures_contract.tenor().code(),
         futures_contract.year() % 100
     )
+}
+
+fn process_contract<T: MarketData>(market_data: &mut T) -> Result<u64, T::Error> {
+    let file_start = Instant::now();
+    let mut lines: u64 = 0;
+    let mut last: Option<T::Record> = None;
+
+    while let Some(record) = market_data.next_record()? {
+        lines += 1;
+        last = Some(record);
+    }
+
+    println!(
+        "{:>13} lines
+        in {:>10?}
+        last: {:?}
+        ----------",
+        lines,
+        file_start.elapsed(),
+        last,
+    );
+
+    Ok(lines)
 }

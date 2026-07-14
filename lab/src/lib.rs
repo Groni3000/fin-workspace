@@ -1,3 +1,5 @@
+pub mod market_data;
+
 use std::{
     fmt::{Display, Pointer},
     num::ParseIntError,
@@ -9,6 +11,8 @@ use chrono_tz::{Tz, US::Eastern as ExchangeTZ};
 use serde::{Deserialize, Serialize};
 use tradeprim::price::{ParsePriceError, Price};
 
+use crate::market_data::RelevantPrice;
+
 #[derive(Serialize, Deserialize)]
 pub struct RawFrdCandle<'a> {
     timestamp: NaiveDateTime,
@@ -19,7 +23,7 @@ pub struct RawFrdCandle<'a> {
     volume: &'a str,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Copy, Clone)]
 #[serde(try_from = "RawFrdCandle")]
 pub struct FrdCandle {
     timestamp: DateTime<Utc>,
@@ -183,6 +187,16 @@ impl FrdCandle {
 
     pub fn volume(&self) -> u64 {
         self.volume
+    }
+}
+
+impl RelevantPrice for FrdCandle {
+    fn last_price(&self) -> Price {
+        self.close
+    }
+
+    fn timestamp(&self) -> DateTime<Utc> {
+        self.timestamp
     }
 }
 
