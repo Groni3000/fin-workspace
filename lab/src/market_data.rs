@@ -112,11 +112,35 @@ impl<T: BufRead> MarketData for FrdMdReader<T> {
 #[derive(Debug)]
 pub struct AggregatedCandle {
     timestamp: DateTime<Utc>,
+    #[allow(dead_code)]
     open: Price,
+    #[allow(dead_code)]
     high: Price,
+    #[allow(dead_code)]
     low: Price,
     close: Price,
+    #[allow(dead_code)]
     volume: u64,
+}
+
+impl AggregatedCandle {
+    pub fn new(
+        timestamp: DateTime<Utc>,
+        open: Price,
+        high: Price,
+        low: Price,
+        close: Price,
+        volume: u64,
+    ) -> Self {
+        Self {
+            timestamp,
+            open,
+            high,
+            low,
+            close,
+            volume,
+        }
+    }
 }
 
 // -----------------------

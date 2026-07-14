@@ -4,10 +4,9 @@ use instrid::instruments::TradedInstrument;
 use instrid::mic::Mic;
 use instrid::prelude::FuturesContract;
 use instrid::tenor::Tenor;
-use lab::FrdCandle;
-use lab::market_data::{FrdMdReader, MarketData, MdError, RelevantPrice};
+use lab::market_data::{FrdMdReader, MarketData, MdError};
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::BufReader;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
