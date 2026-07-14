@@ -1,6 +1,11 @@
 pub mod price;
 use std::ops::Neg;
 
+pub mod prelude {
+    pub use crate::Side;
+    pub use crate::price::Price;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Side {
     Buy,

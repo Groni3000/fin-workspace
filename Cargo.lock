@@ -362,6 +362,7 @@ dependencies = [
  "rust_decimal_macros",
  "serde",
  "serde_json",
+ "tradeprim",
 ]
 
 [[package]]
@@ -906,6 +907,7 @@ dependencies = [
  "proptest",
  "rust_decimal",
  "rust_decimal_macros",
+ "serde",
 ]
 
 [[package]]

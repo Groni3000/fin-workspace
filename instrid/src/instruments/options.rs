@@ -1,6 +1,5 @@
 use std::fmt::Display;
-
-use rust_decimal::Decimal;
+use tradeprim::prelude::Price;
 
 use crate::{asset::Asset, mic::Mic, prelude::TradedInstrument, tenor::Tenor};
 
@@ -15,7 +14,7 @@ pub struct OptionContract {
     day: u8,
     kind: OptionKind,
     style: ExerciseStyle,
-    strike: Decimal,
+    strike: Price,
 }
 
 /// Represents the kind of option contract, either a Put or a Call.
@@ -84,7 +83,7 @@ impl OptionContract {
         day: u8,
         kind: OptionKind,
         style: ExerciseStyle,
-        strike: Decimal,
+        strike: Price,
     ) -> Self {
         Self {
             base,
@@ -127,7 +126,7 @@ impl Display for OptionContract {
             self.day,
             self.style,
             self.kind,
-            self.strike.normalize(),
+            self.strike,
         )?;
 
         Ok(())
@@ -136,10 +135,11 @@ impl Display for OptionContract {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     #[cfg(feature = "serde")]
     use crate::_assert_owned;
     use crate::asset::AssetClass;
-    use rust_decimal_macros::dec;
 
     use super::*;
 
@@ -153,7 +153,7 @@ mod tests {
             19,
             OptionKind::Call,
             ExerciseStyle::American,
-            dec!(200.00),
+            Price::from_str("200.00").unwrap(),
         )
     }
 
@@ -177,7 +177,7 @@ mod tests {
             19,
             OptionKind::Put,
             ExerciseStyle::American,
-            dec!(200.00),
+            Price::from_str("200.00").unwrap(),
         );
         assert_ne!(call, put);
     }
@@ -194,7 +194,7 @@ mod tests {
             19,
             OptionKind::Call,
             ExerciseStyle::European,
-            dec!(200.00),
+            Price::from_str("200.00").unwrap(),
         );
         assert_ne!(american, european);
     }
@@ -211,7 +211,7 @@ mod tests {
             19,
             OptionKind::Call,
             ExerciseStyle::American,
-            dec!(210.00),
+            Price::from_str("210.00").unwrap(),
         );
         assert_ne!(strike_200, strike_210);
     }
@@ -227,7 +227,7 @@ mod tests {
     fn test_option_serialize() {
         let opt = aapl_call_200_dec25();
         let serialized = serde_json::to_string(&opt).unwrap();
-        let expected = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200.00\"}";
+        let expected = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200\"}";
 
         assert_eq!(serialized, expected);
     }
@@ -235,7 +235,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_option_deserialize() {
-        let serialized = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200.00\"}";
+        let serialized = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200\"}";
         let expected = aapl_call_200_dec25();
         let deserialized: OptionContract = serde_json::from_str(serialized).unwrap();
 
@@ -245,16 +245,28 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_option_kind_serialize() {
-        assert_eq!(serde_json::to_string(&OptionKind::Call).unwrap(), "\"Call\"");
+        assert_eq!(
+            serde_json::to_string(&OptionKind::Call).unwrap(),
+            "\"Call\""
+        );
         assert_eq!(serde_json::to_string(&OptionKind::Put).unwrap(), "\"Put\"");
     }
 
     #[cfg(feature = "serde")]
     #[test]
     fn test_exercise_style_serialize() {
-        assert_eq!(serde_json::to_string(&ExerciseStyle::European).unwrap(), "\"European\"");
-        assert_eq!(serde_json::to_string(&ExerciseStyle::American).unwrap(), "\"American\"");
-        assert_eq!(serde_json::to_string(&ExerciseStyle::Bermudan).unwrap(), "\"Bermudan\"");
+        assert_eq!(
+            serde_json::to_string(&ExerciseStyle::European).unwrap(),
+            "\"European\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ExerciseStyle::American).unwrap(),
+            "\"American\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ExerciseStyle::Bermudan).unwrap(),
+            "\"Bermudan\""
+        );
     }
 
     #[cfg(feature = "serde")]

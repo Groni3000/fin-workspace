@@ -92,14 +92,17 @@ impl Display for Instrument {
 #[cfg(test)]
 mod tests {
     #[cfg(feature = "serde")]
+    use std::str::FromStr;
+
+    #[cfg(feature = "serde")]
+    use tradeprim::price::Price;
+
+    #[cfg(feature = "serde")]
     use crate::_assert_owned;
     use crate::asset::AssetClass;
     use crate::tenor::Tenor;
 
     use super::*;
-
-    #[cfg(feature = "serde")]
-    use rust_decimal_macros::dec;
 
     fn aapl_stock() -> Stock {
         Stock::new(
@@ -131,7 +134,7 @@ mod tests {
             19,
             OptionKind::Call,
             ExerciseStyle::American,
-            dec!(200.00),
+            Price::from_str("200.00").unwrap(),
         )
     }
 
@@ -186,7 +189,7 @@ mod tests {
     fn test_instrument_option_serialize() {
         let inst: Instrument = aapl_option().into();
         let serialized = serde_json::to_string(&inst).unwrap();
-        let expected = "{\"type\":\"Option\",\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200.00\"}";
+        let expected = "{\"type\":\"Option\",\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200\"}";
 
         assert_eq!(serialized, expected);
     }
@@ -194,7 +197,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_instrument_option_deserialize() {
-        let serialized = "{\"type\":\"Option\",\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200.00\"}";
+        let serialized = "{\"type\":\"Option\",\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200\"}";
         let expected: Instrument = aapl_option().into();
         let deserialized: Instrument = serde_json::from_str(serialized).unwrap();
 

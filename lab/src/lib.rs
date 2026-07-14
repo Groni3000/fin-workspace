@@ -1,10 +1,6 @@
 pub mod market_data;
 
-use std::{
-    fmt::{Display, Pointer},
-    num::ParseIntError,
-    str::FromStr,
-};
+use std::{fmt::Display, num::ParseIntError, str::FromStr};
 
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, Offset, TimeZone, Utc};
 use chrono_tz::{Tz, US::Eastern as ExchangeTZ};

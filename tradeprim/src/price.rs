@@ -1,3 +1,7 @@
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "serde")]
+use std::borrow::Cow;
 use std::{fmt::Display, num::ParseIntError, str::FromStr};
 
 /// Has fixed scale and max value.
@@ -115,6 +119,19 @@ pub enum ParsePriceError {
     ParseIntError(ParseIntError),
 }
 
+impl Display for ParsePriceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParsePriceError::InvalidFormat => write!(f, "Invalid format"),
+            ParsePriceError::OutOfBounds => write!(f, "Out of bounds"),
+            ParsePriceError::PrecisionError(precision) => {
+                write!(f, "Precision error: {}", precision)
+            }
+            ParsePriceError::ParseIntError(err) => err.fmt(f),
+        }
+    }
+}
+
 impl FromStr for Price {
     type Err = ParsePriceError;
 
@@ -182,6 +199,27 @@ impl TryFrom<f64> for Price {
         }
         let raw = (value * Price::SCALE as f64).round() as i64;
         Self::new(raw).ok_or_else(|| FromF64Error::OutOfBounds(value))
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for Price {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
+        Price::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for Price {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_str(self)
     }
 }
 
