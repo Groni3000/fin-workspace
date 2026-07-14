@@ -4,7 +4,7 @@ use instrid::instruments::TradedInstrument;
 use instrid::mic::Mic;
 use instrid::prelude::FuturesContract;
 use instrid::tenor::Tenor;
-use lab::market_data::{FrdMdReader, MarketData, MdError};
+use lab::market_data::{Candle, FrdMdReader, MarketData, MdError};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
@@ -68,7 +68,11 @@ fn get_frd_file_name(futures_contract: &FuturesContract) -> String {
     )
 }
 
-fn process_contract<T: MarketData>(market_data: &mut T) -> Result<u64, T::Error> {
+fn process_contract<T: MarketData>(market_data: &mut T) -> Result<u64, T::Error>
+where
+    T: MarketData,
+    T::Record: Candle,
+{
     let file_start = Instant::now();
     let mut lines: u64 = 0;
     let mut last: Option<T::Record> = None;

@@ -11,7 +11,7 @@ use chrono_tz::{Tz, US::Eastern as ExchangeTZ};
 use serde::{Deserialize, Serialize};
 use tradeprim::price::{ParsePriceError, Price};
 
-use crate::market_data::RelevantPrice;
+use crate::market_data::{Candle, RelevantPrice};
 
 #[derive(Serialize, Deserialize)]
 pub struct RawFrdCandle<'a> {
@@ -32,6 +32,28 @@ pub struct FrdCandle {
     open: Price,
     close: Price,
     volume: u64,
+}
+
+impl Candle for FrdCandle {
+    fn open(&self) -> Price {
+        self.open
+    }
+
+    fn high(&self) -> Price {
+        self.high
+    }
+
+    fn low(&self) -> Price {
+        self.low
+    }
+
+    fn close(&self) -> Price {
+        self.close
+    }
+
+    fn volume(&self) -> u64 {
+        self.volume
+    }
 }
 
 impl FrdCandle {

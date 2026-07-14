@@ -13,8 +13,7 @@ pub trait RelevantPrice {
     fn timestamp(&self) -> DateTime<Utc>;
 }
 
-pub trait Candle {
-    fn timestamp(&self) -> DateTime<Utc>;
+pub trait Candle: RelevantPrice {
     fn open(&self) -> Price;
     fn high(&self) -> Price;
     fn low(&self) -> Price;
@@ -23,7 +22,7 @@ pub trait Candle {
 }
 
 pub trait MarketData {
-    type Record: RelevantPrice + Debug;
+    type Record: Debug;
     type Error;
 
     /// Returns the next record, if one is available.
@@ -91,52 +90,5 @@ impl<T: BufRead> MarketData for FrdMdReader<T> {
         let record = FrdCandle::from_frd_csv_line(&self.buffer)?;
 
         Ok(Some(record))
-    }
-}
-
-#[derive(Debug)]
-pub struct AggregatedCandle {
-    timestamp: DateTime<Utc>,
-    #[allow(dead_code)]
-    open: Price,
-    #[allow(dead_code)]
-    high: Price,
-    #[allow(dead_code)]
-    low: Price,
-    close: Price,
-    #[allow(dead_code)]
-    volume: u64,
-}
-
-impl AggregatedCandle {
-    pub fn new(
-        timestamp: DateTime<Utc>,
-        open: Price,
-        high: Price,
-        low: Price,
-        close: Price,
-        volume: u64,
-    ) -> Self {
-        Self {
-            timestamp,
-            open,
-            high,
-            low,
-            close,
-            volume,
-        }
-    }
-}
-
-// -----------------------
-// --- Implementations ---
-// -----------------------
-impl RelevantPrice for AggregatedCandle {
-    fn last_price(&self) -> Price {
-        self.close
-    }
-
-    fn timestamp(&self) -> DateTime<Utc> {
-        self.timestamp
     }
 }
