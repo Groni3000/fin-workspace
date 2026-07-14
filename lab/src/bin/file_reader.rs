@@ -27,7 +27,6 @@ fn main() -> Result<(), MdError> {
     let mut total_lines: u64 = 0;
     let mut n_files: u64 = 0;
 
-    // Reused buffer for each record.
     loop {
         let file_path = dir.join(get_frd_file_name(chain.contract()));
         if !file_path.is_file() {

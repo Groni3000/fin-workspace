@@ -8,11 +8,16 @@ use crate::{FrdCandle, FrdCandleParsingError};
 // ------------------------------
 // --- General purpose traits ---
 // ------------------------------
+/// A trait for data that have as little useful data
+/// as possible: when and what the price was at that time.
 pub trait RelevantPrice {
     fn last_price(&self) -> Price;
     fn timestamp(&self) -> DateTime<Utc>;
 }
 
+/// Represents an unknown time span aggregated candle.
+///
+/// Naturally extends RelevantPrice.
 pub trait Candle: RelevantPrice {
     fn open(&self) -> Price;
     fn high(&self) -> Price;
