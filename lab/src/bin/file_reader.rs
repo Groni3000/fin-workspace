@@ -36,9 +36,7 @@ fn main() -> Result<(), MdError> {
     Ok(())
 }
 
-fn process_contracts<T: MarketData>(
-    market_data: &mut T,
-) -> Result<(u64, Option<T::Record>), T::Error>
+fn process_contracts<T>(market_data: &mut T) -> Result<(u64, Option<T::Record>), T::Error>
 where
     T: MarketData,
     T::Record: Candle,
