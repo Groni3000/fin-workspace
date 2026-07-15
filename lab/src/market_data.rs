@@ -1,6 +1,13 @@
-use std::{fmt::Debug, io::BufRead};
+use std::{
+    fmt::Debug,
+    fs::File,
+    io::{BufRead, BufReader},
+    path::PathBuf,
+};
 
 use chrono::{DateTime, Utc};
+use futchain::FutChain;
+use instrid::instruments::TradedInstrument;
 use tradeprim::price::Price;
 
 use crate::{FrdCandle, FrdCandleParsingError};
@@ -57,6 +64,82 @@ impl From<FrdCandleParsingError> for MdError {
 // ---------------
 // --- Structs ---
 // ---------------
+
+/// A reader that reads market data into a buffer.
+#[derive(Debug)]
+pub struct FrdFutChainMdReader<'a> {
+    current: BufReader<File>,
+    chain: FutChain<'a>,
+    dir: PathBuf,
+    buffer: String,
+}
+
+impl<'a> FrdFutChainMdReader<'a> {
+    pub fn new(chain: FutChain<'a>, dir: PathBuf, buffer: String) -> Result<Self, MdError> {
+        let file_name = Self::get_file_name(&chain);
+        let file = File::open(&dir.join(&file_name))?;
+        let reader = BufReader::new(file);
+
+        Ok(Self {
+            current: reader,
+            chain,
+            dir,
+            buffer,
+        })
+    }
+
+    fn get_file_name(chain: &FutChain) -> String {
+        let contract = chain.contract();
+        format!(
+            "{}_{}{:02}_1min.txt",
+            contract.base().name().as_str(),
+            contract.tenor().code(),
+            contract.year() % 100
+        )
+    }
+
+    fn advance(&mut self) -> Result<bool, MdError> {
+        self.chain.advance();
+        let file_name = Self::get_file_name(self.chain());
+        let path = self.dir.join(&file_name);
+        if !path.is_file() {
+            return Ok(false);
+        }
+        self.current = BufReader::new(File::open(&path)?);
+
+        Ok(true)
+    }
+
+    pub fn chain(&self) -> &FutChain<'a> {
+        &self.chain
+    }
+
+    pub fn dir(&self) -> &PathBuf {
+        &self.dir
+    }
+}
+
+impl<'a> MarketData for FrdFutChainMdReader<'a> {
+    type Record = FrdCandle;
+    type Error = MdError;
+
+    fn next_record(&mut self) -> Result<Option<Self::Record>, Self::Error> {
+        loop {
+            self.buffer.clear();
+            let n = self.current.read_line(&mut self.buffer)?;
+            if n == 0 {
+                if self.advance()? {
+                    continue;
+                }
+                // No next file, signal end of stream
+                return Ok(None);
+            }
+            let record = FrdCandle::from_frd_csv_line(&self.buffer)?;
+
+            return Ok(Some(record));
+        }
+    }
+}
 
 /// A reader that reads market data into a buffer.
 #[derive(Debug)]
