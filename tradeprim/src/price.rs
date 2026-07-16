@@ -94,8 +94,28 @@ impl Price {
 }
 
 impl Display for Price {
+    /// Display is used for serialization. Previous implementation
+    /// was working, but could be broken if I decided to bump up
+    /// max integer part.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.value as f64 / Price::SCALE as f64)
+        // unsigned_abs can't overflow, even at i64::MIN
+        let abs = self.value.unsigned_abs();
+        let integer = abs / Price::SCALE as u64;
+        let mut fraction = abs % Price::SCALE as u64;
+
+        if self.value < 0 {
+            write!(f, "-")?;
+        }
+        if fraction == 0 {
+            return write!(f, "{integer}");
+        }
+        // Trim trailing zeros, tracking the width the rest must still pad to:
+        let mut width = Price::PRECISION as usize;
+        while fraction % 10 == 0 {
+            fraction /= 10;
+            width -= 1;
+        }
+        write!(f, "{integer}.{fraction:0width$}")
     }
 }
 
@@ -550,6 +570,67 @@ mod tests {
                 matches!(got, Ok(p) if p.value() == expected),
                 "s={s} expected={expected} got={got:?}"
             );
+        }
+
+    }
+
+    #[test]
+    fn display_formats_known_values() {
+        // Some basic cases
+        let cases = [
+            (0_i64, "0"),
+            (1, "0.000000001"),
+            (-1, "-0.000000001"),
+            (100_000_000, "0.1"),
+            (2_000_000_000, "2"),
+            (-5_300_000_000, "-5.3"),
+            (Price::MAX_RAW, "1000000.999999999"),
+            (Price::MIN_RAW, "-1000000.999999999"),
+        ];
+        for (raw, expected) in cases {
+            let p = Price::new(raw).unwrap();
+            assert_eq!(p.to_string(), expected, "raw={raw}");
+        }
+    }
+
+    // --------------------------------------
+    // ---        Utility function        ---
+    // --- Canonical Price representation ---
+    // --------------------------------------
+    fn canonical_display(raw: i64) -> String {
+        let sign = if raw < 0 { "-" } else { "" };
+        let a = raw.unsigned_abs();
+        let int = a / Price::SCALE as u64;
+        let frac = a % Price::SCALE as u64;
+        if frac == 0 {
+            format!("{sign}{int}")
+        } else {
+            format!("{sign}{int}.{}", format!("{frac:09}").trim_end_matches('0'))
+        }
+    }
+
+    proptest! {
+        // --------------------------
+        // --- Serialize and back ---
+        // --------------------------
+        #[test]
+        fn display_roundtrips_through_from_str(raw in Price::MIN_RAW..=Price::MAX_RAW) {
+            let p = Price::new(raw).unwrap();
+            let s = p.to_string();
+            let got = Price::from_str(&s);
+            prop_assert!(
+                matches!(got, Ok(q) if q.value() == raw),
+                "raw={raw} s={s} got={got:?}"
+            );
+        }
+
+        // ---------------------------------
+        // --- .to_string() is Canonical ---
+        // ---------------------------------
+        #[test]
+        fn display_matches_canonical(raw in Price::MIN_RAW..=Price::MAX_RAW) {
+            let p = Price::new(raw).unwrap();
+            prop_assert_eq!(p.to_string(), canonical_display(raw), "raw={}", raw);
         }
     }
 }
