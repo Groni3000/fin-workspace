@@ -8,8 +8,7 @@
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{BaseConsumer, Consumer};
 use rdkafka::message::Message;
-use rdkafka::{Offset, TopicPartitionList};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 // --- Connection
 const BOOTSTRAP_SERVERS: &str = "192.168.217.126:9092";
@@ -18,7 +17,7 @@ const BOOTSTRAP_SERVERS: &str = "192.168.217.126:9092";
 const TOPIC: &str = "md.databento.GLBX.MDP3.ohlcv-1s";
 // const TOPIC: &str = "md.databento.GLBX.MDP3.trades";
 const GROUP_ID: &str = "dirty-check";
-const AUTO_OFFSET_RESET: &str = "earliest";
+const AUTO_OFFSET_RESET: &str = "latest";
 // ---
 
 fn main() {
@@ -31,30 +30,30 @@ fn main() {
         .create()
         .expect("failed to create consumer");
 
-    let md = consumer
-        .fetch_metadata(Some(TOPIC), Duration::from_secs(10))
-        .unwrap();
+    // let md = consumer
+    //     .fetch_metadata(Some(TOPIC), Duration::from_secs(10))
+    //     .unwrap();
 
     // assigning
-    let mut tpl = TopicPartitionList::new();
-    for t in md.topics() {
-        for p in t.partitions() {
-            // Offset::End = only new msgs (like `latest`); Offset::Beginning = from start
-            tpl.add_partition_offset(TOPIC, p.id(), Offset::Beginning)
-                .unwrap();
-        }
-    }
-    consumer.assign(&tpl).unwrap();
+    // let mut tpl = TopicPartitionList::new();
+    // for t in md.topics() {
+    //     for p in t.partitions() {
+    //         // Offset::End = only new msgs (like `latest`); Offset::Beginning = from start
+    //         tpl.add_partition_offset(TOPIC, p.id(), Offset::Beginning)
+    //             .unwrap();
+    //     }
+    // }
+    // consumer.assign(&tpl).unwrap();
 
     // // subscribing
-    // consumer
-    //     .subscribe(&[TOPIC])
-    //     .expect("failed to subscribe to topic");
+    consumer
+        .subscribe(&[TOPIC])
+        .expect("failed to subscribe to topic");
 
     println!("Consuming '{TOPIC}' from {BOOTSTRAP_SERVERS} (offset reset: {AUTO_OFFSET_RESET})");
 
     let mut count: u64 = 0;
-    let mut start = Instant::now();
+    // let mut start = Instant::now();
     loop {
         match consumer.poll(Duration::from_millis(500)) {
             None => continue,
@@ -82,17 +81,24 @@ fn main() {
                 // "time": "2026-07-02T14:00:18+00:00",
                 // "src": "CL.FUT",
                 // "open": 0.92, "high": 0.92, "low": 0.92, "close": 0.92, "volume": 34}
-                if count % 50_000 == 0 {
-                    let elapsed = start.elapsed();
-                    println!(
-                        "#{count} key={key} partition={} offset={} ts={:?}\n  {payload}\n  elapsed: {:?}\n",
-                        msg.partition(),
-                        msg.offset(),
-                        msg.timestamp(),
-                        elapsed,
-                    );
-                    start = Instant::now();
-                }
+
+                // if count % 50_000 == 0 {
+                //     let elapsed = start.elapsed();
+                //     println!(
+                //         "#{count} key={key} partition={} offset={} ts={:?}\n  {payload}\n  elapsed: {:?}\n",
+                //         msg.partition(),
+                //         msg.offset(),
+                //         msg.timestamp(),
+                //         elapsed,
+                //     );
+                //     start = Instant::now();
+                // }
+                println!(
+                    "#{count} key={key} partition={} offset={} ts={:?}\n  {payload}\n",
+                    msg.partition(),
+                    msg.offset(),
+                    msg.timestamp(),
+                );
             }
             Some(Err(e)) => eprintln!("kafka error: {e}"),
         }
