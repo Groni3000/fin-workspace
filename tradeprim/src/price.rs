@@ -482,19 +482,10 @@ mod tests {
         }
     }
 
-    // Canonical decimal string for a raw value: always 9 fractional digits.
-    fn raw_to_decimal_string(raw: i64) -> String {
-        let sign = if raw < 0 { "-" } else { "" };
-        let a = raw.unsigned_abs();
-        let int = a / Price::SCALE as u64;
-        let frac = a % Price::SCALE as u64;
-        format!("{sign}{int}.{frac:09}")
-    }
-
     proptest! {
         #[test]
         fn str_for_in_range_raw(raw in Price::MIN_RAW..=Price::MAX_RAW) {
-            let s = raw_to_decimal_string(raw);
+            let s = canonical_display(raw);
             let got = Price::from_str(&s);
             prop_assert!(
                 matches!(got, Ok(p) if p.value() == raw),
