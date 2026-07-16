@@ -23,15 +23,29 @@ pub struct Price {
 impl Price {
     pub const PRECISION: u32 = 9;
     /// 1e9
-    pub const SCALE: i64 = 10_i64.pow(Price::PRECISION);
+    pub const SCALE: i64 = 10_i64.pow(Self::PRECISION);
     /// 1e6
     pub const MAX_INTEGER_PART: i64 = 1_000_000;
     /// 1_000_000.999_999_999 (max integer part with a full fraction)
-    pub const MAX_RAW: i64 = Price::MAX_INTEGER_PART * Price::SCALE + (Price::SCALE - 1);
+    pub const MAX_RAW: i64 = Self::MAX_INTEGER_PART * Self::SCALE + (Self::SCALE - 1);
     /// -1_000_000.999_999_999
-    pub const MIN_RAW: i64 = -Price::MAX_RAW;
+    pub const MIN_RAW: i64 = -Self::MAX_RAW;
     /// zero value
-    pub const ZERO: Self = Self { value: 0 };
+    pub const ZERO: Self = Self::new_unchecked(0);
+    // Powers of ten indexed by remaining precision (0..=PRECISION), so the
+    // per-parse scaling is a table lookup instead of a runtime `pow`.
+    const POW10: [i64; Self::PRECISION as usize + 1] = [
+        1,
+        10,
+        100,
+        1_000,
+        10_000,
+        100_000,
+        1_000_000,
+        10_000_000,
+        100_000_000,
+        1_000_000_000,
+    ];
 
     pub fn new(value: i64) -> Option<Self> {
         if value > Self::MAX_RAW || value < Self::MIN_RAW {
@@ -41,7 +55,7 @@ impl Price {
         Some(Self { value })
     }
 
-    fn new_unchecked(value: i64) -> Self {
+    const fn new_unchecked(value: i64) -> Self {
         Self { value }
     }
 
@@ -66,30 +80,16 @@ impl Price {
         let parsed_integer = i64::from_str(integer).unwrap().abs();
 
         let used_precision = fraction.len();
-        let remaining_precision = Price::PRECISION - used_precision as u32;
+        let remaining_precision = Self::PRECISION - used_precision as u32;
         let parsed_fraction = i64::from_str(fraction).unwrap();
-        // Powers of ten indexed by remaining precision (0..=PRECISION), so the
-        // per-parse scaling is a table lookup instead of a runtime `pow`.
-        const POW10: [i64; Price::PRECISION as usize + 1] = [
-            1,
-            10,
-            100,
-            1_000,
-            10_000,
-            100_000,
-            1_000_000,
-            10_000_000,
-            100_000_000,
-            1_000_000_000,
-        ];
-        let adjusted_fraction = parsed_fraction * POW10[remaining_precision as usize];
+        let adjusted_fraction = parsed_fraction * Self::POW10[remaining_precision as usize];
 
         let combined = match is_negative {
-            true => -(parsed_integer * Price::SCALE + adjusted_fraction),
-            false => parsed_integer * Price::SCALE + adjusted_fraction,
+            true => -(parsed_integer * Self::SCALE + adjusted_fraction),
+            false => parsed_integer * Self::SCALE + adjusted_fraction,
         };
 
-        Price::new_unchecked(combined)
+        Self::new_unchecked(combined)
     }
 }
 
@@ -100,8 +100,8 @@ impl Display for Price {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // unsigned_abs can't overflow, even at i64::MIN
         let abs = self.value.unsigned_abs();
-        let integer = abs / Price::SCALE as u64;
-        let mut fraction = abs % Price::SCALE as u64;
+        let integer = abs / Self::SCALE as u64;
+        let mut fraction = abs % Self::SCALE as u64;
 
         if self.value < 0 {
             write!(f, "-")?;
@@ -110,7 +110,7 @@ impl Display for Price {
             return write!(f, "{integer}");
         }
         // Trim trailing zeros, tracking the width the rest must still pad to:
-        let mut width = Price::PRECISION as usize;
+        let mut width = Self::PRECISION as usize;
         while fraction % 10 == 0 {
             fraction /= 10;
             width -= 1;
@@ -166,40 +166,26 @@ impl FromStr for Price {
         let is_negative = integer.starts_with('-');
 
         let parsed_integer = i64::from_str(integer).map_err(ParsePriceError::ParseIntError)?;
-        if parsed_integer > Price::MAX_INTEGER_PART || parsed_integer < -Price::MAX_INTEGER_PART {
+        if parsed_integer > Self::MAX_INTEGER_PART || parsed_integer < -Self::MAX_INTEGER_PART {
             return Err(ParsePriceError::OutOfBounds);
         }
         // We do it after min/max check because i64::MIN.abs() would panic
         let parsed_integer = parsed_integer.abs();
 
         let used_precision = fraction.len();
-        if used_precision > Price::PRECISION as usize {
+        if used_precision > Self::PRECISION as usize {
             return Err(ParsePriceError::PrecisionError(used_precision));
         }
-        let remaining_precision = Price::PRECISION - used_precision as u32;
+        let remaining_precision = Self::PRECISION - used_precision as u32;
         let parsed_fraction = i64::from_str(fraction).map_err(ParsePriceError::ParseIntError)?;
-        // Powers of ten indexed by remaining precision (0..=PRECISION), so the
-        // per-parse scaling is a table lookup instead of a runtime `pow`.
-        const POW10: [i64; Price::PRECISION as usize + 1] = [
-            1,
-            10,
-            100,
-            1_000,
-            10_000,
-            100_000,
-            1_000_000,
-            10_000_000,
-            100_000_000,
-            1_000_000_000,
-        ];
-        let adjusted_fraction = parsed_fraction * POW10[remaining_precision as usize];
+        let adjusted_fraction = parsed_fraction * Self::POW10[remaining_precision as usize];
 
         let combined = match is_negative {
-            true => -(parsed_integer * Price::SCALE + adjusted_fraction),
-            false => parsed_integer * Price::SCALE + adjusted_fraction,
+            true => -(parsed_integer * Self::SCALE + adjusted_fraction),
+            false => parsed_integer * Self::SCALE + adjusted_fraction,
         };
 
-        Ok(Price::new_unchecked(combined))
+        Ok(Self::new_unchecked(combined))
     }
 }
 
@@ -225,8 +211,8 @@ impl TryFrom<f64> for Price {
         if !value.is_finite() {
             return Err(FromF64Error::OutOfBounds(value));
         }
-        let raw = (value * Price::SCALE as f64).round() as i64;
-        Self::new(raw).ok_or_else(|| FromF64Error::OutOfBounds(value))
+        let raw = (value * Self::SCALE as f64).round() as i64;
+        Self::new(raw).ok_or(FromF64Error::OutOfBounds(value))
     }
 }
 
