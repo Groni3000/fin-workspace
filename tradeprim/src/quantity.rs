@@ -95,7 +95,7 @@ impl Quantity {
 
         let combined = parsed_uint * Self::SCALE + adjusted_fraction;
 
-        Quantity::new_unchecked(combined)
+        Self::new_unchecked(combined)
     }
 }
 
@@ -158,21 +158,21 @@ impl FromStr for Quantity {
         let (integer, fraction) = (integer.trim(), fraction.trim());
 
         let parsed_integer = u64::from_str(integer)?;
-        if parsed_integer > Quantity::MAX_INTEGER_PART {
+        if parsed_integer > Self::MAX_INTEGER_PART {
             return Err(ParseQuantityError::OutOfBounds);
         }
 
         let used_precision = fraction.len();
-        if used_precision > Quantity::PRECISION as usize {
+        if used_precision > Self::PRECISION as usize {
             return Err(ParseQuantityError::PrecisionError(used_precision));
         }
-        let remaining_precision = Quantity::PRECISION - used_precision as u32;
+        let remaining_precision = Self::PRECISION - used_precision as u32;
         let parsed_fraction = u64::from_str(fraction)?;
         let adjusted_fraction = parsed_fraction * Self::POW10[remaining_precision as usize];
 
-        let combined = parsed_integer * Quantity::SCALE + adjusted_fraction;
+        let combined = parsed_integer * Self::SCALE + adjusted_fraction;
 
-        Ok(Quantity::new_unchecked(combined))
+        Ok(Self::new_unchecked(combined))
     }
 }
 
@@ -215,7 +215,7 @@ impl TryFrom<f64> for Quantity {
             return Err(FromF64Error::Negative);
         }
 
-        let raw = (value * Quantity::SCALE as f64).round();
+        let raw = (value * Self::SCALE as f64).round();
         Self::new(raw as u64).ok_or(FromF64Error::OutOfBounds(value))
     }
 }
@@ -227,7 +227,7 @@ impl<'de> Deserialize<'de> for Quantity {
         D: serde::Deserializer<'de>,
     {
         let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
-        Quantity::from_str(&s).map_err(serde::de::Error::custom)
+        Self::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
 
