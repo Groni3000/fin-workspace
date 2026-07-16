@@ -44,20 +44,20 @@ pub trait MarketData {
 // --- Errors ---
 // --------------
 #[derive(Debug)]
-pub enum MdError {
+pub enum FrdMdError {
     Io(std::io::Error),
     Parse(FrdCandleParsingError),
 }
 
-impl From<std::io::Error> for MdError {
+impl From<std::io::Error> for FrdMdError {
     fn from(e: std::io::Error) -> Self {
-        MdError::Io(e)
+        FrdMdError::Io(e)
     }
 }
 
-impl From<FrdCandleParsingError> for MdError {
+impl From<FrdCandleParsingError> for FrdMdError {
     fn from(e: FrdCandleParsingError) -> Self {
-        MdError::Parse(e)
+        FrdMdError::Parse(e)
     }
 }
 
@@ -75,7 +75,7 @@ pub struct FrdFutChainMdReader<'a> {
 }
 
 impl<'a> FrdFutChainMdReader<'a> {
-    pub fn new(chain: FutChain<'a>, dir: PathBuf, buffer: String) -> Result<Self, MdError> {
+    pub fn new(chain: FutChain<'a>, dir: PathBuf, buffer: String) -> Result<Self, FrdMdError> {
         let file_name = Self::get_file_name(&chain);
         let file = File::open(&dir.join(&file_name))?;
         let reader = BufReader::new(file);
@@ -98,7 +98,7 @@ impl<'a> FrdFutChainMdReader<'a> {
         )
     }
 
-    fn advance(&mut self) -> Result<bool, MdError> {
+    fn advance(&mut self) -> Result<bool, FrdMdError> {
         self.chain.advance();
         let file_name = Self::get_file_name(self.chain());
         let path = self.dir.join(&file_name);
@@ -121,7 +121,7 @@ impl<'a> FrdFutChainMdReader<'a> {
 
 impl<'a> MarketData for FrdFutChainMdReader<'a> {
     type Record = FrdCandle;
-    type Error = MdError;
+    type Error = FrdMdError;
 
     fn next_record(&mut self) -> Result<Option<Self::Record>, Self::Error> {
         loop {
@@ -166,7 +166,7 @@ impl<T: BufRead> FrdMdReader<T> {
 
 impl<T: BufRead> MarketData for FrdMdReader<T> {
     type Record = FrdCandle;
-    type Error = MdError;
+    type Error = FrdMdError;
 
     fn next_record(&mut self) -> Result<Option<Self::Record>, Self::Error> {
         self.buffer.clear();

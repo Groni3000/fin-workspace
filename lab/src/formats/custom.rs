@@ -153,7 +153,7 @@ impl MarketData for CustomDatabentoConsumerMd {
 
                     return Ok(Some(serde_json::from_str(record)?));
                 }
-                Some(Err(e)) => KafkaMdError::Kafka(e),
+                Some(Err(e)) => return Err(KafkaMdError::Kafka(e)),
                 None => {
                     continue;
                 }

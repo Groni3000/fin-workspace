@@ -3,11 +3,11 @@ use instrid::asset::Asset;
 use instrid::mic::Mic;
 use instrid::prelude::FuturesContract;
 use instrid::tenor::Tenor;
-use lab::market_data::{Candle, FrdFutChainMdReader, MarketData, MdError};
+use lab::market_data::{Candle, FrdFutChainMdReader, FrdMdError, MarketData};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-fn main() -> Result<(), MdError> {
+fn main() -> Result<(), FrdMdError> {
     let dir = Path::new("lab/data/files/futures/frd");
     let instrument: FuturesContract = FuturesContract::new(
         Asset::new("RB", instrid::asset::AssetClass::Commodity).expect("Failed to create Asset"),
