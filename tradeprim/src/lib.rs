@@ -1,4 +1,5 @@
 pub mod price;
+pub mod quantity;
 use std::ops::Neg;
 
 pub mod prelude {
