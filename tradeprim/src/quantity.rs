@@ -216,7 +216,7 @@ impl TryFrom<f64> for Quantity {
         }
 
         let raw = (value * Quantity::SCALE as f64).round();
-        Self::new(raw as u64).ok_or(FromF64Error::OutOfBounds(raw))
+        Self::new(raw as u64).ok_or(FromF64Error::OutOfBounds(value))
     }
 }
 
