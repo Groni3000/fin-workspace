@@ -411,6 +411,7 @@ dependencies = [
  "instrid",
  "rdkafka",
  "serde",
+ "serde_json",
  "tradeprim",
 ]
 

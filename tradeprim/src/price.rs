@@ -190,6 +190,14 @@ pub enum FromF64Error {
     OutOfBounds(f64),
 }
 
+impl Display for FromF64Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FromF64Error::OutOfBounds(value) => write!(f, "out of bounds: {}", value),
+        }
+    }
+}
+
 impl TryFrom<f64> for Price {
     type Error = FromF64Error;
 

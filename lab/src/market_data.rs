@@ -25,7 +25,7 @@ pub trait RelevantPrice {
 /// Represents an unknown time span aggregated candle.
 ///
 /// Naturally extends RelevantPrice.
-pub trait Candle: RelevantPrice {
+pub trait Candle: RelevantPrice + Debug {
     fn open(&self) -> Price;
     fn high(&self) -> Price;
     fn low(&self) -> Price;

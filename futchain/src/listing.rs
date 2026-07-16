@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt::Display};
 
 use instrid::prelude::Tenor;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ListedTenors {
     buffer: Vec<Tenor>,
 }

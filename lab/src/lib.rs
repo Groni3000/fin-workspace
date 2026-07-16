@@ -1,3 +1,4 @@
+pub mod formats;
 pub mod market_data;
 
 use std::{fmt::Display, num::ParseIntError, str::FromStr};
@@ -7,7 +8,24 @@ use chrono_tz::{Tz, US::Eastern as ExchangeTZ};
 use serde::{Deserialize, Serialize};
 use tradeprim::price::{ParsePriceError, Price};
 
-use crate::market_data::{Candle, RelevantPrice};
+use crate::market_data::{Candle, MarketData, RelevantPrice};
+
+/// === PROCESS MARKET DATA
+pub fn process_md<T>(market_data: &mut T) -> Result<(u64, Option<T::Record>), T::Error>
+where
+    T: MarketData,
+    T::Record: Candle,
+{
+    let mut lines: u64 = 0;
+    let mut last: Option<T::Record> = None;
+
+    while let Some(record) = market_data.next_record()? {
+        lines += 1;
+        last = Some(record);
+    }
+
+    Ok((lines, last))
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct RawFrdCandle<'a> {
