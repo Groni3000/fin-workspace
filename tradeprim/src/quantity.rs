@@ -251,141 +251,141 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_price_new() {
-        let max_price = Quantity::new(Quantity::MAX_RAW).unwrap();
-        assert_eq!(Quantity::MAX_RAW, max_price.value);
+    fn test_quantity_new() {
+        let max_quantity = Quantity::new(Quantity::MAX_RAW).unwrap();
+        assert_eq!(Quantity::MAX_RAW, max_quantity.value);
 
-        let min_price = Quantity::new(Quantity::MIN_RAW).unwrap();
-        assert_eq!(Quantity::MIN_RAW, min_price.value);
+        let min_quantity = Quantity::new(Quantity::MIN_RAW).unwrap();
+        assert_eq!(Quantity::MIN_RAW, min_quantity.value);
 
         assert!(Quantity::new(Quantity::MAX_RAW + 1).is_none());
     }
 
     #[test]
-    fn test_f64_to_price_conversions() {
+    fn test_f64_to_quantity_conversions() {
         let raw = 65537.273030587;
-        let price: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert!(price.is_ok_and(|x| x.value == 65537_273_030_587));
+        let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
+        assert!(quantity.is_ok_and(|x| x.value == 65537_273_030_587));
 
         // --- Normal cases
         let raw = 100.0;
-        let price: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert!(price.is_ok_and(|x| x.value == 100_000_000_000));
+        let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
+        assert!(quantity.is_ok_and(|x| x.value == 100_000_000_000));
 
         let raw = 0.000000015;
-        let price: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert!(price.is_ok_and(|x| x.value == 000_000_015));
+        let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
+        assert!(quantity.is_ok_and(|x| x.value == 000_000_015));
 
         let raw = 100.239;
-        let price: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert!(price.is_ok_and(|x| x.value == 100_239_000_000));
+        let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
+        assert!(quantity.is_ok_and(|x| x.value == 100_239_000_000));
 
         // --- Edge cases (MAX/MIN/ZERO/signed smallest non-zero)
         // --- Near max doesn't work!
         let raw = Quantity::MAX_RAW as f64;
-        let price: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert_matches!(price, Err(FromF64Error::OutOfBounds(_)));
+        let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
+        assert_matches!(quantity, Err(FromF64Error::OutOfBounds(_)));
 
         let raw = Quantity::ZERO.value() as f64;
-        let price: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert!(price.is_ok_and(|x| x == Quantity::ZERO));
+        let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
+        assert!(quantity.is_ok_and(|x| x == Quantity::ZERO));
 
         let raw = 0.000000001;
-        let price: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert!(price.is_ok_and(|x| x.value == 1));
+        let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
+        assert!(quantity.is_ok_and(|x| x.value == 1));
 
         // --- Error cases (too large/precision loss)
         let raw = 0.0000000001; // 1 digit out of precision
-        let price: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert!(price.is_ok_and(|x| x == Quantity::ZERO));
+        let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
+        assert!(quantity.is_ok_and(|x| x == Quantity::ZERO));
 
         let raw = 0.000000000001; // 0.001 - 3 digits out of precision
-        let price: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert!(price.is_ok_and(|x| x == Quantity::ZERO));
+        let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
+        assert!(quantity.is_ok_and(|x| x == Quantity::ZERO));
 
         let raw = 0.0000000000001; // 0.0001 - Should not cause an error
-        let price: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert!(price.is_ok_and(|x| x == Quantity::ZERO));
+        let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
+        assert!(quantity.is_ok_and(|x| x == Quantity::ZERO));
 
         let raw = 0.000_000_000_000_9; // 0.0009 - Should not cause an error
-        let price: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert!(price.is_ok_and(|x| x == Quantity::ZERO));
+        let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
+        assert!(quantity.is_ok_and(|x| x == Quantity::ZERO));
 
         let raw = (Quantity::MAX_INTEGER_PART + 1) as f64; // out of bound by 1 unit
-        let price: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert_matches!(price, Err(FromF64Error::OutOfBounds(_)));
+        let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
+        assert_matches!(quantity, Err(FromF64Error::OutOfBounds(_)));
 
         let raw = 1_000_000.000000001;
-        let price: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert!(price.is_ok_and(|x| x.value == 1_000_000_000_000_001));
+        let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
+        assert!(quantity.is_ok_and(|x| x.value == 1_000_000_000_000_001));
 
         // NAN/INF/NEG_INF
         let raw = f64::NAN;
-        let price: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert_matches!(price, Err(FromF64Error::OutOfBounds(_)));
+        let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
+        assert_matches!(quantity, Err(FromF64Error::OutOfBounds(_)));
 
         let raw = f64::INFINITY;
-        let price: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert_matches!(price, Err(FromF64Error::OutOfBounds(_)));
+        let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
+        assert_matches!(quantity, Err(FromF64Error::OutOfBounds(_)));
 
         let raw = f64::NEG_INFINITY;
-        let price: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert_matches!(price, Err(FromF64Error::OutOfBounds(_)));
+        let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
+        assert_matches!(quantity, Err(FromF64Error::OutOfBounds(_)));
     }
 
     #[test]
-    fn test_price_to_f64_conversions() {
-        let price = Quantity::new(0_999_999_999_999_999);
-        assert!(price.is_some_and(|x| {
-            let raw_price: f64 = x.into();
-            let expected_price = 999_999.999_999_999_f64;
-            raw_price.total_cmp(&expected_price) == Ordering::Equal
+    fn test_quantity_to_f64_conversions() {
+        let quantity = Quantity::new(0_999_999_999_999_999);
+        assert!(quantity.is_some_and(|x| {
+            let raw_quantity: f64 = x.into();
+            let expected_quantity = 999_999.999_999_999_f64;
+            raw_quantity.total_cmp(&expected_quantity) == Ordering::Equal
         }));
 
-        let price = Quantity::new(0_999_999_000_000_099);
-        assert!(price.is_some_and(|x| {
-            let raw_price: f64 = x.into();
-            let expected_price = 999_999.000_000_099_f64;
-            raw_price.total_cmp(&expected_price) == Ordering::Equal
+        let quantity = Quantity::new(0_999_999_000_000_099);
+        assert!(quantity.is_some_and(|x| {
+            let raw_quantity: f64 = x.into();
+            let expected_quantity = 999_999.000_000_099_f64;
+            raw_quantity.total_cmp(&expected_quantity) == Ordering::Equal
         }));
 
-        let price = Quantity::new(0_000_000_000_000_099);
-        assert!(price.is_some_and(|x| {
-            let raw_price: f64 = x.into();
-            let expected_price = 0.000_000_099_f64;
-            raw_price.total_cmp(&expected_price) == Ordering::Equal
+        let quantity = Quantity::new(0_000_000_000_000_099);
+        assert!(quantity.is_some_and(|x| {
+            let raw_quantity: f64 = x.into();
+            let expected_quantity = 0.000_000_099_f64;
+            raw_quantity.total_cmp(&expected_quantity) == Ordering::Equal
         }));
     }
 
     #[test]
-    fn test_str_to_price_conversions() {
+    fn test_str_to_quantity_conversions() {
         let input = "";
-        let price = Quantity::from_str(input);
-        assert_matches!(price, Err(ParseQuantityError::ParseIntError(_)));
+        let quantity = Quantity::from_str(input);
+        assert_matches!(quantity, Err(ParseQuantityError::ParseIntError(_)));
 
         let input = "1";
-        let price = Quantity::from_str(input);
-        assert!(price.is_ok_and(|x| x.eq(&Quantity::new_unchecked(1_000_000_000))));
+        let quantity = Quantity::from_str(input);
+        assert!(quantity.is_ok_and(|x| x.eq(&Quantity::new_unchecked(1_000_000_000))));
 
         let input = "1.0";
-        let price = Quantity::from_str(input);
-        assert!(price.is_ok_and(|x| x.eq(&Quantity::new_unchecked(1_000_000_000))));
+        let quantity = Quantity::from_str(input);
+        assert!(quantity.is_ok_and(|x| x.eq(&Quantity::new_unchecked(1_000_000_000))));
 
         let input = "-1.0";
-        let price = Quantity::from_str(input);
-        assert_matches!(price, Err(ParseQuantityError::ParseIntError(_)));
+        let quantity = Quantity::from_str(input);
+        assert_matches!(quantity, Err(ParseQuantityError::ParseIntError(_)));
 
         let input = "-0.5";
-        let price = Quantity::from_str(input);
-        assert_matches!(price, Err(ParseQuantityError::ParseIntError(_)));
+        let quantity = Quantity::from_str(input);
+        assert_matches!(quantity, Err(ParseQuantityError::ParseIntError(_)));
 
         let input = "1.5";
-        let price = Quantity::from_str(input);
-        assert!(price.is_ok_and(|x| x.eq(&Quantity::new_unchecked(1_500_000_000))));
+        let quantity = Quantity::from_str(input);
+        assert!(quantity.is_ok_and(|x| x.eq(&Quantity::new_unchecked(1_500_000_000))));
 
         let input = "1.-5";
-        let price = Quantity::from_str(input);
-        assert_matches!(price, Err(ParseQuantityError::ParseIntError(_)));
+        let quantity = Quantity::from_str(input);
+        assert_matches!(quantity, Err(ParseQuantityError::ParseIntError(_)));
     }
 
     proptest! {
