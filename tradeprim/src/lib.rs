@@ -1,10 +1,18 @@
 pub mod price;
 pub mod quantity;
+pub mod quote_notional;
+
 use std::ops::Neg;
 
 pub mod prelude {
     pub use crate::Side;
     pub use crate::price::Price;
+    pub use crate::quantity::Quantity;
+
+    pub mod errors {
+        pub use crate::price::ParsePriceError;
+        pub use crate::quantity::ParseQuantityError;
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

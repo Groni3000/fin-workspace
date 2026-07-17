@@ -1,0 +1,513 @@
+#[cfg(feature = "serde")]
+use std::borrow::Cow;
+use std::{fmt::Display, num::ParseIntError, str::FromStr};
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
+/// Has fixed scale and max value.
+/// Due to the fact that `Price` and `Quantity`
+/// has fixed 9 digits precision, its product (`Notional`)
+/// should have 18 digits precision. That alone and the
+/// fact that integer part can be quite big
+/// (hundreds of millions or even several billions)
+/// and that it can be negative, we need to use `i128`.
+///
+/// ( ✗ means `not implemented`)
+///
+/// QuoteNotional is a type that represents the result of:
+/// ✗ `Price * Quantity -> QuoteNotional`
+///
+/// Also, it is used to get the price for known quantity:
+/// ✗ `QuoteNotional / Quantity -> Price`
+///
+/// i128::MAX
+/// 170_141_183_460_469_231_731_687_303_715_884_105_727
+/// 999_999_999_999_999_999_999_
+///                             999_999_999_999_999_999
+/// We have 21 digits for integer part
+/// and 18 digits for fractional part
+///
+/// I guess, we can make a reasonable max value
+/// with 15 digits for integer part: 999 trillions.
+///
+/// Considering the fact that for such a big max value
+/// it is worth to think about not providing `TryFrom<f64>`
+/// because for extreme values we can get an extreme error.
+/// User will be forced either convert to strings(/bytes in the future)
+/// or manually control i128 representation before feeding in `Self::new`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct QuoteNotional {
+    value: i128,
+}
+
+impl QuoteNotional {
+    pub const PRECISION: u32 = 18;
+    /// 1e18
+    pub const SCALE: i128 = 10_i128.pow(Self::PRECISION);
+    /// (9)e15
+    pub const MAX_INTEGER_PART: i128 = 999_999_999_999_999;
+    /// 999_999_999_999_999.999_999_999 (max integer part with a full fraction)
+    pub const MAX_RAW: i128 = Self::MAX_INTEGER_PART * Self::SCALE + (Self::SCALE - 1);
+    /// -999_999_999_999_999.999_999_999
+    pub const MIN_RAW: i128 = -Self::MAX_RAW;
+    /// zero value
+    pub const ZERO: Self = Self::new_unchecked(0);
+    // Powers of ten indexed by remaining precision (0..=PRECISION), so the
+    // per-parse scaling is a table lookup instead of a runtime `pow`.
+    const POW10: [i128; Self::PRECISION as usize + 1] = [
+        1,
+        10,
+        100,
+        1_000,
+        10_000,
+        100_000,
+        1_000_000,
+        10_000_000,
+        100_000_000,
+        1_000_000_000,
+        1_000_000_000_0,
+        1_000_000_000_00,
+        1_000_000_000_000,
+        1_000_000_000_000_0,
+        1_000_000_000_000_00,
+        1_000_000_000_000_000,
+        1_000_000_000_000_000_0,
+        1_000_000_000_000_000_00,
+        1_000_000_000_000_000_000,
+    ];
+
+    pub fn new(value: i128) -> Option<Self> {
+        if value > Self::MAX_RAW || value < Self::MIN_RAW {
+            return None;
+        }
+
+        Some(Self { value })
+    }
+
+    const fn new_unchecked(value: i128) -> Self {
+        Self { value }
+    }
+
+    pub fn value(self) -> i128 {
+        self.value
+    }
+
+    /// Basically this function makes a lot of assumptions about
+    /// underlying data correctness.
+    ///
+    /// No checks at all, pure `happy path`.
+    ///
+    /// Safe to use when you've already checked and sanitized the input.
+    ///
+    /// - integer part within ±MAX_INTEGER_PART (else silent overflow in release),
+    /// - no `-` anywhere in the fraction (like `0.-4` otherwise - silent wrong value),
+    /// - ≤18 fraction digits, non-empty, no whitespace, ≤1 dot (these merely panic).
+    pub fn from_str_unchecked(s: &str) -> Self {
+        let (integer, fraction) = s.split_once('.').unwrap_or((s, "000000000000000000"));
+        let is_negative = integer.starts_with('-');
+
+        let parsed_integer = i128::from_str(integer).unwrap().abs();
+
+        let used_precision = fraction.len();
+        let remaining_precision = Self::PRECISION - used_precision as u32;
+        let parsed_fraction = i128::from_str(fraction).unwrap();
+        let adjusted_fraction = parsed_fraction * Self::POW10[remaining_precision as usize];
+
+        let combined = match is_negative {
+            true => -(parsed_integer * Self::SCALE + adjusted_fraction),
+            false => parsed_integer * Self::SCALE + adjusted_fraction,
+        };
+
+        Self::new_unchecked(combined)
+    }
+}
+
+impl Display for QuoteNotional {
+    /// Display is used for serialization. Previous implementation
+    /// was working, but could be broken if I decided to bump up
+    /// max integer part.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // unsigned_abs can't overflow, even at i128::MIN
+        let abs = self.value.unsigned_abs();
+        let integer = abs / Self::SCALE as u128;
+        let mut fraction = abs % Self::SCALE as u128;
+
+        if self.value < 0 {
+            write!(f, "-")?;
+        }
+        if fraction == 0 {
+            return write!(f, "{integer}");
+        }
+        // Trim trailing zeros, tracking the width the rest must still pad to:
+        let mut width = Self::PRECISION as usize;
+        while fraction % 10 == 0 {
+            fraction /= 10;
+            width -= 1;
+        }
+        write!(f, "{integer}.{fraction:0width$}")
+    }
+}
+
+impl From<QuoteNotional> for f64 {
+    fn from(value: QuoteNotional) -> Self {
+        value.value as f64 / QuoteNotional::SCALE as f64
+    }
+}
+
+impl From<QuoteNotional> for i128 {
+    fn from(value: QuoteNotional) -> Self {
+        value.value
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParseQuoteNotionalError {
+    InvalidFormat,
+    OutOfBounds,
+    PrecisionError(usize),
+    ParseIntError(ParseIntError),
+}
+
+impl Display for ParseQuoteNotionalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseQuoteNotionalError::InvalidFormat => write!(f, "Invalid format"),
+            ParseQuoteNotionalError::OutOfBounds => write!(f, "Out of bounds"),
+            ParseQuoteNotionalError::PrecisionError(precision) => {
+                write!(f, "Precision error: {}", precision)
+            }
+            ParseQuoteNotionalError::ParseIntError(err) => err.fmt(f),
+        }
+    }
+}
+
+impl FromStr for QuoteNotional {
+    type Err = ParseQuoteNotionalError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (integer, fraction) = s.split_once('.').unwrap_or((s, "000000000000000000"));
+        let (integer, fraction) = (integer.trim(), fraction.trim());
+        // Check below needed to not accept and parse `-0.-1`
+        // The fraction part would be parsed no problem
+        if fraction.starts_with('-') {
+            return Err(ParseQuoteNotionalError::InvalidFormat);
+        }
+        let is_negative = integer.starts_with('-');
+
+        let parsed_integer =
+            i128::from_str(integer).map_err(ParseQuoteNotionalError::ParseIntError)?;
+        if parsed_integer > Self::MAX_INTEGER_PART || parsed_integer < -Self::MAX_INTEGER_PART {
+            return Err(ParseQuoteNotionalError::OutOfBounds);
+        }
+        // We do it after min/max check because i128::MIN.abs() would panic
+        let parsed_integer = parsed_integer.abs();
+
+        let used_precision = fraction.len();
+        if used_precision > Self::PRECISION as usize {
+            return Err(ParseQuoteNotionalError::PrecisionError(used_precision));
+        }
+        let remaining_precision = Self::PRECISION - used_precision as u32;
+        let parsed_fraction =
+            i128::from_str(fraction).map_err(ParseQuoteNotionalError::ParseIntError)?;
+        let adjusted_fraction = parsed_fraction * Self::POW10[remaining_precision as usize];
+
+        let combined = match is_negative {
+            true => -(parsed_integer * Self::SCALE + adjusted_fraction),
+            false => parsed_integer * Self::SCALE + adjusted_fraction,
+        };
+
+        Ok(Self::new_unchecked(combined))
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for QuoteNotional {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
+        Self::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for QuoteNotional {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_str(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // Bring the macros and other important things into scope.
+    use proptest::prelude::*;
+    use std::assert_matches;
+
+    use super::*;
+
+    #[test]
+    fn test_quote_notional_new() {
+        let max = QuoteNotional::new(QuoteNotional::MAX_RAW).unwrap();
+        assert_eq!(QuoteNotional::MAX_RAW, max.value);
+
+        let min = QuoteNotional::new(QuoteNotional::MIN_RAW).unwrap();
+        assert_eq!(QuoteNotional::MIN_RAW, min.value);
+
+        assert!(QuoteNotional::new(QuoteNotional::MAX_RAW + 1).is_none());
+        assert!(QuoteNotional::new(QuoteNotional::MIN_RAW - 1).is_none());
+    }
+
+    #[test]
+    fn test_str_to_quote_notional_conversions() {
+        let input = "";
+        let qn = QuoteNotional::from_str(input);
+        assert_matches!(qn, Err(ParseQuoteNotionalError::ParseIntError(_)));
+
+        let input = "1";
+        let qn = QuoteNotional::from_str(input);
+        assert!(qn.is_ok_and(|x| x.eq(&QuoteNotional::new_unchecked(1_000_000_000_000_000_000))));
+
+        let input = "1.0";
+        let qn = QuoteNotional::from_str(input);
+        assert!(qn.is_ok_and(|x| x.eq(&QuoteNotional::new_unchecked(1_000_000_000_000_000_000))));
+
+        let input = "-1.0";
+        let qn = QuoteNotional::from_str(input);
+        assert!(qn.is_ok_and(|x| x.eq(&QuoteNotional::new_unchecked(-1_000_000_000_000_000_000))));
+
+        let input = "-0.5";
+        let qn = QuoteNotional::from_str(input);
+        assert!(qn.is_ok_and(|x| x.eq(&QuoteNotional::new_unchecked(-500_000_000_000_000_000))));
+
+        let input = "1.5";
+        let qn = QuoteNotional::from_str(input);
+        assert!(qn.is_ok_and(|x| x.eq(&QuoteNotional::new_unchecked(1_500_000_000_000_000_000))));
+
+        let input = "1.-5";
+        let qn = QuoteNotional::from_str(input);
+        assert_matches!(qn, Err(ParseQuoteNotionalError::InvalidFormat));
+    }
+
+    proptest! {
+        #[test]
+        fn is_some_for_small_integers(s in (-10_i128..10_i128)) {
+            assert!(QuoteNotional::new(s).is_some());
+        }
+
+        #[test]
+        fn is_some_for_large_positive_integers(s in (QuoteNotional::MAX_RAW - 10)..=QuoteNotional::MAX_RAW) {
+            assert!(QuoteNotional::new(s).is_some());
+        }
+
+        #[test]
+        fn is_none_for_large_positive_integers(s in (QuoteNotional::MAX_RAW + 1)..=(QuoteNotional::MAX_RAW + 11)) {
+            assert!(QuoteNotional::new(s).is_none());
+        }
+
+        #[test]
+        fn is_some_for_large_negative_integers(s in QuoteNotional::MIN_RAW..=(QuoteNotional::MIN_RAW + 10)) {
+            assert!(QuoteNotional::new(s).is_some());
+        }
+
+        #[test]
+        fn is_none_for_large_negative_integers(s in (QuoteNotional::MIN_RAW - 11)..=(QuoteNotional::MIN_RAW - 1)) {
+            assert!(QuoteNotional::new(s).is_none());
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn str_for_in_range_raw(raw in QuoteNotional::MIN_RAW..=QuoteNotional::MAX_RAW) {
+            let s = canonical_display(raw);
+            let got = QuoteNotional::from_str(&s);
+            prop_assert!(
+                matches!(got, Ok(p) if p.value() == raw),
+                "s={s} raw={raw} got={got:?}"
+            );
+        }
+
+        // Correct scaling: 0.5 -> 500_000_000_000_000_000
+        #[test]
+        fn str_scales_fraction_by_position(
+            neg in any::<bool>(),
+            int in 0_i128..QuoteNotional::MAX_INTEGER_PART,
+            len in 1_usize..=QuoteNotional::PRECISION as usize,
+            seed in 0_u64..QuoteNotional::SCALE as u64,
+        ) {
+            let frac = seed % 10_u64.pow(len as u32); // fits in `len` digits
+            let sign = if neg { "-" } else { "" };
+            let s = format!("{sign}{int}.{frac:0len$}"); // zero-pad to `len`
+            let magnitude =
+                int * QuoteNotional::SCALE + frac as i128 * 10_i128.pow(QuoteNotional::PRECISION - len as u32);
+            let expected = if neg { -magnitude } else { magnitude };
+            let got = QuoteNotional::from_str(&s);
+            prop_assert!(
+                matches!(got, Ok(p) if p.value() == expected),
+                "s={s} expected={expected} got={got:?}"
+            );
+        }
+
+        // Precision: more than 18 fractional digits must be rejected.
+        #[test]
+        fn str_rejects_excess_precision(
+            int in 0_i128..QuoteNotional::MAX_INTEGER_PART,
+            len in (QuoteNotional::PRECISION as usize + 1)..=20_usize,
+            seed in any::<u64>(),
+        ) {
+            let frac: String = (0..len)
+                .map(|i| char::from(b'0' + ((seed >> (i % 60)) % 10) as u8))
+                .collect();
+            let s = format!("{int}.{frac}");
+            let got = QuoteNotional::from_str(&s);
+            prop_assert!(
+                matches!(got, Err(ParseQuoteNotionalError::PrecisionError(_))),
+                "s={s} got={got:?}"
+            );
+        }
+
+        // Bounds: an integer part beyond ±MAX_INTEGER_PART must be OutOfBounds
+        #[test]
+        fn str_rejects_large_integer_part(
+            int in (QuoteNotional::MAX_INTEGER_PART + 1)..=(QuoteNotional::MAX_INTEGER_PART + 1_000_i128),
+            neg in any::<bool>(),
+        ) {
+            let s = format!("{}{int}.0", if neg { "-" } else { "" });
+            let got = QuoteNotional::from_str(&s);
+            prop_assert!(
+                matches!(got, Err(ParseQuoteNotionalError::OutOfBounds)),
+                "s={s} got={got:?}"
+            );
+        }
+
+        // Boundary: integer part == MAX_INTEGER_PART with any fraction
+        #[test]
+        fn str_accepts_max_integer_with_fraction(
+            neg in any::<bool>(),
+            frac_units in 0_i128..QuoteNotional::SCALE,   // full fractional range
+        ) {
+            let sign = if neg { "-" } else { "" };
+            let s = format!("{sign}{}.{frac_units:018}", QuoteNotional::MAX_INTEGER_PART);
+            let magnitude = QuoteNotional::MAX_INTEGER_PART * QuoteNotional::SCALE + frac_units;
+            let expected = if neg { -magnitude } else { magnitude };
+            let got = QuoteNotional::from_str(&s);
+            prop_assert!(
+                matches!(got, Ok(p) if p.value() == expected),
+                "s={s} expected={expected} got={got:?}"
+            );
+        }
+
+    }
+
+    #[test]
+    fn display_formats_known_values() {
+        // Base cases
+        let cases = [
+            (0_i128, "0"),
+            (1, "0.000000000000000001"),
+            (-1, "-0.000000000000000001"),
+            (100_000_000, "0.0000000001"),
+            (2_000_000_000, "0.000000002"),
+            (-5_300_000_000, "-0.0000000053"),
+            (QuoteNotional::SCALE, "1"),
+            (2 * QuoteNotional::SCALE, "2"),
+            (-5_300_000_000_000_000_000, "-5.3"),
+            (QuoteNotional::MAX_RAW, "999999999999999.999999999999999999"),
+            (
+                QuoteNotional::MIN_RAW,
+                "-999999999999999.999999999999999999",
+            ),
+        ];
+        for (raw, expected) in cases {
+            let p = QuoteNotional::new(raw).unwrap();
+            assert_eq!(p.to_string(), expected, "raw={raw}");
+        }
+    }
+
+    #[test]
+    fn display_integer_path_drops_dot() {
+        for int in [0_i128, 1, 42, QuoteNotional::MAX_INTEGER_PART] {
+            let raw = int * QuoteNotional::SCALE;
+            assert_eq!(
+                QuoteNotional::new(raw).unwrap().to_string(),
+                int.to_string()
+            );
+            if int != 0 {
+                let n = QuoteNotional::new(-raw).unwrap();
+                assert_eq!(n.to_string(), format!("-{int}"));
+            }
+        }
+    }
+
+    proptest! {
+        // `from_str_unchecked` must agree with the checked parser correct input.
+        #[test]
+        fn from_str_unchecked_matches_checked(raw in QuoteNotional::MIN_RAW..=QuoteNotional::MAX_RAW) {
+            let s = canonical_display(raw);
+            prop_assert_eq!(
+                QuoteNotional::from_str_unchecked(&s).value(),
+                QuoteNotional::from_str(&s).unwrap().value(),
+                "s={}", s
+            );
+        }
+
+        // Bare integers (no dot) appending `.(0)`
+        #[test]
+        fn from_str_unchecked_bare_integer(int in -QuoteNotional::MAX_INTEGER_PART..=QuoteNotional::MAX_INTEGER_PART) {
+            let s = int.to_string();
+            prop_assert_eq!(
+                QuoteNotional::from_str_unchecked(&s).value(),
+                int * QuoteNotional::SCALE,
+                "s={}", s
+            );
+        }
+    }
+
+    // --------------------------------------
+    // ---        Utility function        ---
+    // --- Canonical QuoteNotional representation ---
+    // --------------------------------------
+    fn canonical_display(raw: i128) -> String {
+        let sign = if raw < 0 { "-" } else { "" };
+        let a = raw.unsigned_abs();
+        let int = a / QuoteNotional::SCALE as u128;
+        let frac = a % QuoteNotional::SCALE as u128;
+        if frac == 0 {
+            format!("{sign}{int}")
+        } else {
+            format!(
+                "{sign}{int}.{}",
+                format!("{frac:018}").trim_end_matches('0')
+            )
+        }
+    }
+
+    proptest! {
+        // --------------------------
+        // --- Serialize and back ---
+        // --------------------------
+        #[test]
+        fn display_roundtrips_through_from_str(raw in QuoteNotional::MIN_RAW..=QuoteNotional::MAX_RAW) {
+            let p = QuoteNotional::new(raw).unwrap();
+            let s = p.to_string();
+            let got = QuoteNotional::from_str(&s);
+            prop_assert!(
+                matches!(got, Ok(q) if q.value() == raw),
+                "raw={raw} s={s} got={got:?}"
+            );
+        }
+
+        // ---------------------------------
+        // --- .to_string() is Canonical ---
+        // ---------------------------------
+        #[test]
+        fn display_matches_canonical(raw in QuoteNotional::MIN_RAW..=QuoteNotional::MAX_RAW) {
+            let p = QuoteNotional::new(raw).unwrap();
+            prop_assert_eq!(p.to_string(), canonical_display(raw), "raw={}", raw);
+        }
+    }
+}
