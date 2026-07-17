@@ -42,7 +42,7 @@ pub struct QuoteNotional {
 }
 
 impl QuoteNotional {
-    pub const PRECISION: u32 = 18;
+    pub const PRECISION: u32 = 9;
     /// 1e18
     pub const SCALE: i128 = 10_i128.pow(Self::PRECISION);
     /// (9)e15
@@ -66,15 +66,15 @@ impl QuoteNotional {
         10_000_000,
         100_000_000,
         1_000_000_000,
-        1_000_000_000_0,
-        1_000_000_000_00,
-        1_000_000_000_000,
-        1_000_000_000_000_0,
-        1_000_000_000_000_00,
-        1_000_000_000_000_000,
-        1_000_000_000_000_000_0,
-        1_000_000_000_000_000_00,
-        1_000_000_000_000_000_000,
+        // 1_000_000_000_0,
+        // 1_000_000_000_00,
+        // 1_000_000_000_000,
+        // 1_000_000_000_000_0,
+        // 1_000_000_000_000_00,
+        // 1_000_000_000_000_000,
+        // 1_000_000_000_000_000_0,
+        // 1_000_000_000_000_000_00,
+        // 1_000_000_000_000_000_000,
     ];
 
     pub fn new(value: i128) -> Option<Self> {
@@ -104,7 +104,7 @@ impl QuoteNotional {
     /// - no `-` anywhere in the fraction (like `0.-4` otherwise - silent wrong value),
     /// - ≤18 fraction digits, non-empty, no whitespace, ≤1 dot (these merely panic).
     pub fn from_str_unchecked(s: &str) -> Self {
-        let (integer, fraction) = s.split_once('.').unwrap_or((s, "000000000000000000"));
+        let (integer, fraction) = s.split_once('.').unwrap_or((s, "000000000"));
         let is_negative = integer.starts_with('-');
 
         let parsed_integer = i128::from_str(integer).unwrap().abs();
@@ -186,7 +186,7 @@ impl FromStr for QuoteNotional {
     type Err = ParseQuoteNotionalError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (integer, fraction) = s.split_once('.').unwrap_or((s, "000000000000000000"));
+        let (integer, fraction) = s.split_once('.').unwrap_or((s, "000000000"));
         let (integer, fraction) = (integer.trim(), fraction.trim());
         // Check below needed to not accept and parse `-0.-1`
         // The fraction part would be parsed no problem
@@ -270,23 +270,23 @@ mod tests {
 
         let input = "1";
         let qn = QuoteNotional::from_str(input);
-        assert!(qn.is_ok_and(|x| x.eq(&QuoteNotional::new_unchecked(1_000_000_000_000_000_000))));
+        assert!(qn.is_ok_and(|x| x.eq(&QuoteNotional::new_unchecked(1_000_000_000))));
 
         let input = "1.0";
         let qn = QuoteNotional::from_str(input);
-        assert!(qn.is_ok_and(|x| x.eq(&QuoteNotional::new_unchecked(1_000_000_000_000_000_000))));
+        assert!(qn.is_ok_and(|x| x.eq(&QuoteNotional::new_unchecked(1_000_000_000))));
 
         let input = "-1.0";
         let qn = QuoteNotional::from_str(input);
-        assert!(qn.is_ok_and(|x| x.eq(&QuoteNotional::new_unchecked(-1_000_000_000_000_000_000))));
+        assert!(qn.is_ok_and(|x| x.eq(&QuoteNotional::new_unchecked(-1_000_000_000))));
 
         let input = "-0.5";
         let qn = QuoteNotional::from_str(input);
-        assert!(qn.is_ok_and(|x| x.eq(&QuoteNotional::new_unchecked(-500_000_000_000_000_000))));
+        assert!(qn.is_ok_and(|x| x.eq(&QuoteNotional::new_unchecked(-500_000_000))));
 
         let input = "1.5";
         let qn = QuoteNotional::from_str(input);
-        assert!(qn.is_ok_and(|x| x.eq(&QuoteNotional::new_unchecked(1_500_000_000_000_000_000))));
+        assert!(qn.is_ok_and(|x| x.eq(&QuoteNotional::new_unchecked(1_500_000_000))));
 
         let input = "1.-5";
         let qn = QuoteNotional::from_str(input);
@@ -391,7 +391,7 @@ mod tests {
             frac_units in 0_i128..QuoteNotional::SCALE,   // full fractional range
         ) {
             let sign = if neg { "-" } else { "" };
-            let s = format!("{sign}{}.{frac_units:018}", QuoteNotional::MAX_INTEGER_PART);
+            let s = format!("{sign}{}.{frac_units:09}", QuoteNotional::MAX_INTEGER_PART);
             let magnitude = QuoteNotional::MAX_INTEGER_PART * QuoteNotional::SCALE + frac_units;
             let expected = if neg { -magnitude } else { magnitude };
             let got = QuoteNotional::from_str(&s);
@@ -408,19 +408,16 @@ mod tests {
         // Base cases
         let cases = [
             (0_i128, "0"),
-            (1, "0.000000000000000001"),
-            (-1, "-0.000000000000000001"),
-            (100_000_000, "0.0000000001"),
-            (2_000_000_000, "0.000000002"),
-            (-5_300_000_000, "-0.0000000053"),
+            (1, "0.000000001"),
+            (-1, "-0.000000001"),
+            (100_000_000, "0.1"),
+            (2_000_000_000, "2"),
+            (-5_300_000_000, "-5.3"),
             (QuoteNotional::SCALE, "1"),
             (2 * QuoteNotional::SCALE, "2"),
-            (-5_300_000_000_000_000_000, "-5.3"),
-            (QuoteNotional::MAX_RAW, "999999999999999.999999999999999999"),
-            (
-                QuoteNotional::MIN_RAW,
-                "-999999999999999.999999999999999999",
-            ),
+            (-5_300_000_000_000_000_000, "-5300000000"),
+            (QuoteNotional::MAX_RAW, "999999999999999.999999999"),
+            (QuoteNotional::MIN_RAW, "-999999999999999.999999999"),
         ];
         for (raw, expected) in cases {
             let p = QuoteNotional::new(raw).unwrap();
@@ -479,10 +476,7 @@ mod tests {
         if frac == 0 {
             format!("{sign}{int}")
         } else {
-            format!(
-                "{sign}{int}.{}",
-                format!("{frac:018}").trim_end_matches('0')
-            )
+            format!("{sign}{int}.{}", format!("{frac:09}").trim_end_matches('0'))
         }
     }
 
