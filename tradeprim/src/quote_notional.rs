@@ -1,41 +1,16 @@
 #[cfg(feature = "serde")]
 use std::borrow::Cow;
-use std::{fmt::Display, num::ParseIntError, str::FromStr};
+use std::{fmt::Display, num::ParseIntError, ops::Mul, str::FromStr};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::{price::Price, quantity::Quantity};
+
 /// Has fixed scale and max value.
-/// Due to the fact that `Price` and `Quantity`
-/// has fixed 9 digits precision, its product (`Notional`)
-/// should have 18 digits precision. That alone and the
-/// fact that integer part can be quite big
-/// (hundreds of millions or even several billions)
-/// and that it can be negative, we need to use `i128`.
 ///
-/// ( ✗ means `not implemented`)
-///
-/// QuoteNotional is a type that represents the result of:
-/// ✗ `Price * Quantity -> QuoteNotional`
-///
-/// Also, it is used to get the price for known quantity:
-/// ✗ `QuoteNotional / Quantity -> Price`
-///
-/// i128::MAX
-/// 170_141_183_460_469_231_731_687_303_715_884_105_727
-/// 999_999_999_999_999_999_999_
-///                             999_999_999_999_999_999
-/// We have 21 digits for integer part
-/// and 18 digits for fractional part
-///
-/// I guess, we can make a reasonable max value
-/// with 15 digits for integer part: 999 trillions.
-///
-/// Considering the fact that for such a big max value
-/// it is worth to think about not providing `TryFrom<f64>`
-/// because for extreme values we can get an extreme error.
-/// User will be forced either convert to strings(/bytes in the future)
-/// or manually control i128 representation before feeding in `Self::new`.
+/// Max/min values are derived from max/min `Price` and max `Quantity`.
+/// Therefore we can afford to return value, instead of `Option<QuoteNotional>`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct QuoteNotional {
     value: i128,
@@ -43,16 +18,22 @@ pub struct QuoteNotional {
 
 impl QuoteNotional {
     pub const PRECISION: u32 = 9;
-    /// 1e18
     pub const SCALE: i128 = 10_i128.pow(Self::PRECISION);
-    /// (9)e15
-    pub const MAX_INTEGER_PART: i128 = 999_999_999_999_999;
-    /// 999_999_999_999_999.999_999_999 (max integer part with a full fraction)
-    pub const MAX_RAW: i128 = Self::MAX_INTEGER_PART * Self::SCALE + (Self::SCALE - 1);
-    /// -999_999_999_999_999.999_999_999
-    pub const MIN_RAW: i128 = -Self::MAX_RAW;
-    /// zero value
+    // --- max / min shinanigans
+
+    // --- other
+    const MAX_PRICE: i128 = Price::MAX_RAW as i128;
+    const MAX_QUANTITY: i128 = Quantity::MAX_RAW as i128;
+    const MIN_PRICE: i128 = Price::MIN_RAW as i128;
+
+    // --- quote_notional
+    pub const MAX_RAW: i128 = Self::round(Self::MAX_QUANTITY * Self::MAX_PRICE);
+    pub const MIN_RAW: i128 = Self::round(Self::MAX_QUANTITY * Self::MIN_PRICE);
+
+    // --- Useful constants
     pub const ZERO: Self = Self::new_unchecked(0);
+    pub const ONE: Self = Self::new_unchecked(Self::SCALE);
+    pub const MAX_INTEGER_PART: i128 = Self::MAX_RAW / Self::SCALE;
     // Powers of ten indexed by remaining precision (0..=PRECISION), so the
     // per-parse scaling is a table lookup instead of a runtime `pow`.
     const POW10: [i128; Self::PRECISION as usize + 1] = [
@@ -66,15 +47,6 @@ impl QuoteNotional {
         10_000_000,
         100_000_000,
         1_000_000_000,
-        // 1_000_000_000_0,
-        // 1_000_000_000_00,
-        // 1_000_000_000_000,
-        // 1_000_000_000_000_0,
-        // 1_000_000_000_000_00,
-        // 1_000_000_000_000_000,
-        // 1_000_000_000_000_000_0,
-        // 1_000_000_000_000_000_00,
-        // 1_000_000_000_000_000_000,
     ];
 
     pub fn new(value: i128) -> Option<Self> {
@@ -120,6 +92,38 @@ impl QuoteNotional {
         };
 
         Self::new_unchecked(combined)
+    }
+
+    /// Rounds the value half away from zero.
+    ///
+    /// In order to understand what I'm trying to achieve -
+    /// here is an examples in f64:
+    ///
+    /// 0.5 -> 1, 0.4 -> 0.0,
+    /// -0.5 -> -1, -0.4 -> 0.0
+    ///
+    /// Assuming `min < value < max` of `QuoteNotional`
+    pub const fn round(value: i128) -> i128 {
+        (value + value.signum() * (Self::SCALE / 2)) / Self::SCALE
+    }
+}
+
+impl Mul<Quantity> for Price {
+    type Output = QuoteNotional;
+
+    fn mul(self, rhs: Quantity) -> Self::Output {
+        // can't overflow by design
+        let mul_res = self.value() as i128 * rhs.value() as i128;
+        let raw = QuoteNotional::round(mul_res);
+        QuoteNotional::new_unchecked(raw)
+    }
+}
+
+impl Mul<Price> for Quantity {
+    type Output = QuoteNotional;
+
+    fn mul(self, rhs: Price) -> Self::Output {
+        rhs * self
     }
 }
 
@@ -415,9 +419,9 @@ mod tests {
             (-5_300_000_000, "-5.3"),
             (QuoteNotional::SCALE, "1"),
             (2 * QuoteNotional::SCALE, "2"),
-            (-5_300_000_000_000_000_000, "-5300000000"),
-            (QuoteNotional::MAX_RAW, "999999999999999.999999999"),
-            (QuoteNotional::MIN_RAW, "-999999999999999.999999999"),
+            (-5_300_000_000, "-5.3"),
+            (QuoteNotional::MAX_RAW, "5000006000000993999998.000000001"),
+            (QuoteNotional::MIN_RAW, "-5000006000000993999998.000000001"),
         ];
         for (raw, expected) in cases {
             let p = QuoteNotional::new(raw).unwrap();
