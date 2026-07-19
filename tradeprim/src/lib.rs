@@ -1,3 +1,4 @@
+pub mod currency;
 pub mod currency_notional;
 pub mod price;
 pub mod quantity;
@@ -11,6 +12,7 @@ pub mod prelude {
     pub use crate::quantity::Quantity;
 
     pub mod errors {
+        pub use crate::currency::Currency;
         pub use crate::price::ParsePriceError;
         pub use crate::quantity::ParseQuantityError;
     }
