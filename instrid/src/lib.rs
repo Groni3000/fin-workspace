@@ -2,6 +2,7 @@ pub mod asset;
 pub mod inline_str;
 pub mod instruments;
 pub mod mic;
+pub mod spec;
 pub mod tenor;
 
 /// Common imports for users of this crate.

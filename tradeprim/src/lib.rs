@@ -1,3 +1,4 @@
+pub mod currency_notional;
 pub mod price;
 pub mod quantity;
 pub mod quote_notional;

@@ -2,7 +2,9 @@
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "serde")]
 use std::borrow::Cow;
-use std::{fmt::Display, num::ParseIntError, str::FromStr};
+use std::{fmt::Display, num::ParseIntError, ops::Mul, str::FromStr};
+
+use crate::{currency_notional::CurrencyNotional, quote_notional::QuoteNotional};
 
 /// Has fixed scale and max value.
 ///
@@ -32,6 +34,8 @@ impl Price {
     pub const MIN_RAW: i64 = -Self::MAX_RAW;
     /// zero value
     pub const ZERO: Self = Self::new_unchecked(0);
+    /// one value
+    pub const ONE: Self = Self::new_unchecked(1_000_000_000);
     // Powers of ten indexed by remaining precision (0..=PRECISION), so the
     // per-parse scaling is a table lookup instead of a runtime `pow`.
     const POW10: [i64; Self::PRECISION as usize + 1] = [
@@ -90,6 +94,14 @@ impl Price {
         };
 
         Self::new_unchecked(combined)
+    }
+}
+
+impl Mul<Price> for QuoteNotional {
+    type Output = CurrencyNotional;
+
+    fn mul(self, rhs: Price) -> Self::Output {
+        CurrencyNotional::new((rhs.value() as i128 * Price::SCALE as i128) * self.value())
     }
 }
 

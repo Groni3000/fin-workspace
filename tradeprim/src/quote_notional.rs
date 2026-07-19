@@ -420,8 +420,8 @@ mod tests {
             (QuoteNotional::SCALE, "1"),
             (2 * QuoteNotional::SCALE, "2"),
             (-5_300_000_000, "-5.3"),
-            (QuoteNotional::MAX_RAW, "5000006000000993999998.000000001"),
-            (QuoteNotional::MIN_RAW, "-5000006000000993999998.000000001"),
+            (QuoteNotional::MAX_RAW, "5000006000000.993999998"),
+            (QuoteNotional::MIN_RAW, "-5000006000000.993999998"),
         ];
         for (raw, expected) in cases {
             let p = QuoteNotional::new(raw).unwrap();
@@ -506,6 +506,141 @@ mod tests {
         fn display_matches_canonical(raw in QuoteNotional::MIN_RAW..=QuoteNotional::MAX_RAW) {
             let p = QuoteNotional::new(raw).unwrap();
             prop_assert_eq!(p.to_string(), canonical_display(raw), "raw={}", raw);
+        }
+    }
+
+    // -----------------------
+    // ---      round      ---
+    // -----------------------
+    /// This is the reference implementation of `round` for tests.
+    fn round_ref(v: i128) -> i128 {
+        let q = v / QuoteNotional::SCALE; // truncates toward zero
+        let r = (v % QuoteNotional::SCALE).abs();
+        if r * 2 >= QuoteNotional::SCALE {
+            q + v.signum()
+        } else {
+            q
+        }
+    }
+
+    #[test]
+    fn round_known_values() {
+        let s = QuoteNotional::SCALE;
+        let cases = [
+            (0, 0),
+            (-0, 0),           // -0 -> 0 (sign gone away)
+            (s / 2, 1),        // 0.5 -> 1  (tie, away)
+            (s / 2 - 1, 0),    // just under 0.5 -> 0
+            (s / 2 + 1, 1),    // just over  0.5 -> 1
+            (-(s / 2), -1),    // -0.5 -> -1 (tie, away)
+            (-(s / 2 - 1), 0), // -0.4… -> 0
+            (s + s / 2, 2),    // 1.5 -> 2
+            (2 * s, 2),        // exact, no fraction
+        ];
+        for (v, expected) in cases {
+            assert_eq!(QuoteNotional::round(v), expected, "v={v}");
+        }
+    }
+
+    #[test]
+    fn round_is_linear_transformation() {
+        // round(-v) == -round(v)
+        for v in [1_i128, 499_999_999, 500_000_000, 500_000_001, 1_500_000_000] {
+            assert_eq!(QuoteNotional::round(-v), -QuoteNotional::round(v), "v={v}");
+        }
+    }
+
+    proptest! {
+        // Check that `round` matches the reference implementation.
+        #[test]
+        fn round_matches_reference(v in QuoteNotional::MIN_RAW..=QuoteNotional::MAX_RAW) {
+            prop_assert_eq!(QuoteNotional::round(v), round_ref(v), "v={}", v);
+        }
+    }
+
+    // ---------------------------------
+    // ---   Price * Quantity mul   ---
+    // ---------------------------------
+    #[test]
+    fn mul_produces_expected_value_and_display() {
+        let price = Price::new(2_150_000_000).unwrap();
+        let qty = Quantity::new(3_000_000_000).unwrap();
+        let qn = price * qty;
+        assert_eq!(qn.value(), 6_450_000_000);
+        assert_eq!(qn.to_string(), "6.45");
+    }
+
+    #[test]
+    fn mul_rounds_half_away() {
+        // result is in 10th digit, applied round
+        // 0.000000005 * 0.1 = 0.0000000005
+        // rounds away from zero to 0.000000001.
+        let tiny = Price::new(5).unwrap();
+        let tenth = Quantity::new(100_000_000).unwrap();
+        assert_eq!((tiny * tenth).value(), 1);
+
+        // Negative side of the same tie.
+        let neg_tiny = Price::new(-5).unwrap();
+        assert_eq!((neg_tiny * tenth).value(), -1);
+
+        // Below the tie stays down:
+        // 1.000000001 * 1.000000001 =
+        // 1.000000002000000001 =
+        //                    | this last digit will be rounded to 0
+        // 1.000000002 - result
+        let a = Price::new(1_000_000_001).unwrap();
+        let b = Quantity::new(1_000_000_001).unwrap();
+        assert_eq!((a * b).value(), 1_000_000_002);
+    }
+
+    #[test]
+    fn mul_hits_bounds_exactly() {
+        // The extremes of Price/Quantity land exactly on QuoteNotional's bounds
+        let max_price = Price::new(Price::MAX_RAW).unwrap();
+        let min_price = Price::new(Price::MIN_RAW).unwrap();
+        let max_qty = Quantity::new(Quantity::MAX_RAW).unwrap();
+
+        assert_eq!((max_price * max_qty).value(), QuoteNotional::MAX_RAW);
+        assert_eq!((min_price * max_qty).value(), QuoteNotional::MIN_RAW);
+    }
+
+    proptest! {
+        // "Can't overflow by design": any valid Price * Quantity lands inside
+        // [MIN_RAW, MAX_RAW], so new() would accept every product.
+        #[test]
+        fn mul_stays_in_range(
+            p_raw in Price::MIN_RAW..=Price::MAX_RAW,
+            q_raw in Quantity::MIN_RAW..=Quantity::MAX_RAW,
+        ) {
+            // It uses `new_unchecked` under the hood, but if it happens
+            // I change it - I may catch the bug here.
+            let qn = Price::new(p_raw).unwrap() * Quantity::new(q_raw).unwrap();
+            prop_assert!(
+                QuoteNotional::new(qn.value()).is_some(),
+                "p_raw={p_raw} q_raw={q_raw} qn={}", qn.value()
+            );
+        }
+
+        // Multiplication is commutative.
+        #[test]
+        fn mul_is_commutative(
+            p_raw in Price::MIN_RAW..=Price::MAX_RAW,
+            q_raw in Quantity::MIN_RAW..=Quantity::MAX_RAW,
+        ) {
+            let price = Price::new(p_raw).unwrap();
+            let qty = Quantity::new(q_raw).unwrap();
+            prop_assert_eq!((price * qty).value(), (qty * price).value());
+        }
+
+        // `mul` rounds so `round(mul_result)` is no-op
+        #[test]
+        fn mul_matches_rounded_raw_product(
+            p_raw in Price::MIN_RAW..=Price::MAX_RAW,
+            q_raw in Quantity::MIN_RAW..=Quantity::MAX_RAW,
+        ) {
+            let qn = Price::new(p_raw).unwrap() * Quantity::new(q_raw).unwrap();
+            let expected = QuoteNotional::round(p_raw as i128 * q_raw as i128);
+            prop_assert_eq!(qn.value(), expected, "p_raw={} q_raw={}", p_raw, q_raw);
         }
     }
 }
