@@ -1004,6 +1004,7 @@ dependencies = [
 name = "tradeprim"
 version = "0.1.0"
 dependencies = [
+ "csv",
  "proptest",
  "rust_decimal",
  "rust_decimal_macros",
