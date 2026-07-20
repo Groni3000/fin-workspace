@@ -7,7 +7,7 @@ use crate::{asset::Asset, mic::Mic, prelude::TradedInstrument, tenor::Tenor};
 #[derive(Debug, PartialEq, Eq)]
 pub struct OptionContract {
     base: Asset,
-    quote: Asset,
+    price_quotation: Asset,
     mic: Mic,
     settlement_currency: Currency,
     year: u16,
@@ -77,7 +77,7 @@ impl Display for ExerciseStyle {
 impl OptionContract {
     pub const fn new(
         base: Asset,
-        quote: Asset,
+        price_quotation: Asset,
         mic: Mic,
         settlement_currency: Currency,
         year: u16,
@@ -89,7 +89,7 @@ impl OptionContract {
     ) -> Self {
         Self {
             base,
-            quote,
+            price_quotation,
             mic,
             settlement_currency,
             year,
@@ -111,8 +111,8 @@ impl TradedInstrument for OptionContract {
         &self.base
     }
 
-    fn quote(&self) -> &Asset {
-        &self.quote
+    fn price_quotation(&self) -> &Asset {
+        &self.price_quotation
     }
 
     fn mic(&self) -> &Mic {
@@ -130,7 +130,7 @@ impl Display for OptionContract {
             f,
             "Option:{}/{}@{} {:04}-{:02}-{:02} {}::{}#{}",
             self.base,
-            self.quote,
+            self.price_quotation,
             self.mic,
             self.year,
             self.tenor.ordinal(),
@@ -242,7 +242,7 @@ mod tests {
     fn test_option_serialize() {
         let opt = aapl_call_200_dec25();
         let serialized = serde_json::to_string(&opt).unwrap();
-        let expected = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200\"}";
+        let expected = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200\"}";
 
         assert_eq!(serialized, expected);
     }
@@ -250,7 +250,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_option_deserialize() {
-        let serialized = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200\"}";
+        let serialized = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200\"}";
         let expected = aapl_call_200_dec25();
         let deserialized: OptionContract = serde_json::from_str(serialized).unwrap();
 

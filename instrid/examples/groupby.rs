@@ -152,7 +152,7 @@ pub fn signed_cashflow_by_base<'a>(
     let mut cashflow_by_base = HashMap::new();
     for fill in fills {
         let base = fill.instrument.base();
-        let quote = fill.instrument.quote();
+        let quote = fill.instrument.price_quotation();
 
         *cashflow_by_base
             .entry(base)
@@ -171,7 +171,7 @@ pub fn signed_cashflow_by_quote<'a>(
     let mut cashflow_by_quote = HashMap::new();
     for fill in fills {
         let base = fill.instrument.base();
-        let quote = fill.instrument.quote();
+        let quote = fill.instrument.price_quotation();
 
         *cashflow_by_quote
             .entry(quote)
@@ -207,7 +207,7 @@ pub fn signed_cashflow_by_asset_class<'a>(
 
     for fill in fills {
         let base_class = fill.instrument.base().class();
-        let quote = fill.instrument.quote();
+        let quote = fill.instrument.price_quotation();
 
         *grouped.entry((base_class, quote)).or_insert(0.0) += fill.signed_cashflow();
     }

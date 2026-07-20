@@ -9,16 +9,21 @@ use std::fmt::Display;
 #[derive(Debug, PartialEq, Eq)]
 pub struct Stock {
     base: Asset,
-    quote: Asset,
+    price_quotation: Asset,
     mic: Mic,
     settlement_currency: Currency,
 }
 
 impl Stock {
-    pub const fn new(base: Asset, quote: Asset, mic: Mic, settlement_currency: Currency) -> Self {
+    pub const fn new(
+        base: Asset,
+        price_quotation: Asset,
+        mic: Mic,
+        settlement_currency: Currency,
+    ) -> Self {
         Self {
             base,
-            quote,
+            price_quotation,
             mic,
             settlement_currency,
         }
@@ -30,8 +35,8 @@ impl TradedInstrument for Stock {
         &self.base
     }
 
-    fn quote(&self) -> &Asset {
-        &self.quote
+    fn price_quotation(&self) -> &Asset {
+        &self.price_quotation
     }
 
     fn mic(&self) -> &Mic {
@@ -48,7 +53,7 @@ impl Display for Stock {
         write!(
             f,
             "Stock:{}/{}@{}({})",
-            self.base, self.quote, self.mic, self.settlement_currency
+            self.base, self.price_quotation, self.mic, self.settlement_currency
         )
     }
 }
@@ -85,7 +90,7 @@ mod tests {
     fn test_stock_serialize() {
         let stock = aapl();
         let serialized = serde_json::to_string(&stock).expect("Stock should be serializable");
-        let expected = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\"}";
+        let expected = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\"}";
 
         assert_eq!(expected, serialized);
     }
@@ -94,7 +99,7 @@ mod tests {
     #[test]
     fn test_stock_deserialize() {
         let expected = aapl();
-        let stock_str = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\"}";
+        let stock_str = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\"}";
         let deserialized: Stock =
             serde_json::from_str(stock_str).expect("Stock should be deserializable");
 

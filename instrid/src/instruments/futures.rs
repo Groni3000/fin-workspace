@@ -11,7 +11,7 @@ use crate::tenor::Tenor;
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct FuturesContract {
     base: Asset,
-    quote: Asset,
+    price_quotation: Asset,
     mic: Mic,
     settlement_currency: Currency,
     year: u16,
@@ -22,7 +22,7 @@ pub struct FuturesContract {
 impl FuturesContract {
     pub const fn new(
         base: Asset,
-        quote: Asset,
+        price_quotation: Asset,
         mic: Mic,
         settlement_currency: Currency,
         year: u16,
@@ -31,7 +31,7 @@ impl FuturesContract {
     ) -> Self {
         Self {
             base,
-            quote,
+            price_quotation,
             mic,
             settlement_currency,
             year,
@@ -83,8 +83,8 @@ impl TradedInstrument for FuturesContract {
         &self.base
     }
 
-    fn quote(&self) -> &Asset {
-        &self.quote
+    fn price_quotation(&self) -> &Asset {
+        &self.price_quotation
     }
 
     fn mic(&self) -> &Mic {
@@ -102,7 +102,7 @@ impl Display for FuturesContract {
             f,
             "Futures:{}/{}@{}({}) {:04}-{:02}",
             self.base,
-            self.quote,
+            self.price_quotation,
             self.mic,
             self.settlement_currency,
             self.year,
@@ -174,7 +174,7 @@ mod tests {
         let f = cl();
         let serialized =
             serde_json::to_string(&f).expect("Futures contract should be serializable");
-        let expected = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2026,\"tenor\":6,\"day\":null}";
+        let expected = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2026,\"tenor\":6,\"day\":null}";
 
         assert_eq!(serialized, expected);
     }
@@ -182,7 +182,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_futures_deserialize() {
-        let serialized = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2026,\"tenor\":6,\"day\":null}";
+        let serialized = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2026,\"tenor\":6,\"day\":null}";
         let expected = cl();
         let deserialized: FuturesContract =
             serde_json::from_str(serialized).expect("Futures contract should be deserializable");
@@ -196,7 +196,7 @@ mod tests {
         let f = cl_with_day();
         let serialized =
             serde_json::to_string(&f).expect("Futures contract should be serializable");
-        let expected = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2026,\"tenor\":6,\"day\":20}";
+        let expected = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2026,\"tenor\":6,\"day\":20}";
 
         assert_eq!(serialized, expected);
     }
@@ -204,7 +204,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_futures_with_day_deserialize() {
-        let serialized = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"quote\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2026,\"tenor\":6,\"day\":20,\"settlement_currency\":\"USD\"}";
+        let serialized = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2026,\"tenor\":6,\"day\":20,\"settlement_currency\":\"USD\"}";
         let expected = cl_with_day();
         let deserialized: FuturesContract =
             serde_json::from_str(serialized).expect("Futures contract should be deserializable");
