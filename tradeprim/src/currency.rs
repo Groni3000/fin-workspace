@@ -154,13 +154,9 @@ impl<'de> Deserialize<'de> for Currency {
         D: serde::Deserializer<'de>,
     {
         let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
-        let code = match s {
-            Cow::Borrowed(s) => AsciiCode::try_from(s),
-            Cow::Owned(s) => AsciiCode::try_from(s.as_str()),
-        };
-        let code = code.map_err(|_err| serde::de::Error::custom("AsciiCodeError"))?;
-        Currency::from_alphabetic_ascii_code(code)
-            .ok_or_else(|| serde::de::Error::custom("invalid currency code"))
+        Currency::from_alphabetic_code(&s)
+            .map_err(|err| serde::de::Error::custom(format!("{}", err)))?
+            .ok_or_else(|| serde::de::Error::custom(format!("Currency is not found in registry")))
     }
 }
 

@@ -71,7 +71,9 @@ fn main() {
         Asset::new("XAU", AssetClass::Commodity).expect("Asset got incorrect parameters"),
         Asset::new("CNY", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xsge(),
-        Currency::from_alphabetic_code("CNY").expect("Could not find currency code"),
+        Currency::from_alphabetic_code("CNY")
+            .expect("Code should be valid")
+            .expect("Could not find currency code"),
     ));
     // ---
 

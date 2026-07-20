@@ -136,7 +136,7 @@ fn main() {
                 expressions,
                 "    /// {name} (`{code}`, ISO 4217 numeric {numeric}, {precision} minor digits).\n    \
                  pub const fn {fn_name}() -> Self {{ \
-                 Currency::new({name_lit}, {code_lit}, {numeric_lit}, {precision}) }}",
+                 Currency::new({name_lit}, AsciiCode::new({code_lit}).unwrap(), AsciiCode::new({numeric_lit}).unwrap(), {precision}) }}",
                 name = currency_name,
                 code = alphabetic_code,
                 numeric = numeric_code,
