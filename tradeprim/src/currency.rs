@@ -7,6 +7,8 @@ use std::sync::OnceLock;
 
 use std::fmt::Display;
 
+use crate::ascii_code::{AsciiCode, AsciiCodeError};
+
 /// A currency from the ISO 4217 registry.
 ///
 /// Curated currencies are compiled in as `const fn` constructors
@@ -19,9 +21,9 @@ pub struct Currency {
     /// Human-readable currency name, e.g. "US Dollar".
     name: &'static str,
     /// 3-letter alphabetic code, e.g. "USD".
-    alphabetic_code: [u8; 3],
+    alphabetic_code: AsciiCode<3>,
     /// 3-digit numeric code, zero-padded, e.g. "840".
-    numeric_code: [u8; 3],
+    numeric_code: AsciiCode<3>,
     /// Minor-unit precision: digits after the decimal separator (0 if none).
     precision: u8,
 }
@@ -29,8 +31,8 @@ pub struct Currency {
 impl Currency {
     pub const fn new(
         name: &'static str,
-        alphabetic_code: [u8; 3],
-        numeric_code: [u8; 3],
+        alphabetic_code: AsciiCode<3>,
+        numeric_code: AsciiCode<3>,
         precision: u8,
     ) -> Self {
         Currency {
@@ -46,20 +48,24 @@ impl Currency {
     }
 
     pub fn alphabetic_code(&self) -> &str {
-        str::from_utf8(&self.alphabetic_code).expect("Alphabetic code should be utf-8")
+        self.alphabetic_code.as_str()
     }
 
     pub fn numeric_code(&self) -> &str {
-        str::from_utf8(&self.numeric_code).expect("Numeric code should be utf-8")
+        self.numeric_code.as_str()
     }
 
     pub const fn precision(&self) -> u8 {
         self.precision
     }
 
-    pub fn from_alphabetic_code(code: &str) -> Option<Currency> {
-        let bytes: &[u8; 3] = code.as_bytes().try_into().ok()?;
-        registry().get(bytes).copied()
+    pub fn from_alphabetic_code(code: &str) -> Result<Option<Currency>, AsciiCodeError> {
+        let code: AsciiCode<3> = code.try_into()?;
+        Ok(registry().get(&code).copied())
+    }
+
+    pub fn from_alphabetic_ascii_code(code: AsciiCode<3>) -> Option<Currency> {
+        registry().get(&code).copied()
     }
 }
 
@@ -69,9 +75,9 @@ static CURRENCY_STRINGS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/curre
 // Keep in sync with the layout documented in build.rs.
 const RECORD_SIZE: usize = 19;
 
-static CURRENCY_REGISTRY: OnceLock<HashMap<[u8; 3], Currency>> = OnceLock::new();
+static CURRENCY_REGISTRY: OnceLock<HashMap<AsciiCode<3>, Currency>> = OnceLock::new();
 
-fn registry() -> &'static HashMap<[u8; 3], Currency> {
+fn registry() -> &'static HashMap<AsciiCode<3>, Currency> {
     CURRENCY_REGISTRY.get_or_init(|| {
         debug_assert_eq!(
             CURRENCY_RECORDS.len() % RECORD_SIZE,
@@ -113,11 +119,11 @@ fn parse_record(r: &'static [u8]) -> Currency {
     let alphabetic_code: [u8; 3] = r[12..15]
         .try_into()
         .expect("alphabetic_code should be 3 bytes");
-    // let alphabetic_code = str::from_utf8(alphabetic_code).unwrap();
+    let alphabetic_code = AsciiCode::new(alphabetic_code).expect("Alphabetic code should be ASCII");
     let numeric_code: [u8; 3] = r[15..18]
         .try_into()
         .expect("numeric_code should be 3 bytes");
-    // let numeric_code = str::from_utf8(numeric_code).expect("numeric_code should be utf-8 only");
+    let numeric_code = AsciiCode::new(numeric_code).expect("Numeric code should be ASCII");
     // Precision unpacking
     let precision: u8 =
         u8::from_le_bytes(r[18..19].try_into().expect("precision should be 1 byte"));
@@ -148,7 +154,12 @@ impl<'de> Deserialize<'de> for Currency {
         D: serde::Deserializer<'de>,
     {
         let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
-        Currency::from_alphabetic_code(&s)
+        let code = match s {
+            Cow::Borrowed(s) => AsciiCode::try_from(s),
+            Cow::Owned(s) => AsciiCode::try_from(s.as_str()),
+        };
+        let code = code.map_err(|_err| serde::de::Error::custom("AsciiCodeError"))?;
+        Currency::from_alphabetic_ascii_code(code)
             .ok_or_else(|| serde::de::Error::custom("invalid currency code"))
     }
 }
@@ -159,12 +170,14 @@ include!(concat!(env!("OUT_DIR"), "/currency_generated.rs"));
 
 #[cfg(test)]
 mod tests {
-    use crate::currency::Currency;
+    use crate::{ascii_code::AsciiCode, currency::Currency};
 
     #[test]
     fn check_registry() {
-        let looked_up =
-            Currency::from_alphabetic_code("EUR").expect("Currency should be in registry");
+        let looked_up = Currency::from_alphabetic_ascii_code(
+            AsciiCode::try_from("EUR").expect("Code should be valid"),
+        )
+        .expect("Registry lookup should succeed");
         // Check if it is a correct value field by field
         assert_eq!(looked_up.name(), "Euro");
         assert_eq!(looked_up.alphabetic_code(), "EUR");
@@ -174,8 +187,10 @@ mod tests {
         assert_eq!(looked_up, Currency::eur());
 
         // BELIZE,Belize Dollar,BZD,084,2,
-        let looked_up =
-            Currency::from_alphabetic_code("BZD").expect("Currency should be in registry");
+        let looked_up = Currency::from_alphabetic_ascii_code(
+            AsciiCode::try_from("BZD").expect("Code should be valid"),
+        )
+        .expect("Currency should be in registry");
         assert_eq!(looked_up.name(), "Belize Dollar");
         assert_eq!(looked_up.alphabetic_code(), "BZD");
         assert_eq!(looked_up.numeric_code(), "084");
@@ -183,8 +198,9 @@ mod tests {
 
         // Even such things passed...
         // ZZ07_No_Currency,The codes assigned for transactions where no currency is involved,XXX,999,-,
-        let looked_up =
-            Currency::from_alphabetic_code("XXX").expect("Currency should be in registry");
+        let looked_up = Currency::from_alphabetic_code("XXX")
+            .expect("Code should be valid")
+            .expect("Currency should be in registry");
         assert_eq!(
             looked_up.name(),
             "The codes assigned for transactions where no currency is involved"
@@ -193,10 +209,10 @@ mod tests {
         assert_eq!(looked_up.numeric_code(), "999");
         assert_eq!(looked_up.precision(), 0);
 
-        // Test None from registry on invalid
+        // Test Error from building on invalid string
         let looked_up = Currency::from_alphabetic_code("XXXD");
-        assert!(looked_up.is_none());
-        let looked_up = Currency::from_alphabetic_code("ZZZ");
+        assert!(looked_up.is_err());
+        let looked_up = Currency::from_alphabetic_code("ZZZ").expect("Code should be valid");
         assert!(looked_up.is_none());
     }
 
