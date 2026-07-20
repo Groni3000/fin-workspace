@@ -1,5 +1,5 @@
 //! Groupby:
-//!     - base/quote Asset
+//!     - base/price_quotation Asset
 //!     - base AssetClass
 //!     - instrument class
 //!     - MIC
@@ -152,29 +152,29 @@ pub fn signed_cashflow_by_base<'a>(
     let mut cashflow_by_base = HashMap::new();
     for fill in fills {
         let base = fill.instrument.base();
-        let quote = fill.instrument.price_quotation();
+        let price_quotation = fill.instrument.price_quotation();
 
         *cashflow_by_base
             .entry(base)
             .or_insert(HashMap::<&'a Asset, f64>::new())
-            .entry(quote)
+            .entry(price_quotation)
             .or_insert(0.0) += fill.signed_cashflow();
     }
 
     cashflow_by_base
 }
 
-/// Groups by quote asset.
+/// Groups by price_quotation asset.
 pub fn signed_cashflow_by_quote<'a>(
     fills: &[Fill<'a>],
 ) -> HashMap<&'a Asset, HashMap<&'a Asset, f64>> {
     let mut cashflow_by_quote = HashMap::new();
     for fill in fills {
         let base = fill.instrument.base();
-        let quote = fill.instrument.price_quotation();
+        let price_quotation = fill.instrument.price_quotation();
 
         *cashflow_by_quote
-            .entry(quote)
+            .entry(price_quotation)
             .or_insert(HashMap::<&'a Asset, f64>::new())
             .entry(base)
             .or_insert(0.0) += fill.signed_cashflow();
@@ -199,7 +199,7 @@ pub fn fills_by_asset_class<'a, 'b>(
     grouped
 }
 
-/// Groups cashflow by asset class and quote asset.
+/// Groups cashflow by asset class and price_quotation asset.
 pub fn signed_cashflow_by_asset_class<'a>(
     fills: &[Fill<'a>],
 ) -> HashMap<(AssetClass, &'a Asset), f64> {
@@ -207,9 +207,9 @@ pub fn signed_cashflow_by_asset_class<'a>(
 
     for fill in fills {
         let base_class = fill.instrument.base().class();
-        let quote = fill.instrument.price_quotation();
+        let price_quotation = fill.instrument.price_quotation();
 
-        *grouped.entry((base_class, quote)).or_insert(0.0) += fill.signed_cashflow();
+        *grouped.entry((base_class, price_quotation)).or_insert(0.0) += fill.signed_cashflow();
     }
 
     grouped

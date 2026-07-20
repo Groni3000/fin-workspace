@@ -19,7 +19,8 @@ granularities, and most type systems blur them into one:
 
 - [`Asset`] - represents the entity: (`name + AssetClass`)
 - [`TradedInstrument`] - represents what we buy/sell (`base: Asset`), what is used to 
-quote base (`quote: Asset`) and where it is traded (`mic: Mic`).
+quote base (`price_quotation: Asset`), where it is traded (`mic: Mic`) and what it
+settles in (`settlement_currency: Currency`).
 - [`Stock`, `FuturesContract`, `OptionContract`] - concrete implementations of each trading instrument type.
 - [`Instrument`] - enum of concrete implementations 
 (useful for gathering all instrument types together). 
