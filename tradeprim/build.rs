@@ -140,9 +140,9 @@ fn main() {
                 name = currency_name,
                 code = alphabetic_code,
                 numeric = numeric_code,
-                name_lit = str_literal(currency_name),
-                code_lit = str_literal(alphabetic_code),
-                numeric_lit = str_literal(numeric_code),
+                name_lit = str_literal(currency_name, false),
+                code_lit = str_literal(alphabetic_code, true),
+                numeric_lit = str_literal(numeric_code, true),
                 precision = major_unit_precision,
             )
             .expect("build.rs: failed to write currency ctor");
@@ -170,7 +170,11 @@ fn main() {
 }
 
 /// Renders a `&str` as an escaped Rust string literal (`"..."`).
-fn str_literal(s: &str) -> String {
+fn str_literal(s: &str, as_bytes: bool) -> String {
     let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
-    format!("\"{escaped}\"")
+    if as_bytes {
+        format!("*b\"{escaped}\"")
+    } else {
+        format!("\"{escaped}\"")
+    }
 }

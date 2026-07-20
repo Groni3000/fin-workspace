@@ -1,3 +1,10 @@
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "serde")]
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
 use std::fmt::Display;
 
 /// A currency from the ISO 4217 registry.
@@ -12,9 +19,9 @@ pub struct Currency {
     /// Human-readable currency name, e.g. "US Dollar".
     name: &'static str,
     /// 3-letter alphabetic code, e.g. "USD".
-    alphabetic_code: &'static str,
+    alphabetic_code: [u8; 3],
     /// 3-digit numeric code, zero-padded, e.g. "840".
-    numeric_code: &'static str,
+    numeric_code: [u8; 3],
     /// Minor-unit precision: digits after the decimal separator (0 if none).
     precision: u8,
 }
@@ -22,8 +29,8 @@ pub struct Currency {
 impl Currency {
     pub const fn new(
         name: &'static str,
-        alphabetic_code: &'static str,
-        numeric_code: &'static str,
+        alphabetic_code: [u8; 3],
+        numeric_code: [u8; 3],
         precision: u8,
     ) -> Self {
         Currency {
@@ -38,25 +45,198 @@ impl Currency {
         self.name
     }
 
-    pub const fn alphabetic_code(&self) -> &'static str {
-        self.alphabetic_code
+    pub fn alphabetic_code(&self) -> &str {
+        str::from_utf8(&self.alphabetic_code).expect("Alphabetic code should be utf-8")
     }
 
-    pub const fn numeric_code(&self) -> &'static str {
-        self.numeric_code
+    pub fn numeric_code(&self) -> &str {
+        str::from_utf8(&self.numeric_code).expect("Numeric code should be utf-8")
     }
 
     pub const fn precision(&self) -> u8 {
         self.precision
     }
+
+    pub fn from_alphabetic_code(code: &str) -> Option<Currency> {
+        let bytes: &[u8; 3] = code.as_bytes().try_into().ok()?;
+        registry().get(bytes).copied()
+    }
+}
+
+static CURRENCY_RECORDS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/currency_records.bin"));
+static CURRENCY_STRINGS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/currency_strings.bin"));
+
+// Keep in sync with the layout documented in build.rs.
+const RECORD_SIZE: usize = 19;
+
+static CURRENCY_REGISTRY: OnceLock<HashMap<[u8; 3], Currency>> = OnceLock::new();
+
+fn registry() -> &'static HashMap<[u8; 3], Currency> {
+    CURRENCY_REGISTRY.get_or_init(|| {
+        debug_assert_eq!(
+            CURRENCY_RECORDS.len() % RECORD_SIZE,
+            0,
+            "CURRENCY_RECORDS not a multiple of RECORD_SIZE",
+        );
+        let n = CURRENCY_RECORDS.len() / RECORD_SIZE;
+        let mut map = HashMap::with_capacity(n);
+        for i in 0..n {
+            let rec = &CURRENCY_RECORDS[i * RECORD_SIZE..(i + 1) * RECORD_SIZE];
+            let currency = parse_record(rec);
+            map.insert(currency.alphabetic_code, currency);
+        }
+        map
+    })
+}
+
+fn parse_record(r: &'static [u8]) -> Currency {
+    // Currency name offset and len unpacking
+    let (currency_name_offset, currency_name_len) = (&r[6..10], &r[10..12]);
+    let (currency_name_offset, currency_name_len): ([u8; 4], [u8; 2]) = (
+        currency_name_offset
+            .try_into()
+            .expect("currency_name_offset should be 4 bytes"),
+        currency_name_len
+            .try_into()
+            .expect("currency_name_len should be 2 bytes"),
+    );
+    let (currency_name_offset, currency_name_len): (u32, u16) = (
+        u32::from_le_bytes(currency_name_offset),
+        u16::from_le_bytes(currency_name_len),
+    );
+    let currency_name = str::from_utf8(
+        &CURRENCY_STRINGS[currency_name_offset as usize
+            ..(currency_name_offset + currency_name_len as u32) as usize],
+    )
+    .expect("Currency strings should be utf-8 only");
+    // Codes unpacking
+    let alphabetic_code: [u8; 3] = r[12..15]
+        .try_into()
+        .expect("alphabetic_code should be 3 bytes");
+    // let alphabetic_code = str::from_utf8(alphabetic_code).unwrap();
+    let numeric_code: [u8; 3] = r[15..18]
+        .try_into()
+        .expect("numeric_code should be 3 bytes");
+    // let numeric_code = str::from_utf8(numeric_code).expect("numeric_code should be utf-8 only");
+    // Precision unpacking
+    let precision: u8 =
+        u8::from_le_bytes(r[18..19].try_into().expect("precision should be 1 byte"));
+
+    Currency::new(currency_name, alphabetic_code, numeric_code, precision)
 }
 
 impl Display for Currency {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.alphabetic_code)
+        write!(f, "{}", self.alphabetic_code())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for Currency {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_str(self.alphabetic_code())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for Currency {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
+        Currency::from_alphabetic_code(&s)
+            .ok_or_else(|| serde::de::Error::custom("invalid currency code"))
     }
 }
 
 // Curated `pub const fn` constructors, generated by build.rs into an
 // `impl Currency { ... }` block. Keep in sync with the emission in build.rs.
 include!(concat!(env!("OUT_DIR"), "/currency_generated.rs"));
+
+#[cfg(test)]
+mod tests {
+    use crate::currency::Currency;
+
+    #[test]
+    fn check_registry() {
+        let looked_up =
+            Currency::from_alphabetic_code("EUR").expect("Currency should be in registry");
+        // Check if it is a correct value field by field
+        assert_eq!(looked_up.name(), "Euro");
+        assert_eq!(looked_up.alphabetic_code(), "EUR");
+        assert_eq!(looked_up.numeric_code(), "978");
+        assert_eq!(looked_up.precision(), 2);
+        // Check if it is the same value as compiled in
+        assert_eq!(looked_up, Currency::eur());
+
+        // BELIZE,Belize Dollar,BZD,084,2,
+        let looked_up =
+            Currency::from_alphabetic_code("BZD").expect("Currency should be in registry");
+        assert_eq!(looked_up.name(), "Belize Dollar");
+        assert_eq!(looked_up.alphabetic_code(), "BZD");
+        assert_eq!(looked_up.numeric_code(), "084");
+        assert_eq!(looked_up.precision(), 2);
+
+        // Even such things passed...
+        // ZZ07_No_Currency,The codes assigned for transactions where no currency is involved,XXX,999,-,
+        let looked_up =
+            Currency::from_alphabetic_code("XXX").expect("Currency should be in registry");
+        assert_eq!(
+            looked_up.name(),
+            "The codes assigned for transactions where no currency is involved"
+        );
+        assert_eq!(looked_up.alphabetic_code(), "XXX");
+        assert_eq!(looked_up.numeric_code(), "999");
+        assert_eq!(looked_up.precision(), 0);
+
+        // Test None from registry on invalid
+        let looked_up = Currency::from_alphabetic_code("XXXD");
+        assert!(looked_up.is_none());
+        let looked_up = Currency::from_alphabetic_code("ZZZ");
+        assert!(looked_up.is_none());
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn deserialize_by_code() {
+        use serde::Deserialize;
+        use serde::de::IntoDeserializer;
+        use serde::de::value::{Error, StrDeserializer};
+
+        // A known code deserializes to the registry based value,
+        // that is identical to the compiled-in constructor.
+        let de: StrDeserializer<Error> = "EUR".into_deserializer();
+        assert_eq!(Currency::deserialize(de).unwrap(), Currency::eur());
+
+        // An unknown code is rejected, not silently constructed.
+        let de: StrDeserializer<Error> = "ZZZ".into_deserializer();
+        assert!(Currency::deserialize(de).is_err());
+
+        // A wrong-length code is rejected too.
+        let de: StrDeserializer<Error> = "EURO".into_deserializer();
+        assert!(Currency::deserialize(de).is_err());
+
+        // Ser/de via popular formatter
+        let serialized = serde_json::to_value("EUR").unwrap();
+        assert_eq!(serialized, serde_json::json!("EUR"));
+
+        let currency: Currency =
+            serde_json::from_str("\"EUR\"").expect("serialized currency must be valid");
+        assert_eq!(currency, Currency::eur());
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn serde_roundtrip() {
+        let curr = Currency::eur();
+        let serialized = serde_json::to_string(&curr)
+            .expect("Serialization from a correct currency must be successful");
+        let deserialized: Currency = serde_json::from_str(&serialized)
+            .expect("Deserialization from a correct JSON must be successful");
+        assert_eq!(deserialized, curr);
+    }
+}
