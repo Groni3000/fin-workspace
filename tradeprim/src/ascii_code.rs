@@ -42,6 +42,12 @@ impl<const N: usize> std::fmt::Display for AsciiCode<N> {
     }
 }
 
+impl<const N: usize> Default for AsciiCode<N> {
+    fn default() -> Self {
+        Self { code: [b'?'; N] }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AsciiCodeError {
     WrongLength,
@@ -71,5 +77,20 @@ impl<const N: usize> TryFrom<&str> for AsciiCode<N> {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let bytes: [u8; N] = value.as_bytes().try_into()?;
         Self::new(bytes).ok_or(AsciiCodeError::NotAscii)
+    }
+}
+
+impl<const N: usize> From<&[u8; N]> for AsciiCode<N> {
+    fn from(value: &[u8; N]) -> Self {
+        AsciiCode::new(*value).unwrap()
+    }
+}
+
+impl<const N: usize> TryFrom<&[u8]> for AsciiCode<N> {
+    type Error = AsciiCodeError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        let code: [u8; N] = value.try_into()?;
+        AsciiCode::new(code).ok_or_else(|| AsciiCodeError::NotAscii)
     }
 }

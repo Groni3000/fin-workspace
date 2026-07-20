@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::cmp::Eq;
 use std::{fmt::Display, str::FromStr};
+use tradeprim::ascii_code::AsciiCode;
 
 /// Market Identifier Code (MIC) record as defined by ISO 10383.
 ///
@@ -14,9 +15,9 @@ use std::{fmt::Display, str::FromStr};
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Mic {
     /// Four-character MIC assigned to the venue (e.g. `XNAS`).
-    code: [u8; 4],
+    code: AsciiCode<4>,
     /// MIC of the operating/parent venue. Equals `code` for operating MICs.
-    operating: [u8; 4],
+    operating: AsciiCode<4>,
     /// Whether this entry is an operating MIC or a market segment MIC.
     mic_type: MicType,
     /// Full registered name of the market or venue.
@@ -24,13 +25,13 @@ pub struct Mic {
     /// Legal entity that operates the venue.
     legal_entity_name: Option<&'static str>,
     /// 20-character ISO 17442 Legal Entity Identifier of the operator.
-    lei_code: Option<[u8; 20]>,
+    lei_code: Option<AsciiCode<20>>,
     /// Category of market (e.g. regulated market, MTF, OTF, SI).
     market_category_code: MarketCategoryCode,
     /// Common acronym for the venue, if any.
     acronym: Option<&'static str>,
     /// ISO 3166-1 alpha-2 country code of the venue's jurisdiction.
-    iso_country_code: [u8; 2],
+    iso_country_code: AsciiCode<2>,
     /// City where the venue is located.
     city: &'static str,
     /// Public website URL of the venue.
@@ -51,15 +52,15 @@ pub struct Mic {
 
 impl Mic {
     pub const fn new(
-        code: [u8; 4],
-        operating: [u8; 4],
+        code: AsciiCode<4>,
+        operating: AsciiCode<4>,
         market_name: &'static str,
         mic_type: MicType,
         legal_entity_name: Option<&'static str>,
-        lei_code: Option<[u8; 20]>,
+        lei_code: Option<AsciiCode<20>>,
         market_category_code: MarketCategoryCode,
         acronym: Option<&'static str>,
-        iso_country_code: [u8; 2],
+        iso_country_code: AsciiCode<2>,
         city: &'static str,
         website: Option<&'static str>,
         status: MicStatus,
@@ -101,11 +102,7 @@ impl Eq for Mic {}
 
 impl Display for Mic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            std::str::from_utf8(&self.code).expect("MIC must be a valid ASCII")
-        )
+        write!(f, "{}", self.code.as_str())
     }
 }
 
@@ -335,10 +332,7 @@ impl Serialize for Mic {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(
-            std::str::from_utf8(self.code.as_slice())
-                .map_err(|_err| serde::ser::Error::custom("Code should be a valid UTF-8"))?,
-        )
+        serializer.serialize_str(self.code.as_str())
     }
 }
 
@@ -390,7 +384,7 @@ fn registry() -> &'static HashMap<[u8; 4], Mic> {
         for i in 0..n {
             let rec = &MIC_RECORDS[i * RECORD_SIZE..(i + 1) * RECORD_SIZE];
             let mic = parse_record(rec);
-            map.insert(mic.code, mic);
+            map.insert(mic.code.code(), mic);
         }
         map
     })
@@ -419,8 +413,8 @@ pub fn mic_by_code(code: &str) -> Option<Mic> {
 }
 
 fn parse_record(r: &[u8]) -> Mic {
-    let code: [u8; 4] = r[0..4].try_into().unwrap();
-    let operating: [u8; 4] = r[4..8].try_into().unwrap();
+    let code: AsciiCode<4> = r[0..4].try_into().unwrap();
+    let operating: AsciiCode<4> = r[4..8].try_into().unwrap();
     let mic_type = match r[8] {
         0 => MicType::Operating,
         1 => MicType::Segment,
@@ -431,7 +425,7 @@ fn parse_record(r: &[u8]) -> Mic {
     let lei_code = read_opt_lei(&r[22..43]);
     let market_category_code = read_category(&r[43..48]);
     let acronym = read_opt_str(&r[48..55]);
-    let iso_country_code: [u8; 2] = r[55..57].try_into().unwrap();
+    let iso_country_code: AsciiCode<2> = r[55..57].try_into().unwrap();
     let city = read_str(&r[57..63]);
     let website = read_opt_str(&r[63..70]);
     let status = match r[70] {
@@ -482,7 +476,7 @@ fn read_opt_str(field: &[u8]) -> Option<&'static str> {
     Some(read_str(&field[1..7]))
 }
 
-fn read_opt_lei(field: &[u8]) -> Option<[u8; 20]> {
+fn read_opt_lei(field: &[u8]) -> Option<AsciiCode<20>> {
     if field[0] == 0 {
         return None;
     }

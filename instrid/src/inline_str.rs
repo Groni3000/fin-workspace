@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 ///     - N <= 255 (u8::MAX)
 ///     - self.len <= N
 ///     - self.buffer contains only valid ASCII
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct InlineStr<const N: usize> {
     buffer: [u8; N],
     len: u8, // assume N <= 255
@@ -37,6 +37,12 @@ pub struct InlineStr<const N: usize> {
 impl<const N: usize> Display for InlineStr<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
+    }
+}
+
+impl<const N: usize> std::fmt::Debug for InlineStr<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.as_str())
     }
 }
 

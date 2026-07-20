@@ -361,8 +361,8 @@ fn field<'a>(row: &'a csv::StringRecord, idx: usize) -> &'a str {
 fn mic_expr(row: &csv::StringRecord, code: &[u8; 4]) -> String {
     let code_str = std::str::from_utf8(code).unwrap();
     format!(
-        "Mic::new(*b\"{code}\", {operating}, {market_name}, {mic_type}, \
-         {legal_entity}, {lei}, {category}, {acronym}, {country}, {city}, \
+        "Mic::new(AsciiCode::new(*b\"{code}\").unwrap(), AsciiCode::new({operating}).unwrap(), {market_name}, {mic_type}, \
+         {legal_entity}, {lei}, {category}, {acronym}, AsciiCode::new({country}).unwrap(), {city}, \
          {website}, {status}, {creation}, {last_update}, {last_validation}, \
          {expiry}, {comments})",
         code = code_str,
@@ -413,7 +413,7 @@ fn opt_lei_lit(s: &str) -> String {
         return "None".into();
     }
     assert_eq!(s.len(), 20, "expected 20-char LEI, got {s:?}");
-    format!("Some(*b\"{s}\")")
+    format!("AsciiCode::new(*b\"{s}\")")
 }
 
 fn mic_type_lit(s: &str) -> &'static str {

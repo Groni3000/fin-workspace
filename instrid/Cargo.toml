@@ -20,4 +20,4 @@ csv = { version = "1" }
 [features]
 default = []
 mic-full = []
-serde = ["dep:serde", "rust_decimal/serde"]
+serde = ["dep:serde", "rust_decimal/serde", "tradeprim/serde"]
