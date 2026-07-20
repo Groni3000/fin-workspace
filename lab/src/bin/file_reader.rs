@@ -6,6 +6,7 @@ use instrid::tenor::Tenor;
 use lab::market_data::{Candle, FrdFutChainMdReader, FrdMdError, MarketData};
 use std::path::Path;
 use std::time::{Duration, Instant};
+use tradeprim::currency::Currency;
 
 fn main() -> Result<(), FrdMdError> {
     let dir = Path::new("lab/data/files/futures/frd");
@@ -13,6 +14,7 @@ fn main() -> Result<(), FrdMdError> {
         Asset::new("RB", instrid::asset::AssetClass::Commodity).expect("Failed to create Asset"),
         Asset::new("USD", instrid::asset::AssetClass::Currency).expect("Failed to create Asset"),
         Mic::xnym(),
+        Currency::usd(),
         2025,
         Tenor::December,
         None,

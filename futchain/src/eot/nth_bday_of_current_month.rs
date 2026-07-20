@@ -49,6 +49,7 @@ impl EndOfTrading for NthBDayOfCurrentMonth {
 mod tests {
     use super::*;
     use instrid::prelude::{Asset, AssetClass, Mic, Tenor};
+    use tradeprim::currency::Currency;
 
     /// HE@XCME - Lean Hogs. LTD is the 10th business day of the contract
     /// month with a -1 BDay defensive offset.
@@ -57,6 +58,7 @@ mod tests {
             Asset::new("HE", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xcme(),
+            Currency::usd(),
             year,
             tenor,
             None,

@@ -7,4 +7,5 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 chrono = "0.4.44"
+tradeprim = { path = "../tradeprim" }
 instrid = { path = "../instrid" }

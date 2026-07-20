@@ -59,6 +59,7 @@ impl EndOfTrading for NthBDayPriorToOrdinalDayOfPrevMonth {
 mod tests {
     use super::*;
     use instrid::prelude::{Asset, AssetClass, Mic, Tenor};
+    use tradeprim::currency::Currency;
 
     // https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.contractSpecs.html
     // FND = EOT + 2 BDay => EOT - 3 business day before
@@ -68,6 +69,7 @@ mod tests {
             Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnym(),
+            Currency::usd(),
             year,
             tenor,
             None,

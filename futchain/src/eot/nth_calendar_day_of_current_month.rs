@@ -43,6 +43,7 @@ impl EndOfTrading for NthCalendarDayOfCurrentMonth {
 mod tests {
     use super::*;
     use instrid::prelude::{Asset, AssetClass, Mic, Tenor};
+    use tradeprim::currency::Currency;
 
     /// https://www.eurex.com/ex-en/markets/int/fix/government-bonds/Euro-Bund-Futures-137298
     /// FGBL@XEUR is 8.5 to 10.5 years to maturity bonds with coupon of 6% yield.
@@ -55,6 +56,7 @@ mod tests {
             Asset::new("FGBL", AssetClass::FixedIncome).expect("Asset got incorrect parameters"),
             Asset::new("EUR", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xeur(),
+            Currency::eur(),
             year,
             tenor,
             None,

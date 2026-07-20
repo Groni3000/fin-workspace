@@ -13,6 +13,7 @@ use futchain::{
     eot::{DateOffset, NthInMonth, NthWeekdayOfCurrentMonth},
 };
 use instrid::prelude::{Asset, AssetClass, FuturesContract, Mic, Tenor};
+use tradeprim::currency::Currency;
 
 fn main() {
     // ES (E-mini S&P 500):
@@ -39,6 +40,7 @@ fn main() {
         Asset::new("ES", AssetClass::Index).expect("Asset got incorrect parameters"),
         Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xcme(),
+        Currency::usd(),
         2024,
         Tenor::December,
         None,

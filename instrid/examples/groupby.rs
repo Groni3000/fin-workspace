@@ -11,6 +11,7 @@
 use std::collections::HashMap;
 
 use instrid::prelude::*;
+use tradeprim::currency::Currency;
 
 fn main() {
     // --- Instruments you trade
@@ -18,16 +19,19 @@ fn main() {
         Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
         Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xnas(),
+        Currency::usd(),
     ));
     let aapl_xlon = Instrument::Stock(Stock::new(
         Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
         Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xlon(),
+        Currency::usd(),
     ));
     let es_cme = Instrument::Futures(FuturesContract::new(
         Asset::new("ES", AssetClass::Index).expect("Asset got incorrect parameters"),
         Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xcme(),
+        Currency::usd(),
         2026,
         Tenor::June,
         None,
@@ -36,6 +40,7 @@ fn main() {
         Asset::new("FDX", AssetClass::Index).expect("Asset got incorrect parameters"),
         Asset::new("EUR", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xeur(),
+        Currency::eur(),
         2026,
         Tenor::June,
         None,
@@ -50,12 +55,14 @@ fn main() {
         Asset::new("XAU", AssetClass::Commodity).expect("Asset got incorrect parameters"),
         Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xlbm(),
+        Currency::usd(),
     ));
     // Same LBMA gold, quoted in EUR by the FX desk.
     let xau_eur = Instrument::Stock(Stock::new(
         Asset::new("XAU", AssetClass::Commodity).expect("Asset got incorrect parameters"),
         Asset::new("EUR", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xlbm(),
+        Currency::eur(),
     ));
     // Shanghai Gold Exchange, CNY (onshore yuan). Materially different
     // market from LBMA due to China's capital controls — the Shanghai-London
@@ -64,6 +71,7 @@ fn main() {
         Asset::new("XAU", AssetClass::Commodity).expect("Asset got incorrect parameters"),
         Asset::new("CNY", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xsge(),
+        Currency::from_alphabetic_code("CNY").expect("Could not find currency code"),
     ));
     // ---
 

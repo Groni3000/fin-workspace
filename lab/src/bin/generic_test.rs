@@ -7,6 +7,7 @@ use lab::{
     market_data::{Candle, FrdFutChainMdReader, FrdMdError},
     process_md,
 };
+use tradeprim::currency::Currency;
 
 enum Source {
     FrdFiles,
@@ -77,6 +78,7 @@ fn init_files_md<'a>(listing: &'a ListedTenors) -> Result<FrdFutChainMdReader<'a
         Asset::new("RB", instrid::asset::AssetClass::Commodity).expect("Failed to create Asset"),
         Asset::new("USD", instrid::asset::AssetClass::Currency).expect("Failed to create Asset"),
         Mic::xnym(),
+        Currency::usd(),
         2025,
         Tenor::December,
         None,

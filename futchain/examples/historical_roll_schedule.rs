@@ -16,6 +16,7 @@ use futchain::{
     eot::{DateOffset, LastNthBDayOfPrevMonth},
 };
 use instrid::prelude::{Asset, AssetClass, FuturesContract, Mic, Tenor};
+use tradeprim::currency::Currency;
 
 fn main() {
     // GC (Gold): the OI-heavy months only.
@@ -41,6 +42,7 @@ fn main() {
         Asset::new("GC", AssetClass::Commodity).expect("Asset got incorrect parameters"),
         Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xnym(),
+        Currency::usd(),
         2023,
         Tenor::December,
         None,
