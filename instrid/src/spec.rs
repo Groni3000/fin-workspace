@@ -1,4 +1,4 @@
-use std::ops::Mul;
+use std::{fmt::Display, num::ParseIntError, ops::Mul, str::FromStr};
 
 use tradeprim::{currency_notional::CurrencyNotional, price::Price, quote_notional::QuoteNotional};
 
@@ -107,9 +107,28 @@ pub struct PointValue(i128);
 
 impl PointValue {
     pub const SCALE: i128 = Price::SCALE as i128;
+    pub const PRECISION: u32 = Price::PRECISION;
+    const POW10: [i128; Self::PRECISION as usize + 1] = [
+        1,
+        10,
+        100,
+        1_000,
+        10_000,
+        100_000,
+        1_000_000,
+        10_000_000,
+        100_000_000,
+        1_000_000_000,
+    ];
     /// Max reference: JPY futures = 12.5 mil
-    pub const MAX: i128 = 12_500_000_000_000_000;
-    pub const MIN: i128 = 0;
+    /// ```
+    /// pub const MAX_RAW: i128 = i128::MAX / QuoteNotional::MAX_RAW;
+    /// assert_eq!(MAX_RAW, 34028195858252051);
+    /// ```
+    pub const MAX_RAW: i128 = i128::MAX / QuoteNotional::MAX_RAW;
+    pub const MIN_RAW: i128 = i128::MIN / QuoteNotional::MAX_RAW;
+    pub const MAX_INTEGER_PART: i128 = Self::MAX_RAW / Self::SCALE;
+    pub const MIN_INTEGER_PART: i128 = Self::MIN_RAW / Self::SCALE;
 
     pub const ONE: i128 = Self::SCALE;
     pub const ZERO: i128 = 0;
@@ -124,7 +143,7 @@ impl PointValue {
     /// It's hard to argue about the maximum value of `PointValue`.
     /// For example, there is a JPY futures with point value of 12.5mil
     pub fn new(value: i128) -> Option<Self> {
-        if value < Self::ZERO || value > Self::MAX {
+        if value < Self::ZERO || value > Self::MAX_RAW {
             return None;
         }
         Some(Self(value))
@@ -132,6 +151,90 @@ impl PointValue {
 
     pub fn value(&self) -> i128 {
         self.0
+    }
+
+    const fn new_unchecked(value: i128) -> Self {
+        Self(value)
+    }
+
+    pub fn from_str_unchecked(s: &str) -> Self {
+        let (integer, fraction) = s.split_once('.').unwrap_or((s, "000000000"));
+        let is_negative = integer.starts_with('-');
+
+        let parsed_integer = i128::from_str(integer).unwrap().abs();
+
+        let used_precision = fraction.len();
+        let remaining_precision = Self::PRECISION - used_precision as u32;
+        let parsed_fraction = i128::from_str(fraction).unwrap();
+        let adjusted_fraction = parsed_fraction * Self::POW10[remaining_precision as usize];
+
+        let combined = match is_negative {
+            true => -(parsed_integer * Self::SCALE + adjusted_fraction),
+            false => parsed_integer * Self::SCALE + adjusted_fraction,
+        };
+
+        Self::new_unchecked(combined)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParsePointValueError {
+    InvalidFormat,
+    OutOfBounds,
+    PrecisionError(usize),
+    ParseIntError(ParseIntError),
+}
+
+impl Display for ParsePointValueError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParsePointValueError::InvalidFormat => write!(f, "Invalid format"),
+            ParsePointValueError::OutOfBounds => write!(f, "Out of bounds"),
+            ParsePointValueError::PrecisionError(precision) => {
+                write!(f, "Precision error: {}", precision)
+            }
+            ParsePointValueError::ParseIntError(err) => err.fmt(f),
+        }
+    }
+}
+
+// --- Basically a copy-paste from a Price
+impl FromStr for PointValue {
+    type Err = ParsePointValueError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (integer, fraction) = s.split_once('.').unwrap_or((s, "000000000"));
+        let (integer, fraction) = (integer.trim(), fraction.trim());
+        // Check below needed to not accept and parse `-0.-1`
+        // The fraction part would be parsed no problem
+        if fraction.starts_with('-') {
+            return Err(ParsePointValueError::InvalidFormat);
+        }
+        let is_negative = integer.starts_with('-');
+
+        let parsed_integer =
+            i128::from_str(integer).map_err(ParsePointValueError::ParseIntError)?;
+        if parsed_integer > Self::MAX_INTEGER_PART || parsed_integer < -Self::MAX_INTEGER_PART {
+            return Err(ParsePointValueError::OutOfBounds);
+        }
+        // We do it after min/max check because i128::MIN.abs() would panic
+        let parsed_integer = parsed_integer.abs();
+
+        let used_precision = fraction.len();
+        if used_precision > Self::PRECISION as usize {
+            return Err(ParsePointValueError::PrecisionError(used_precision));
+        }
+        let remaining_precision = Self::PRECISION - used_precision as u32;
+        let parsed_fraction =
+            i128::from_str(fraction).map_err(ParsePointValueError::ParseIntError)?;
+        let adjusted_fraction = parsed_fraction * Self::POW10[remaining_precision as usize];
+
+        let combined = match is_negative {
+            true => -(parsed_integer * Self::SCALE + adjusted_fraction),
+            false => parsed_integer * Self::SCALE + adjusted_fraction,
+        };
+
+        Ok(Self::new_unchecked(combined))
     }
 }
 
