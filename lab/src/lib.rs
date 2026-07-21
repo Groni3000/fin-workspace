@@ -166,37 +166,37 @@ impl FrdCandle {
 
         let raw_ts = split
             .next()
-            .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Timestamp))?;
+            .ok_or(FrdCandleParsingError::Missing(FrdField::Timestamp))?;
         let utc_ts = Self::frd_convert_str_with_tz_to_utc_timestamp(raw_ts, ExchangeTZ)?;
         let high = Price::from_str(
             split
                 .next()
-                .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
+                .ok_or(FrdCandleParsingError::Missing(FrdField::Price))?,
         )
-        .map_err(|err| FrdCandleParsingError::PriceParsingError(err))?;
+        .map_err(FrdCandleParsingError::PriceParsingError)?;
         let low = Price::from_str(
             split
                 .next()
-                .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
+                .ok_or(FrdCandleParsingError::Missing(FrdField::Price))?,
         )
-        .map_err(|err| FrdCandleParsingError::PriceParsingError(err))?;
+        .map_err(FrdCandleParsingError::PriceParsingError)?;
         let open = Price::from_str(
             split
                 .next()
-                .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
+                .ok_or(FrdCandleParsingError::Missing(FrdField::Price))?,
         )
-        .map_err(|err| FrdCandleParsingError::PriceParsingError(err))?;
+        .map_err(FrdCandleParsingError::PriceParsingError)?;
         let close = Price::from_str(
             split
                 .next()
-                .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
+                .ok_or(FrdCandleParsingError::Missing(FrdField::Price))?,
         )
-        .map_err(|err| FrdCandleParsingError::PriceParsingError(err))?;
+        .map_err(FrdCandleParsingError::PriceParsingError)?;
         let volume: u64 = split
             .next()
-            .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Volume))?
+            .ok_or(FrdCandleParsingError::Missing(FrdField::Volume))?
             .parse()
-            .map_err(|err| FrdCandleParsingError::VolumeParsingError(err))?;
+            .map_err(FrdCandleParsingError::VolumeParsingError)?;
 
         Ok(FrdCandle::new(utc_ts, high, low, open, close, volume))
     }
@@ -355,17 +355,17 @@ impl<'a> TryFrom<RawFrdCandle<'a>> for FrdCandle {
         };
 
         let open =
-            Price::from_str(value.open).map_err(|e| FrdCandleParsingError::PriceParsingError(e))?;
+            Price::from_str(value.open).map_err(FrdCandleParsingError::PriceParsingError)?;
         let close = Price::from_str(value.close)
-            .map_err(|e| FrdCandleParsingError::PriceParsingError(e))?;
+            .map_err(FrdCandleParsingError::PriceParsingError)?;
         let high =
-            Price::from_str(value.high).map_err(|e| FrdCandleParsingError::PriceParsingError(e))?;
+            Price::from_str(value.high).map_err(FrdCandleParsingError::PriceParsingError)?;
         let low =
-            Price::from_str(value.low).map_err(|e| FrdCandleParsingError::PriceParsingError(e))?;
+            Price::from_str(value.low).map_err(FrdCandleParsingError::PriceParsingError)?;
         let volume: u64 = value
             .volume
             .parse()
-            .map_err(|e| FrdCandleParsingError::VolumeParsingError(e))?;
+            .map_err(FrdCandleParsingError::VolumeParsingError)?;
 
         Ok(FrdCandle::new(
             utc_converted,
@@ -457,7 +457,7 @@ pub(crate) mod untested {
                 .next()
                 .ok_or(FrdCandleParsingError::Missing(FrdField::Volume))?
                 .parse()
-                .map_err(|err| FrdCandleParsingError::VolumeParsingError(err))?;
+                .map_err(FrdCandleParsingError::VolumeParsingError)?;
 
             Ok(FrdCandle::new(utc_ts, high, low, open, close, volume))
         }

@@ -149,7 +149,7 @@ impl MarketData for CustomDatabentoConsumerMd {
                     let record = msg
                         .payload_view::<str>()
                         .ok_or(KafkaMdError::EmptyPayload)?
-                        .map_err(|err| KafkaMdError::Utf8Error(err))?;
+                        .map_err(KafkaMdError::Utf8Error)?;
 
                     return Ok(Some(serde_json::from_str(record)?));
                 }

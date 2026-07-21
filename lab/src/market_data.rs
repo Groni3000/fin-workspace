@@ -77,7 +77,7 @@ pub struct FrdFutChainMdReader<'a> {
 impl<'a> FrdFutChainMdReader<'a> {
     pub fn new(chain: FutChain<'a>, dir: PathBuf, buffer: String) -> Result<Self, FrdMdError> {
         let file_name = Self::get_file_name(&chain);
-        let file = File::open(&dir.join(&file_name))?;
+        let file = File::open(dir.join(&file_name))?;
         let reader = BufReader::new(file);
 
         Ok(Self {
