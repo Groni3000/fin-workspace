@@ -102,7 +102,7 @@ impl From<(Price, Price)> for TickSize {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PointValue(i128);
 
 impl PointValue {
@@ -128,12 +128,12 @@ impl PointValue {
     /// assert_eq!(MAX_RAW, 34028195858252051);
     /// ```
     pub const MAX_RAW: i128 = i128::MAX / QuoteNotional::MAX_RAW;
-    pub const MIN_RAW: i128 = i128::MIN / QuoteNotional::MAX_RAW;
+    pub const MIN_RAW: i128 = 0_i128;
     pub const MAX_INTEGER_PART: i128 = Self::MAX_RAW / Self::SCALE;
     pub const MIN_INTEGER_PART: i128 = Self::MIN_RAW / Self::SCALE;
 
-    pub const ONE: i128 = Self::SCALE;
-    pub const ZERO: i128 = 0;
+    pub const ONE: Self = Self::new_unchecked(Self::SCALE);
+    pub const ZERO: Self = Self::new_unchecked(0_i128);
 
     /// Creates a new `PointValue` from a `Price`.
     /// Returns `None` if the price is not positive or greater than
@@ -145,7 +145,7 @@ impl PointValue {
     /// It's hard to argue about the maximum value of `PointValue`.
     /// For example, there is a JPY futures with point value of 12.5mil
     pub fn new(value: i128) -> Option<Self> {
-        if !(Self::ZERO..=Self::MAX_RAW).contains(&value) {
+        if !(Self::MIN_RAW..=Self::MAX_RAW).contains(&value) {
             return None;
         }
         Some(Self(value))
@@ -209,18 +209,15 @@ impl FromStr for PointValue {
         let (integer, fraction) = (integer.trim(), fraction.trim());
         // Check below needed to not accept and parse `-0.-1`
         // The fraction part would be parsed no problem
-        if fraction.starts_with('-') {
+        if fraction.starts_with('-') || integer.starts_with('-') {
             return Err(ParsePointValueError::InvalidFormat);
         }
-        let is_negative = integer.starts_with('-');
 
         let parsed_integer =
             i128::from_str(integer).map_err(ParsePointValueError::ParseIntError)?;
-        if !(-Self::MAX_INTEGER_PART..=Self::MAX_INTEGER_PART).contains(&parsed_integer) {
+        if !(Self::ZERO.0..=Self::MAX_INTEGER_PART).contains(&parsed_integer) {
             return Err(ParsePointValueError::OutOfBounds);
         }
-        // We do it after min/max check because i128::MIN.abs() would panic
-        let parsed_integer = parsed_integer.abs();
 
         let used_precision = fraction.len();
         if used_precision > Self::PRECISION as usize {
@@ -231,12 +228,9 @@ impl FromStr for PointValue {
             i128::from_str(fraction).map_err(ParsePointValueError::ParseIntError)?;
         let adjusted_fraction = parsed_fraction * Self::POW10[remaining_precision as usize];
 
-        let combined = match is_negative {
-            true => -(parsed_integer * Self::SCALE + adjusted_fraction),
-            false => parsed_integer * Self::SCALE + adjusted_fraction,
-        };
-
-        Ok(Self::new_unchecked(combined))
+        Ok(Self::new_unchecked(
+            parsed_integer * Self::SCALE + adjusted_fraction,
+        ))
     }
 }
 
@@ -250,7 +244,7 @@ impl Mul<QuoteNotional> for PointValue {
     type Output = CurrencyNotional;
 
     fn mul(self, rhs: QuoteNotional) -> Self::Output {
-        CurrencyNotional::new((self.0 * Self::SCALE) * rhs.value())
+        CurrencyNotional::new_unchecked(QuoteNotional::round(self.0 * rhs.value()))
     }
 }
 
@@ -259,5 +253,67 @@ impl Mul<PointValue> for QuoteNotional {
 
     fn mul(self, rhs: PointValue) -> Self::Output {
         rhs * self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::assert_matches;
+
+    #[test]
+    fn test_point_value_init() {
+        assert!(PointValue::new(PointValue::MIN_RAW).is_some());
+        assert!(PointValue::new(PointValue::MIN_RAW - 1).is_none());
+        assert!(PointValue::new(PointValue::MAX_RAW).is_some());
+        assert!(PointValue::new(PointValue::MAX_RAW + 1).is_none());
+        assert!(
+            PointValue::from_str("100")
+                .is_ok_and(|x| x == PointValue::new_unchecked(100 * PointValue::SCALE))
+        );
+        assert!(
+            PointValue::from_str("100.000000001")
+                .is_ok_and(|x| x == PointValue::new_unchecked(100 * PointValue::SCALE + 1))
+        );
+        // --- Errors paths
+        assert!(
+            PointValue::from_str("-100").is_err_and(|x| x == ParsePointValueError::InvalidFormat)
+        );
+        assert_matches!(
+            PointValue::from_str("1a.32").expect_err("Should fail with ParseIntError"),
+            ParsePointValueError::ParseIntError(_)
+        );
+        assert_matches!(
+            PointValue::from_str("10.3a").expect_err("Should fail with ParseIntError"),
+            ParsePointValueError::ParseIntError(_)
+        );
+        assert!(
+            PointValue::from_str("-100.000000001")
+                .is_err_and(|x| x == ParsePointValueError::InvalidFormat)
+        );
+        let max_integer_part = (PointValue::MAX_INTEGER_PART + 1).to_string();
+        assert!(
+            PointValue::from_str(&max_integer_part)
+                .is_err_and(|x| x == ParsePointValueError::OutOfBounds)
+        );
+        assert!(
+            PointValue::from_str("100.0000000001")
+                .is_err_and(|x| x == ParsePointValueError::PrecisionError(10))
+        );
+    }
+
+    #[test]
+    fn test_point_value_mul_quote_notional() {
+        // 1 * 1 = 1
+        let pv = PointValue::ONE;
+        let qn = QuoteNotional::ONE;
+        let result = pv * qn;
+        assert_eq!(result, CurrencyNotional::ONE);
+
+        // 10.32 * 2 = 20.64
+        let pv = PointValue::from_str_unchecked("10.32");
+        let qn = QuoteNotional::from_str_unchecked("2");
+        let result = pv * qn;
+        assert_eq!(result, CurrencyNotional::new_unchecked(20_640_000_000));
     }
 }
