@@ -91,6 +91,6 @@ impl<const N: usize> TryFrom<&[u8]> for AsciiCode<N> {
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         let code: [u8; N] = value.try_into()?;
-        AsciiCode::new(code).ok_or_else(|| AsciiCodeError::NotAscii)
+        AsciiCode::new(code).ok_or(AsciiCodeError::NotAscii)
     }
 }

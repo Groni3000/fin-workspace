@@ -123,7 +123,7 @@ impl Display for Price {
         }
         // Trim trailing zeros, tracking the width the rest must still pad to:
         let mut width = Self::PRECISION as usize;
-        while fraction % 10 == 0 {
+        while fraction.is_multiple_of(10) {
             fraction /= 10;
             width -= 1;
         }
@@ -178,7 +178,7 @@ impl FromStr for Price {
         let is_negative = integer.starts_with('-');
 
         let parsed_integer = i64::from_str(integer).map_err(ParsePriceError::ParseIntError)?;
-        if parsed_integer > Self::MAX_INTEGER_PART || parsed_integer < -Self::MAX_INTEGER_PART {
+        if !(-Self::MAX_INTEGER_PART..=Self::MAX_INTEGER_PART).contains(&parsed_integer) {
             return Err(ParsePriceError::OutOfBounds);
         }
         // We do it after min/max check because i64::MIN.abs() would panic

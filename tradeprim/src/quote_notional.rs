@@ -50,7 +50,7 @@ impl QuoteNotional {
     ];
 
     pub fn new(value: i128) -> Option<Self> {
-        if value > Self::MAX_RAW || value < Self::MIN_RAW {
+        if !(Self::MIN_RAW..=Self::MAX_RAW).contains(&value) {
             return None;
         }
 

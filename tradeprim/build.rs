@@ -82,11 +82,11 @@ fn main() {
         let Some(major_unit_precision) = row.get(4).map(|x| {
             let trimmed = x.trim();
             if trimmed.eq("-") || trimmed.is_empty() {
-                return 0;
+                0
             } else {
-                return trimmed
+                trimmed
                     .parse::<u8>()
-                    .expect("major_unit_precision must be a valid u8");
+                    .expect("major_unit_precision must be a valid u8")
             }
         }) else {
             continue;

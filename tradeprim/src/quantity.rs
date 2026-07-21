@@ -101,8 +101,8 @@ impl Quantity {
 
 impl Display for Quantity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let int = self.value / Self::SCALE as u64;
-        let frac = self.value % Self::SCALE as u64;
+        let int = self.value / Self::SCALE;
+        let frac = self.value % Self::SCALE;
         if frac == 0 {
             write!(f, "{int}")
         } else {
