@@ -52,7 +52,7 @@ impl Price {
     ];
 
     pub fn new(value: i64) -> Option<Self> {
-        if !(Self::MIN_RAW..Self::MAX_RAW).contains(&value) {
+        if !(Self::MIN_RAW..=Self::MAX_RAW).contains(&value) {
             return None;
         }
 

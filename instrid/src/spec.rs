@@ -122,6 +122,8 @@ impl PointValue {
     ];
     /// Max reference: JPY futures = 12.5 mil
     /// ```
+    /// use tradeprim::quote_notional::QuoteNotional;
+    ///
     /// pub const MAX_RAW: i128 = i128::MAX / QuoteNotional::MAX_RAW;
     /// assert_eq!(MAX_RAW, 34028195858252051);
     /// ```
