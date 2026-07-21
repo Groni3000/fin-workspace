@@ -34,6 +34,9 @@ impl QuoteNotional {
     pub const ZERO: Self = Self::new_unchecked(0);
     pub const ONE: Self = Self::new_unchecked(Self::SCALE);
     pub const MAX_INTEGER_PART: i128 = Self::MAX_RAW / Self::SCALE;
+    pub const MAX: Self = Self::new_unchecked(Self::MAX_RAW);
+    pub const MIN: Self = Self::new_unchecked(Self::MIN_RAW);
+
     // Powers of ten indexed by remaining precision (0..=PRECISION), so the
     // per-parse scaling is a table lookup instead of a runtime `pow`.
     const POW10: [i128; Self::PRECISION as usize + 1] = [
@@ -237,6 +240,9 @@ impl FromStr for QuoteNotional {
             true => -(parsed_integer * Self::SCALE + adjusted_fraction),
             false => parsed_integer * Self::SCALE + adjusted_fraction,
         };
+        if !(-Self::MAX_RAW..=Self::MAX_RAW).contains(&combined) {
+            return Err(ParseQuoteNotionalError::OutOfBounds);
+        }
 
         Ok(Self::new_unchecked(combined))
     }
@@ -405,11 +411,11 @@ mod tests {
             );
         }
 
-        // Boundary: integer part == MAX_INTEGER_PART with any fraction
+        // Boundary: only fractions up to `MAX_RAW % SCALE` stay in range.
         #[test]
         fn str_accepts_max_integer_with_fraction(
             neg in any::<bool>(),
-            frac_units in 0_i128..QuoteNotional::SCALE,   // full fractional range
+            frac_units in 0_i128..=(QuoteNotional::MAX_RAW % QuoteNotional::SCALE),
         ) {
             let sign = if neg { "-" } else { "" };
             let s = format!("{sign}{}.{frac_units:09}", QuoteNotional::MAX_INTEGER_PART);
@@ -419,6 +425,21 @@ mod tests {
             prop_assert!(
                 matches!(got, Ok(p) if p.value() == expected),
                 "s={s} expected={expected} got={got:?}"
+            );
+        }
+
+        // Out of Boundary: the same test but for rejects `MAX_RAW % SCALE + 1`.
+        #[test]
+        fn str_rejects_max_integer_overshoot_fraction(
+            neg in any::<bool>(),
+            frac_units in (QuoteNotional::MAX_RAW % QuoteNotional::SCALE + 1)..QuoteNotional::SCALE,
+        ) {
+            let sign = if neg { "-" } else { "" };
+            let s = format!("{sign}{}.{frac_units:09}", QuoteNotional::MAX_INTEGER_PART);
+            let got = QuoteNotional::from_str(&s);
+            prop_assert!(
+                matches!(got, Err(ParseQuoteNotionalError::OutOfBounds)),
+                "s={s} got={got:?}"
             );
         }
 

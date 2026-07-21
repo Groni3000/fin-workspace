@@ -128,12 +128,13 @@ impl PointValue {
     /// assert_eq!(MAX_RAW, 34028195858252051);
     /// ```
     pub const MAX_RAW: i128 = i128::MAX / QuoteNotional::MAX_RAW;
-    pub const MIN_RAW: i128 = 0_i128;
+    pub const MIN_RAW: i128 = 1_i128;
     pub const MAX_INTEGER_PART: i128 = Self::MAX_RAW / Self::SCALE;
     pub const MIN_INTEGER_PART: i128 = Self::MIN_RAW / Self::SCALE;
 
     pub const ONE: Self = Self::new_unchecked(Self::SCALE);
-    pub const ZERO: Self = Self::new_unchecked(0_i128);
+    pub const MAX: Self = Self::new_unchecked(Self::MAX_RAW);
+    pub const MIN: Self = Self::new_unchecked(Self::MIN_RAW);
 
     /// Creates a new `PointValue` from a `Price`.
     /// Returns `None` if the price is not positive or greater than
@@ -215,7 +216,7 @@ impl FromStr for PointValue {
 
         let parsed_integer =
             i128::from_str(integer).map_err(ParsePointValueError::ParseIntError)?;
-        if !(Self::ZERO.0..=Self::MAX_INTEGER_PART).contains(&parsed_integer) {
+        if !(0..=Self::MAX_INTEGER_PART).contains(&parsed_integer) {
             return Err(ParsePointValueError::OutOfBounds);
         }
 
@@ -227,10 +228,12 @@ impl FromStr for PointValue {
         let parsed_fraction =
             i128::from_str(fraction).map_err(ParsePointValueError::ParseIntError)?;
         let adjusted_fraction = parsed_fraction * Self::POW10[remaining_precision as usize];
+        let combined = parsed_integer * Self::SCALE + adjusted_fraction;
+        if !(Self::MIN_RAW..=Self::MAX_RAW).contains(&combined) {
+            return Err(ParsePointValueError::OutOfBounds);
+        }
 
-        Ok(Self::new_unchecked(
-            parsed_integer * Self::SCALE + adjusted_fraction,
-        ))
+        Ok(Self::new_unchecked(combined))
     }
 }
 
@@ -259,7 +262,30 @@ impl Mul<PointValue> for QuoteNotional {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
     use std::assert_matches;
+
+    /// Canonical string for a non-negative `PointValue` raw value.
+    fn pv_canonical(raw: i128) -> String {
+        let int = raw / PointValue::SCALE;
+        let frac = raw % PointValue::SCALE;
+        if frac == 0 {
+            format!("{int}")
+        } else {
+            format!("{int}.{}", format!("{frac:09}").trim_end_matches('0'))
+        }
+    }
+
+    /// Independent reference for `PointValue * QuoteNotional`
+    fn round_ref(v: i128) -> i128 {
+        let q = v / PointValue::SCALE; // truncates toward zero
+        let r = (v % PointValue::SCALE).abs();
+        if r * 2 >= PointValue::SCALE {
+            q + v.signum()
+        } else {
+            q
+        }
+    }
 
     #[test]
     fn test_point_value_init() {
@@ -302,6 +328,65 @@ mod tests {
         );
     }
 
+    /// Zero is not a valid contract multiplier: `from_str` rejects it
+    #[test]
+    fn from_str_rejects_zero() {
+        for s in ["0", "0.0", "0.000000000"] {
+            assert_eq!(
+                PointValue::from_str(s),
+                Err(ParsePointValueError::OutOfBounds),
+                "from_str({s:?}) must reject a zero point value"
+            );
+        }
+    }
+
+    #[test]
+    fn from_str_accepts_endpoints() {
+        // MIN_RAW == 1 raw == 0.000000001 (smallest strictly-positive value).
+        let min = PointValue::from_str("0.000000001").expect("MIN_RAW must parse");
+        assert_eq!(min.value(), PointValue::MIN_RAW);
+
+        // MAX_RAW rendered canonically must round-trip exactly.
+        let max =
+            PointValue::from_str(&pv_canonical(PointValue::MAX_RAW)).expect("MAX_RAW must parse");
+        assert_eq!(max.value(), PointValue::MAX_RAW);
+    }
+
+    #[test]
+    fn from_str_rejects_above_max() {
+        let s = format!("{}.999999999", PointValue::MAX_INTEGER_PART);
+        assert_eq!(
+            PointValue::from_str(&s),
+            Err(ParsePointValueError::OutOfBounds),
+            "from_str({s:?}) is above MAX_RAW"
+        );
+    }
+
+    proptest! {
+        /// Every in-range raw value roundtrips through `from_str`.
+        #[test]
+        fn from_str_roundtrips_in_range(raw in PointValue::MIN_RAW..=PointValue::MAX_RAW) {
+            let s = pv_canonical(raw);
+            prop_assert!(
+                matches!(PointValue::from_str(&s), Ok(p) if p.value() == raw),
+                "raw={raw} s={s}"
+            );
+        }
+
+        /// Similar to `from_str_rejects_above_max`, but proptest
+        #[test]
+        fn from_str_rejects_overshoot_fraction(
+            frac in (PointValue::MAX_RAW % PointValue::SCALE + 1)..PointValue::SCALE,
+        ) {
+            let s = format!("{}.{frac:09}", PointValue::MAX_INTEGER_PART);
+            prop_assert_eq!(
+                PointValue::from_str(&s),
+                Err(ParsePointValueError::OutOfBounds),
+                "s={}", s
+            );
+        }
+    }
+
     #[test]
     fn test_point_value_mul_quote_notional() {
         // 1 * 1 = 1
@@ -315,5 +400,71 @@ mod tests {
         let qn = QuoteNotional::from_str_unchecked("2");
         let result = pv * qn;
         assert_eq!(result, CurrencyNotional::new_unchecked(20_640_000_000));
+    }
+
+    /// Edgecase: `MAX_RAW * MAX_RAW` (and its negative) lands just
+    /// under `i128::MAX`, and `round` adds `SCALE/2` on top.
+    #[test]
+    fn mul_extremes_do_not_overflow() {
+        let pv = PointValue::MAX;
+        let qn_max = QuoteNotional::MAX;
+        let qn_min = QuoteNotional::MIN;
+
+        let hi = (pv * qn_max).value();
+        let lo = (pv * qn_min).value();
+
+        assert_eq!(hi, round_ref(PointValue::MAX_RAW * QuoteNotional::MAX_RAW));
+        assert_eq!(lo, round_ref(PointValue::MAX_RAW * QuoteNotional::MIN_RAW));
+        // QuoteNotional::MIN_RAW == -MAX_RAW and rounding is odd, so it's symmetric.
+        assert_eq!(lo, -hi);
+    }
+
+    proptest! {
+        /// Check against mul-reference
+        #[test]
+        fn mul_matches_reference(
+            pv_raw in PointValue::MIN_RAW..=PointValue::MAX_RAW,
+            qn_raw in QuoteNotional::MIN_RAW..=QuoteNotional::MAX_RAW,
+        ) {
+            let pv = PointValue::new(pv_raw).unwrap();
+            let qn = QuoteNotional::new(qn_raw).unwrap();
+            prop_assert_eq!(
+                (pv * qn).value(),
+                round_ref(pv_raw * qn_raw),
+                "pv_raw={} qn_raw={}", pv_raw, qn_raw
+            );
+        }
+
+        /// Both `Mul` directions produce the same value.
+        #[test]
+        fn mul_is_commutative(
+            pv_raw in PointValue::MIN_RAW..=PointValue::MAX_RAW,
+            qn_raw in QuoteNotional::MIN_RAW..=QuoteNotional::MAX_RAW,
+        ) {
+            let pv = PointValue::new(pv_raw).unwrap();
+            let qn = QuoteNotional::new(qn_raw).unwrap();
+            prop_assert_eq!((pv * qn).value(), (qn * pv).value());
+        }
+
+        /// `PointValue::ONE` is the identity
+        #[test]
+        fn mul_by_one_preserves_quote_raw(
+            qn_raw in QuoteNotional::MIN_RAW..=QuoteNotional::MAX_RAW,
+        ) {
+            let qn = QuoteNotional::new(qn_raw).unwrap();
+            prop_assert_eq!((PointValue::ONE * qn).value(), qn_raw);
+        }
+
+        /// With a strictly positive point value, the result's sign tracks the
+        /// quote notional's sign (zero maps to zero).
+        #[test]
+        fn mul_sign_follows_quote(
+            pv_raw in 1..=PointValue::MAX_RAW,
+            qn_raw in QuoteNotional::MIN_RAW..=QuoteNotional::MAX_RAW,
+        ) {
+            let pv = PointValue::new(pv_raw).unwrap();
+            let qn = QuoteNotional::new(qn_raw).unwrap();
+            prop_assert_eq!((pv * qn).value().signum(), round_ref(pv_raw * qn_raw).signum());
+        }
     }
 }
