@@ -2,9 +2,7 @@
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "serde")]
 use std::borrow::Cow;
-use std::{fmt::Display, num::ParseIntError, ops::Mul, str::FromStr};
-
-use crate::{currency_notional::CurrencyNotional, quote_notional::QuoteNotional};
+use std::{fmt::Display, num::ParseIntError, str::FromStr};
 
 /// Has fixed scale and max value.
 ///
@@ -94,14 +92,6 @@ impl Price {
         };
 
         Self::new_unchecked(combined)
-    }
-}
-
-impl Mul<Price> for QuoteNotional {
-    type Output = CurrencyNotional;
-
-    fn mul(self, rhs: Price) -> Self::Output {
-        CurrencyNotional::new((rhs.value() as i128 * Price::SCALE as i128) * self.value())
     }
 }
 
@@ -622,4 +612,7 @@ mod tests {
             prop_assert_eq!(p.to_string(), canonical_display(raw), "raw={}", raw);
         }
     }
+
+    #[test]
+    fn mul_price_quote_notional() {}
 }

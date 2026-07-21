@@ -1,6 +1,6 @@
-use std::{fmt::Display, num::ParseIntError, ops::Mul, str::FromStr};
+use std::{fmt::Display, num::ParseIntError, str::FromStr};
 
-use tradeprim::{currency_notional::CurrencyNotional, price::Price, quote_notional::QuoteNotional};
+use tradeprim::{price::Price, quote_notional::QuoteNotional};
 
 pub trait Specification {
     fn tick_size(&self);
@@ -243,22 +243,6 @@ impl From<i128> for PointValue {
     }
 }
 
-impl Mul<QuoteNotional> for PointValue {
-    type Output = CurrencyNotional;
-
-    fn mul(self, rhs: QuoteNotional) -> Self::Output {
-        CurrencyNotional::new_unchecked(QuoteNotional::round(self.0 * rhs.value()))
-    }
-}
-
-impl Mul<PointValue> for QuoteNotional {
-    type Output = CurrencyNotional;
-
-    fn mul(self, rhs: PointValue) -> Self::Output {
-        rhs * self
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,15 +261,6 @@ mod tests {
     }
 
     /// Independent reference for `PointValue * QuoteNotional`
-    fn round_ref(v: i128) -> i128 {
-        let q = v / PointValue::SCALE; // truncates toward zero
-        let r = (v % PointValue::SCALE).abs();
-        if r * 2 >= PointValue::SCALE {
-            q + v.signum()
-        } else {
-            q
-        }
-    }
 
     #[test]
     fn test_point_value_init() {
@@ -384,87 +359,6 @@ mod tests {
                 Err(ParsePointValueError::OutOfBounds),
                 "s={}", s
             );
-        }
-    }
-
-    #[test]
-    fn test_point_value_mul_quote_notional() {
-        // 1 * 1 = 1
-        let pv = PointValue::ONE;
-        let qn = QuoteNotional::ONE;
-        let result = pv * qn;
-        assert_eq!(result, CurrencyNotional::ONE);
-
-        // 10.32 * 2 = 20.64
-        let pv = PointValue::from_str_unchecked("10.32");
-        let qn = QuoteNotional::from_str_unchecked("2");
-        let result = pv * qn;
-        assert_eq!(result, CurrencyNotional::new_unchecked(20_640_000_000));
-    }
-
-    /// Edgecase: `MAX_RAW * MAX_RAW` (and its negative) lands just
-    /// under `i128::MAX`, and `round` adds `SCALE/2` on top.
-    #[test]
-    fn mul_extremes_do_not_overflow() {
-        let pv = PointValue::MAX;
-        let qn_max = QuoteNotional::MAX;
-        let qn_min = QuoteNotional::MIN;
-
-        let hi = (pv * qn_max).value();
-        let lo = (pv * qn_min).value();
-
-        assert_eq!(hi, round_ref(PointValue::MAX_RAW * QuoteNotional::MAX_RAW));
-        assert_eq!(lo, round_ref(PointValue::MAX_RAW * QuoteNotional::MIN_RAW));
-        // QuoteNotional::MIN_RAW == -MAX_RAW and rounding is odd, so it's symmetric.
-        assert_eq!(lo, -hi);
-    }
-
-    proptest! {
-        /// Check against mul-reference
-        #[test]
-        fn mul_matches_reference(
-            pv_raw in PointValue::MIN_RAW..=PointValue::MAX_RAW,
-            qn_raw in QuoteNotional::MIN_RAW..=QuoteNotional::MAX_RAW,
-        ) {
-            let pv = PointValue::new(pv_raw).unwrap();
-            let qn = QuoteNotional::new(qn_raw).unwrap();
-            prop_assert_eq!(
-                (pv * qn).value(),
-                round_ref(pv_raw * qn_raw),
-                "pv_raw={} qn_raw={}", pv_raw, qn_raw
-            );
-        }
-
-        /// Both `Mul` directions produce the same value.
-        #[test]
-        fn mul_is_commutative(
-            pv_raw in PointValue::MIN_RAW..=PointValue::MAX_RAW,
-            qn_raw in QuoteNotional::MIN_RAW..=QuoteNotional::MAX_RAW,
-        ) {
-            let pv = PointValue::new(pv_raw).unwrap();
-            let qn = QuoteNotional::new(qn_raw).unwrap();
-            prop_assert_eq!((pv * qn).value(), (qn * pv).value());
-        }
-
-        /// `PointValue::ONE` is the identity
-        #[test]
-        fn mul_by_one_preserves_quote_raw(
-            qn_raw in QuoteNotional::MIN_RAW..=QuoteNotional::MAX_RAW,
-        ) {
-            let qn = QuoteNotional::new(qn_raw).unwrap();
-            prop_assert_eq!((PointValue::ONE * qn).value(), qn_raw);
-        }
-
-        /// With a strictly positive point value, the result's sign tracks the
-        /// quote notional's sign (zero maps to zero).
-        #[test]
-        fn mul_sign_follows_quote(
-            pv_raw in 1..=PointValue::MAX_RAW,
-            qn_raw in QuoteNotional::MIN_RAW..=QuoteNotional::MAX_RAW,
-        ) {
-            let pv = PointValue::new(pv_raw).unwrap();
-            let qn = QuoteNotional::new(qn_raw).unwrap();
-            prop_assert_eq!((pv * qn).value().signum(), round_ref(pv_raw * qn_raw).signum());
         }
     }
 }
