@@ -80,6 +80,40 @@ So, we see how even a complex example of futures contracts maps to this type sys
 The idea is to use `quote_notional` for internal math and convert to `currency_notional` for
 humans.
 
+Let's see one more example:
+
+3. RB - RBOB Gasoline Futures.
+
+   Contract Unit - 42,000 gallons
+
+   Price Quotation - U.S. dollars and cents per gallon
+
+   Minimum Price Fluctuation - 0.0001 per gallon = $4.20
+
+Therefore:
+
+Let `quantity = 5 (contract)`, `price = 3.2062 ($ / gallon)`.
+
+`quote_notional = quantity * price = (contract) * ($ / gallon)`
+
+`quote_notional = 5 * 3.2062 = 16.031 (contract * $ / gallon)`
+
+`tick_size = (0.0001, 4.20) = ($ per gallon, $ per contract)`
+
+`point_value = tick_size.1 * 1 / tick_size.0`
+
+`point_value = ($ / contract) * 1 / ($ / gallon)`
+
+`point_value = gallon / contract`
+
+`point_value = 4.20 * 1 / (1 / 0.0001) = 4.2 * 10_000 = 42_000 (gallon / contract)`
+
+`currency_notional = point_value * quote_notional = (gallon / contract) * (contract * $ / gallon)`
+
+`currency_notional = $`
+
+`currency_notional = 42_000 * 16.031 = 673_302 ($)`
+
 ## Price concept
 
 - `i64` under the hood.
