@@ -352,7 +352,7 @@ fn parse_code2(s: &str) -> [u8; 2] {
     s.as_bytes().try_into().unwrap()
 }
 
-fn field<'a>(row: &'a csv::StringRecord, idx: usize) -> &'a str {
+fn field(row: &csv::StringRecord, idx: usize) -> &str {
     row.get(idx).unwrap_or("").trim()
 }
 

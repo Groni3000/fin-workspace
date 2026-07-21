@@ -46,7 +46,7 @@ pub struct FuturesSpecification {
 
 impl FuturesSpecification {
     pub fn new(tick_size: TickSize, point_value: PointValue) -> Self {
-        let tick_quotient = Price::ONE.value() as u64 / tick_size.0.value().abs() as u64;
+        let tick_quotient = Price::ONE.value() as u64 / tick_size.0.value().unsigned_abs();
 
         Self {
             tick_size,
@@ -143,7 +143,7 @@ impl PointValue {
     /// It's hard to argue about the maximum value of `PointValue`.
     /// For example, there is a JPY futures with point value of 12.5mil
     pub fn new(value: i128) -> Option<Self> {
-        if value < Self::ZERO || value > Self::MAX_RAW {
+        if !(Self::ZERO..=Self::MAX_RAW).contains(&value) {
             return None;
         }
         Some(Self(value))
@@ -214,7 +214,7 @@ impl FromStr for PointValue {
 
         let parsed_integer =
             i128::from_str(integer).map_err(ParsePointValueError::ParseIntError)?;
-        if parsed_integer > Self::MAX_INTEGER_PART || parsed_integer < -Self::MAX_INTEGER_PART {
+        if !(-Self::MAX_INTEGER_PART..=Self::MAX_INTEGER_PART).contains(&parsed_integer) {
             return Err(ParsePointValueError::OutOfBounds);
         }
         // We do it after min/max check because i128::MIN.abs() would panic

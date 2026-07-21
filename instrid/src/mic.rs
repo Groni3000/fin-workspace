@@ -108,18 +108,15 @@ impl Display for Mic {
 
 /// Distinguishes top-level operating MICs from their market segments.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum MicType {
     /// Operating MIC: identifies the venue itself.
+    #[default]
     Operating,
     /// Segment MIC: identifies a specific market segment within an operating MIC.
     Segment,
 }
 
-impl Default for MicType {
-    fn default() -> Self {
-        MicType::Operating
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnknownMicType;
@@ -138,6 +135,7 @@ impl FromStr for MicType {
 
 /// Lifecycle status of a MIC entry in the ISO registry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum MicStatus {
     /// Currently in use.
     Active,
@@ -146,14 +144,10 @@ pub enum MicStatus {
     /// At least one field is changed in the current monthly publication.
     Updated,
     /// Used for internal testing
+    #[default]
     Mock,
 }
 
-impl Default for MicStatus {
-    fn default() -> Self {
-        MicStatus::Mock
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnknownMicStatus;
