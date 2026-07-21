@@ -145,7 +145,7 @@ impl Display for QuoteNotional {
         }
         // Trim trailing zeros, tracking the width the rest must still pad to:
         let mut width = Self::PRECISION as usize;
-        while fraction % 10 == 0 {
+        while fraction.is_multiple_of(10) {
             fraction /= 10;
             width -= 1;
         }
@@ -201,7 +201,7 @@ impl FromStr for QuoteNotional {
 
         let parsed_integer =
             i128::from_str(integer).map_err(ParseQuoteNotionalError::ParseIntError)?;
-        if parsed_integer > Self::MAX_INTEGER_PART || parsed_integer < -Self::MAX_INTEGER_PART {
+        if !(-Self::MAX_INTEGER_PART..=Self::MAX_INTEGER_PART).contains(&parsed_integer) {
             return Err(ParseQuoteNotionalError::OutOfBounds);
         }
         // We do it after min/max check because i128::MIN.abs() would panic

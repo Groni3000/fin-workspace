@@ -10,8 +10,8 @@ pub trait Specification {
 /// Specification for a futures contract.
 ///
 /// Usually, futures contract has such important values:
-/// - Contract Unit	- example: 42_000 gallons
-/// - Price Quotation - U.S. dollars and cents per gallon
+/// - Contract Unit - example: 42_000 gallons
+/// - Price Quotation   - U.S. dollars and cents per gallon
 /// - Minimum Price Fluctuation - 0.0001 per gallon = $4.20
 ///
 /// `4.20 * 1 / 0.0001 = 42_000`

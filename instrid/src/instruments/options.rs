@@ -75,6 +75,7 @@ impl Display for ExerciseStyle {
 }
 
 impl OptionContract {
+    #[allow(clippy::too_many_arguments)]
     pub const fn new(
         base: Asset,
         price_quotation: Asset,

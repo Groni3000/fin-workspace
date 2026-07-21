@@ -51,6 +51,7 @@ pub struct Mic {
 }
 
 impl Mic {
+    #[allow(clippy::too_many_arguments)]
     pub const fn new(
         code: AsciiCode<4>,
         operating: AsciiCode<4>,
@@ -107,8 +108,7 @@ impl Display for Mic {
 }
 
 /// Distinguishes top-level operating MICs from their market segments.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MicType {
     /// Operating MIC: identifies the venue itself.
     #[default]
@@ -116,7 +116,6 @@ pub enum MicType {
     /// Segment MIC: identifies a specific market segment within an operating MIC.
     Segment,
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnknownMicType;
@@ -134,8 +133,7 @@ impl FromStr for MicType {
 }
 
 /// Lifecycle status of a MIC entry in the ISO registry.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MicStatus {
     /// Currently in use.
     Active,
@@ -147,7 +145,6 @@ pub enum MicStatus {
     #[default]
     Mock,
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnknownMicStatus;
