@@ -26,11 +26,5 @@ fn init_kafka_md() -> CustomDatabentoConsumerMd {
     const AUTO_OFFSET_RESET: &str = "latest";
     // ---
     println!("Consuming '{TOPIC}' from {BOOTSTRAP_SERVERS} (offset reset: {AUTO_OFFSET_RESET})");
-    return CustomDatabentoConsumerMd::new(
-        BOOTSTRAP_SERVERS,
-        GROUP_ID,
-        AUTO_OFFSET_RESET,
-        false,
-        TOPIC,
-    );
+    CustomDatabentoConsumerMd::new(BOOTSTRAP_SERVERS, GROUP_ID, AUTO_OFFSET_RESET, false, TOPIC)
 }

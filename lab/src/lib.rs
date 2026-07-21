@@ -436,26 +436,26 @@ pub(crate) mod untested {
             let high = Price::from_str_unchecked(
                 split
                     .next()
-                    .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
+                    .ok_or(FrdCandleParsingError::Missing(FrdField::Price))?,
             );
             let low = Price::from_str_unchecked(
                 split
                     .next()
-                    .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
+                    .ok_or(FrdCandleParsingError::Missing(FrdField::Price))?,
             );
             let open = Price::from_str_unchecked(
                 split
                     .next()
-                    .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
+                    .ok_or(FrdCandleParsingError::Missing(FrdField::Price))?,
             );
             let close = Price::from_str_unchecked(
                 split
                     .next()
-                    .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Price))?,
+                    .ok_or(FrdCandleParsingError::Missing(FrdField::Price))?,
             );
             let volume: u64 = split
                 .next()
-                .ok_or_else(|| FrdCandleParsingError::Missing(FrdField::Volume))?
+                .ok_or(FrdCandleParsingError::Missing(FrdField::Volume))?
                 .parse()
                 .map_err(|err| FrdCandleParsingError::VolumeParsingError(err))?;
 
