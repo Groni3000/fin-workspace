@@ -77,7 +77,7 @@ impl QuoteNotional {
     ///
     /// - integer part within ±MAX_INTEGER_PART (else silent overflow in release),
     /// - no `-` anywhere in the fraction (like `0.-4` otherwise - silent wrong value),
-    /// - ≤18 fraction digits, non-empty, no whitespace, ≤1 dot (these merely panic).
+    /// - ≤9 fraction digits, non-empty, no whitespace, ≤1 dot (these merely panic).
     pub fn from_str_unchecked(s: &str) -> Self {
         let (integer, fraction) = s.split_once('.').unwrap_or((s, "000000000"));
         let is_negative = integer.starts_with('-');
@@ -379,7 +379,7 @@ mod tests {
             );
         }
 
-        // Precision: more than 18 fractional digits must be rejected.
+        // Precision: more than 9 fractional digits must be rejected.
         #[test]
         fn str_rejects_excess_precision(
             int in 0_i128..QuoteNotional::MAX_INTEGER_PART,

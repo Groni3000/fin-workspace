@@ -106,31 +106,9 @@ humans.
 
 ## QuoteNotional concept
 
-- Represents Notional in quote. For example:
-  - SPY/USD -> QuoteNotional is in $. And you can simply think of it as
-    a simple notional value, money.
-  - `RB/($ per gallon)` -> QuoteNotional is in `(n_contracts * ($ per gallon))`.
-    Example: price 3.1 which is quoted in `($ / gallon)`. If you multiply
-    by quantity (let it be 5 contracts), you **won't** get `15.5 ($)` of notional
-    value. You will get `5 (contract) * 3.1 ($ / gallon)`.
-    **That** is `QuoteNotional`. You can't treat it like money.
-    In order to get money value, you need to multiply it by `point_value`
-    per specification. In this case it is 42_000 (gallons / contract).
-    Let's do this:
-
-    `5 (contract) * 3.1 ($ / gallon) * 42_000 (gallon / contract) =`
-
-    `= {notice how "contract" and "gallon" cancel out} =`
-
-    `= 5 * 3.1 ($) * 42_000 = 651_000 ($)`
-
-    **This** is `CurrencyNotional` in money as we all used to.
-
-  - There are more examples like this: "cents per bushel" or some bond futures are traded in
-    "% per par" etc.
-
-- Similar to other types, `i128` and fixed precision to `18` digits.
-- Max representable value is: `999 trillions`.
+- Represents Notional in quote. It isn't always money. For such example: look ZB example above.
+- Similar to other types, `i128` and fixed precision to `9` digits.
+- Max representable value is: `5_000_006_000_000.993_999_998`.
 - **DOESN'T** have conversion from `f64` to `QuoteNotional`.
   That is because f64 has ~15-16 significant digits, while this type
   requires more.
