@@ -1,10 +1,56 @@
 use std::{fmt::Display, num::ParseIntError, str::FromStr};
 
-use tradeprim::{price::Price, quote_notional::QuoteNotional};
+use tradeprim::{currency::Currency, price::Price, quote_notional::QuoteNotional};
 
-pub trait Specification {
-    fn tick_size(&self);
-    fn point_value(&self);
+pub trait Spec {
+    fn tick_size_price(&self) -> Price;
+    fn tick_size_currency(&self) -> (Price, Currency);
+    fn point_value(&self) -> PointValue;
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Specification {
+    tick_size_price: Price,
+    tick_size_currency: (Price, Currency),
+    point_value: PointValue,
+}
+
+impl Default for Specification {
+    fn default() -> Self {
+        Self {
+            tick_size_price: Price::from_str_unchecked("0.01"),
+            tick_size_currency: (Price::from_str_unchecked("0.01"), Currency::default()),
+            point_value: PointValue::ONE,
+        }
+    }
+}
+
+impl Specification {
+    pub fn new(tick_size_price: Price, tick_size_currency: (Price, Currency)) -> Self {
+        let point_value = PointValue::new(QuoteNotional::round(
+            (tick_size_currency.0.value() / tick_size_price.value()) as i128,
+        ))
+        .unwrap();
+        Self {
+            tick_size_price,
+            tick_size_currency,
+            point_value,
+        }
+    }
+}
+
+impl Spec for Specification {
+    fn tick_size_price(&self) -> Price {
+        self.tick_size_price
+    }
+
+    fn tick_size_currency(&self) -> (Price, Currency) {
+        self.tick_size_currency
+    }
+
+    fn point_value(&self) -> PointValue {
+        self.point_value
+    }
 }
 
 /// Specification for a futures contract.
@@ -360,5 +406,85 @@ mod tests {
                 "s={}", s
             );
         }
+    }
+
+    #[test]
+    fn random_tests() {
+        // u64::max
+        // 18_446_744_073_709_551_615
+        // 18_446_744_073_709_551_615
+        // default case for a common shares
+        // usd, cents
+        let ts_p = Price::from_str_unchecked("0.01");
+        let ts_c = (Price::from_str_unchecked("0.01"), Currency::default());
+        let spec = Specification::new(ts_p, ts_c);
+        assert_eq!(ts_p, spec.tick_size_price());
+        assert_eq!(ts_c.0, spec.tick_size_currency().0);
+        assert_eq!(PointValue::from_str_unchecked("1.0"), spec.point_value());
+
+        // ZW, 5k bushels, price in cents, tick_size_currency in $
+        // I had to multiply 0.0025 by 100...
+        let spec = Specification::new(
+            Price::from_str_unchecked("0.25"),
+            (Price::from_str_unchecked("12.5"), Currency::usd()),
+        );
+        assert_eq!(Price::from_str_unchecked("0.25"), spec.tick_size_price());
+        assert_eq!(
+            Price::from_str_unchecked("12.5"),
+            spec.tick_size_currency().0
+        );
+        assert_eq!(PointValue::from_str_unchecked("50.0"), spec.point_value());
+
+        // RB, 42k gallons, price in dollars and cents, tick_size_currency in $
+        let spec = Specification::new(
+            Price::from_str_unchecked("0.0001"),
+            (Price::from_str_unchecked("4.2"), Currency::usd()),
+        );
+        assert_eq!(Price::from_str_unchecked("0.0001"), spec.tick_size_price());
+        assert_eq!(
+            Price::from_str_unchecked("4.2"),
+            spec.tick_size_currency().0
+        );
+        assert_eq!(
+            PointValue::from_str_unchecked("42_000.0"),
+            spec.point_value()
+        );
+
+        // ZB, Face value at maturity of $100,000,
+        // price Points and fractions of points with par on the basis of 100 points,
+        // tick_size_currency in $
+        let spec = Specification::new(
+            Price::from_str_unchecked("0.03125"),
+            (Price::from_str_unchecked("31.25"), Currency::usd()),
+        );
+        assert_eq!(Price::from_str_unchecked("0.03125"), spec.tick_size_price());
+        assert_eq!(
+            Price::from_str_unchecked("31.25"),
+            spec.tick_size_currency().0
+        );
+        assert_eq!(
+            PointValue::from_str_unchecked("1_000.0"),
+            spec.point_value()
+        );
+
+        // 6J, contract_unit = 12,500,000 Japanese yen,
+        // price U.S. dollars and cent per JPY increment,
+        // 0.0000005 per JPY increment = $6.25
+        let spec = Specification::new(
+            Price::from_str_unchecked("0.0000005"),
+            (Price::from_str_unchecked("6.25"), Currency::usd()),
+        );
+        assert_eq!(
+            Price::from_str_unchecked("0.0000005"),
+            spec.tick_size_price()
+        );
+        assert_eq!(
+            Price::from_str_unchecked("6.25"),
+            spec.tick_size_currency().0
+        );
+        assert_eq!(
+            PointValue::from_str_unchecked("12_500_000.0"),
+            spec.point_value()
+        );
     }
 }

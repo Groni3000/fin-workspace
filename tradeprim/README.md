@@ -119,6 +119,40 @@ written using `std::marker::PhantomData`, but I've already chosen
 "runtime compatibility", though I must admit that developing this new
 type system would be interesting and so much fun.
 
+Ok, one more:
+
+4. ZW - Chicago SRW Wheat Futures.
+
+   Contract Unit - 5,000 bushels
+
+   Price Quotation - U.S. cents per bushel
+
+   Minimum Price Fluctuation - 1/4 of one cent (0.0025) per bushel = $12.50
+
+Therefore:
+
+Let `quantity = 5 (contract)`, `price = 696'4 ($cents / bushel) = 696 + 4/8 ($cents / bushel) = 696.5 ($cents / bushel)`.
+
+`quote_notional = quantity * price = (contract) * ($cents / bushel)`
+
+`quote_notional = 5 * 696.5 = 3_482.5 (contract * $cents / bushel)`
+
+`tick_size = (0.0025, 12.5) = ($ per bushel, $ per contract)`
+
+`point_value = tick_size.1 * 1 / tick_size.0`
+
+`point_value = ($ / contract) * 1 / ($ / bushel)`
+
+`point_value = bushel / contract`
+
+`point_value = 12.5 * 1 / (1 / 0.0025) = 12.5 * 400 = 5_000 (bushel / contract)`
+
+`currency_notional = point_value * quote_notional = (bushel / contract) * (contract * $cents / bushel)`
+
+`currency_notional = $cents`
+
+`currency_notional = 5_000 * 3_482.5 = 17_412_500 ($cents) = 174_125.0 ($)`
+
 ## Price concept
 
 - `i64` under the hood.

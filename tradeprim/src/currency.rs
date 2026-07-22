@@ -28,6 +28,17 @@ pub struct Currency {
     precision: u8,
 }
 
+impl Default for Currency {
+    fn default() -> Self {
+        Self {
+            name: "US Dollar",
+            alphabetic_code: AsciiCode::try_from("USD").unwrap(),
+            numeric_code: AsciiCode::try_from("840").unwrap(),
+            precision: 2,
+        }
+    }
+}
+
 impl Currency {
     pub const fn new(
         name: &'static str,
@@ -68,6 +79,39 @@ impl Currency {
         registry().get(&code).copied()
     }
 }
+
+/// Derived from `Currency`, holds only alphabetic code and precision -
+/// the bare functional minimum to plug into other structs.
+#[derive(Debug, Clone, Copy)]
+pub struct CurrencyTag {
+    alphabetic_code: AsciiCode<3>,
+    precision: u8,
+}
+
+impl CurrencyTag {
+    pub fn new(alphabetic_code: AsciiCode<3>, precision: u8) -> Self {
+        Self {
+            alphabetic_code,
+            precision,
+        }
+    }
+
+    pub fn alphabetic_code(&self) -> AsciiCode<3> {
+        self.alphabetic_code
+    }
+
+    pub fn precision(&self) -> u8 {
+        self.precision
+    }
+}
+
+impl PartialEq for CurrencyTag {
+    fn eq(&self, other: &Self) -> bool {
+        self.alphabetic_code == other.alphabetic_code
+    }
+}
+
+impl Eq for CurrencyTag {}
 
 static CURRENCY_RECORDS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/currency_records.bin"));
 static CURRENCY_STRINGS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/currency_strings.bin"));
