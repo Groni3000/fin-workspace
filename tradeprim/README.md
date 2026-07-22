@@ -114,6 +114,11 @@ Let `quantity = 5 (contract)`, `price = 3.2062 ($ / gallon)`.
 
 `currency_notional = 42_000 * 16.031 = 673_302 ($)`
 
+To be honest, this conversions and type system deserves to be
+written using `std::marker::PhantomData`, but I've already chosen
+"runtime compatibility", though I must admit that developing this new
+type system would be interesting and so much fun.
+
 ## Price concept
 
 - `i64` under the hood.
