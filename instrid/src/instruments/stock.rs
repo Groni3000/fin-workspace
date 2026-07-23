@@ -6,7 +6,7 @@ use crate::mic::Mic;
 use std::fmt::Display;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Stock {
     base: Asset,
     price_quotation: Asset,

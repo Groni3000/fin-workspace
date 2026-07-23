@@ -4,7 +4,7 @@ use tradeprim::{currency::Currency, prelude::Price};
 use crate::{asset::Asset, mic::Mic, prelude::TradedInstrument, tenor::Tenor};
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct OptionContract {
     base: Asset,
     price_quotation: Asset,

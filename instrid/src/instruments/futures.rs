@@ -8,7 +8,7 @@ use crate::mic::Mic;
 use crate::tenor::Tenor;
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct FuturesContract {
     base: Asset,
     price_quotation: Asset,
