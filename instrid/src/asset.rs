@@ -56,8 +56,10 @@ pub enum AssetClass {
     /// Physical goods: energy (crude oil, natural gas), metals (gold, silver),
     /// agriculture (corn, wheat).
     Commodity,
-    /// Fiat currencies (USD, EUR) and cryptocurrency (BTC, ETH).
+    /// Fiat currencies (USD, EUR).
     Currency,
+    /// Cryptocurrencies: BTC, ETH, and other digital assets.
+    Crypto,
     /// Debt instruments: government bonds, corporate bonds, treasury bills.
     FixedIncome,
     /// Direct property or real estate investment instruments
@@ -74,6 +76,7 @@ impl Display for AssetClass {
             AssetClass::Equity => "Equity",
             AssetClass::Commodity => "Commodity",
             AssetClass::Currency => "Currency",
+            AssetClass::Crypto => "Crypto",
             AssetClass::FixedIncome => "FixedIncome",
             AssetClass::RealEstate => "RealEstate",
             AssetClass::Index => "Index",

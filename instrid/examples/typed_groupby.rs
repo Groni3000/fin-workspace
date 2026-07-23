@@ -27,6 +27,8 @@ fn main() {
         xau_usd_spec,
         xau_eur_spec,
         xau_chf_spec,
+        jpy_6j_spec,
+        btc_usd_spec,
     ) = create_specs();
 
     let mut registry = Registry::new();
@@ -37,6 +39,8 @@ fn main() {
     registry.register(XAU_USD, xau_usd_spec);
     registry.register(XAU_EUR, xau_eur_spec);
     registry.register(XAU_CHF, xau_chf_spec);
+    registry.register(JPY_6J, jpy_6j_spec);
+    registry.register(BTC_USD, btc_usd_spec);
 
     let fills = vec![
         Fill::new(&AAPL_XNAS, Side::Buy, qty("1"), px("300.15")),
@@ -45,10 +49,15 @@ fn main() {
         Fill::new(&AAPL_XLON, Side::Buy, qty("1"), px("300.24")),
         Fill::new(&ES_CME, Side::Buy, qty("1"), px("24000.25")),
         Fill::new(&FDAX_EUREX, Side::Sell, qty("3"), px("40000.50")),
+        Fill::new(&FDAX_EUREX, Side::Buy, qty("3"), px("41020.50")),
         Fill::new(&XAU_USD, Side::Buy, qty("10"), px("2650.30")),
         Fill::new(&XAU_USD, Side::Sell, qty("4"), px("2661.55")),
         Fill::new(&XAU_EUR, Side::Buy, qty("5"), px("2440.75")),
         Fill::new(&XAU_CHF, Side::Buy, qty("2"), px("2400.40")),
+        Fill::new(&JPY_6J, Side::Buy, qty("2"), px("0.0068155")),
+        Fill::new(&JPY_6J, Side::Sell, qty("3"), px("0.0068355")),
+        Fill::new(&BTC_USD, Side::Buy, qty("0.05"), px("67234.50")),
+        Fill::new(&BTC_USD, Side::Sell, qty("0.05"), px("78234.50")),
     ];
 
     header("signed cashflow by currency");
@@ -172,9 +181,30 @@ const XAU_CHF: Instrument = Instrument::Stock(Stock::new(
     //     .expect("Code should be valid")
     //     .expect("Could not find currency code"),
 ));
+
+// CME Japanese Yen future: price is USD per JPY, so the tick is tiny
+// (0.0000005) and the point value is huge (12_500_000). Granular price.
+const JPY_6J: Instrument = Instrument::Futures(FuturesContract::new(
+    unwrap_asset(Asset::new("JPY", AssetClass::Currency)),
+    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
+    Mic::xcme(),
+    Currency::usd(),
+    2026,
+    Tenor::June,
+    None,
+));
+// Bitcoin spot in USD: whole ticks, but you trade fractional quantities.
+const BTC_USD: Instrument = Instrument::Stock(Stock::new(
+    unwrap_asset(Asset::new("BTC", AssetClass::Crypto)),
+    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
+    Mic::iexg(),
+    Currency::usd(),
+));
 // ---
 
 fn create_specs() -> (
+    Specification,
+    Specification,
     Specification,
     Specification,
     Specification,
@@ -206,6 +236,12 @@ fn create_specs() -> (
         (Price::from_str_unchecked("0.01"), Currency::chf().into()),
     )
     .unwrap();
+    let jpy_6j_spec: Specification = Specification::new(
+        Price::from_str_unchecked("0.0000005"),
+        (Price::from_str_unchecked("6.25"), Currency::usd().into()),
+    )
+    .unwrap();
+    let btc_usd_spec: Specification = Specification::default();
 
     (
         aapl_xnas_spec,
@@ -215,6 +251,8 @@ fn create_specs() -> (
         xau_usd_spec,
         xau_eur_spec,
         xau_chf_spec,
+        jpy_6j_spec,
+        btc_usd_spec,
     )
 }
 
