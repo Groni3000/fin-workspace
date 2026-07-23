@@ -8,7 +8,7 @@ use instrid::{
     spec::Specification,
     tenor::Tenor,
 };
-use tradeprim::{currency::Currency, price::Price};
+use tradeprim::{Side, currency::Currency, price::Price, quantity::Quantity};
 
 fn main() {
     // Specifications can't be const created due to various checks
@@ -152,4 +152,24 @@ fn create_specs() -> (
         xau_eur_spec,
         xau_chf_spec,
     )
+}
+
+/// Simple placeholder fill on an instrument, using the typed `Quantity`/`Price`.
+#[derive(Debug)]
+pub struct Fill<'a> {
+    instrument: &'a Instrument,
+    side: Side,
+    quantity: Quantity,
+    price: Price,
+}
+
+impl<'a> Fill<'a> {
+    pub fn new(instrument: &'a Instrument, side: Side, quantity: Quantity, price: Price) -> Self {
+        Self {
+            instrument,
+            side,
+            quantity,
+            price,
+        }
+    }
 }
