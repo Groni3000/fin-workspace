@@ -58,6 +58,13 @@ fn main() {
         Fill::new(&JPY_6J, Side::Sell, qty("3"), px("0.0068355")),
         Fill::new(&BTC_USD, Side::Buy, qty("0.05"), px("67234.50")),
         Fill::new(&BTC_USD, Side::Sell, qty("0.05"), px("78234.50")),
+        Fill::new(&ES_CME, Side::Buy, qty("1"), px("24010.00")),
+        Fill::new(&ES_CME, Side::Sell, qty("1"), px("24050.00")),
+        Fill::new(&ES_CME, Side::Sell, qty("1"), px("23990.00")),
+        Fill::new(&XAU_USD, Side::Sell, qty("2"), px("2670.00")),
+        Fill::new(&XAU_USD, Side::Sell, qty("4"), px("2655.50")),
+        Fill::new(&XAU_EUR, Side::Sell, qty("2"), px("2450.00")),
+        Fill::new(&XAU_EUR, Side::Sell, qty("3"), px("2445.00")),
     ];
 
     header("signed cashflow by currency");
@@ -84,6 +91,12 @@ fn main() {
     header("signed cashflow by asset class");
     for ((class, quote), notional) in &signed_cashflow_by_asset_class(&fills, &registry) {
         println!("  ({class}, {quote}): {notional}");
+    }
+    println!();
+
+    header("realized pnl per instrument (flat positions only, no FIFO/LIFO matcher yet)");
+    for (instrument, pnl) in &realized_pnl_by_instrument_for_flat_positions(&fills, &registry) {
+        println!("  {instrument}: {pnl}");
     }
 }
 
@@ -358,6 +371,38 @@ pub fn signed_cashflow_by_base<'a>(
     }
 
     cashflow_by_base
+}
+
+/// Realized P&L per instrument for flat positions.
+///
+/// Why only flat? Because if we want to calculate partially closed positions,
+/// we need to choose a convention: FIFO (match oldest), LIFO (match newest) or... Avg?
+///
+/// I don't want to build a matcher right now, so... Only flat here.
+pub fn realized_pnl_by_instrument_for_flat_positions<'a>(
+    fills: &[Fill<'a>],
+    registry: &Registry,
+) -> HashMap<&'a Instrument, CurrencyNotional> {
+    let mut acc: HashMap<&Instrument, (CurrencyNotional, i128)> = HashMap::new();
+    for fill in fills {
+        let cashflow = fill.signed_cashflow(registry);
+        let signed_qty = match fill.side {
+            Side::Buy => fill.quantity.value() as i128,
+            Side::Sell => -(fill.quantity.value() as i128),
+        };
+
+        acc.entry(fill.instrument)
+            .and_modify(|(cf, qty)| {
+                *cf = *cf + cashflow;
+                *qty += signed_qty;
+            })
+            .or_insert((cashflow, signed_qty));
+    }
+
+    acc.into_iter()
+        .filter(|(_, (_, net_qty))| *net_qty == 0)
+        .map(|(instrument, (cashflow, _))| (instrument, cashflow))
+        .collect()
 }
 
 /// Buckets fills by the base asset's class. No summation, so no currency concern.
