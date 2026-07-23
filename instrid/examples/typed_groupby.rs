@@ -55,6 +55,14 @@ fn main() {
     for (asset, notional) in &signed_cashflow_by_currency(&fills, &registry) {
         println!("  {asset:?}: {notional}");
     }
+
+    println!("signed cashflow by base:");
+    for (base, by_quote) in &signed_cashflow_by_base(&fills, &registry) {
+        println!("  {base:?}:");
+        for (quote, notional) in by_quote {
+            println!("        {quote:?}: {notional}");
+        }
+    }
 }
 
 fn qty(s: &str) -> Quantity {
@@ -273,4 +281,26 @@ pub fn signed_cashflow_by_currency<'a>(
     }
 
     cashflow_by_currency
+}
+
+/// Sums signed cashflow by base asset, split by price-quotation asset.
+pub fn signed_cashflow_by_base<'a>(
+    fills: &[Fill<'a>],
+    registry: &Registry,
+) -> HashMap<&'a Asset, HashMap<&'a Asset, CurrencyNotional>> {
+    let mut cashflow_by_base = HashMap::new();
+    for fill in fills {
+        let base = fill.instrument.base();
+        let price_quotation = fill.instrument.price_quotation();
+        let cashflow = fill.signed_cashflow(registry);
+
+        cashflow_by_base
+            .entry(base)
+            .or_insert_with(HashMap::new)
+            .entry(price_quotation)
+            .and_modify(|acc: &mut CurrencyNotional| *acc = *acc + cashflow)
+            .or_insert(cashflow);
+    }
+
+    cashflow_by_base
 }
