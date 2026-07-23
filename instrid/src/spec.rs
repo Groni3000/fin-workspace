@@ -2,12 +2,15 @@ use std::{fmt::Display, num::ParseIntError, str::FromStr};
 
 use tradeprim::{currency::Currency, price::Price, quote_notional::QuoteNotional};
 
+/// Has essential trading specification parameters.
+///
 pub trait Spec {
     fn tick_size_price(&self) -> Price;
     fn tick_size_currency(&self) -> (Price, Currency);
     fn point_value(&self) -> PointValue;
 }
 
+/// Represents the essential trading specification parameters.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Specification {
     tick_size_price: Price,
@@ -27,9 +30,10 @@ impl Default for Specification {
 
 impl Specification {
     pub fn new(tick_size_price: Price, tick_size_currency: (Price, Currency)) -> Self {
-        let point_value = PointValue::new(QuoteNotional::round(
-            (tick_size_currency.0.value() / tick_size_price.value()) as i128,
-        ))
+        let point_value = PointValue::new(
+            (tick_size_currency.0.value() as i128 * PointValue::SCALE)
+                / tick_size_price.value() as i128,
+        )
         .unwrap();
         Self {
             tick_size_price,
@@ -50,101 +54,6 @@ impl Spec for Specification {
 
     fn point_value(&self) -> PointValue {
         self.point_value
-    }
-}
-
-/// Specification for a futures contract.
-///
-/// Usually, futures contract has such important values:
-/// - Contract Unit - example: 42_000 gallons
-/// - Price Quotation   - U.S. dollars and cents per gallon
-/// - Minimum Price Fluctuation - 0.0001 per gallon = $4.20
-///
-/// `4.20 * 1 / 0.0001 = 42_000`
-/// `x * 1 / 0.0001 = y` => `0.0001 = x / y`
-/// `4.20 * 1 / 0.0001 = y` => `0.0001 = x / y`
-///
-/// All above - RB@XNYM (NYMEX) contract specification.
-///
-/// We need this struct to be able to convert `tradeprim::QuoteNotional`
-/// to `CurrencyNotional` (which is not implemented yet :) ).
-///
-/// `currency_notional = quote_notional * point_value`
-///
-/// Also Price of the instrument should always satisfy such condition:
-/// - `price % tick_size == 0` (rounded to the nearest tick size)
-///
-/// I'm kind of tired to create new types for each data type,
-/// but I know that I want both `tick_size` and `point_value`
-/// to be like `Quantity`, so... Let's start with it.
-///
-/// But, I guess, we still need to make it non-negative...
-/// Maybe a wrapper? Why not?
-pub struct FuturesSpecification {
-    /// Usually it is declared as: `(0.0001 per gallon, $4.20)`
-    /// We use only first part.
-    tick_size: TickSize,
-    /// How many tick_sizes' in 1 `point_value`
-    tick_quotient: u64, // other values are 8 bytes, so there is no reason to keep it small
-    /// A contract multiplier. You multiply QuoteNotional by it and get CurrencyNotional
-    point_value: PointValue,
-}
-
-impl FuturesSpecification {
-    pub fn new(tick_size: TickSize, point_value: PointValue) -> Self {
-        let tick_quotient = Price::ONE.value() as u64 / tick_size.0.value().unsigned_abs();
-
-        Self {
-            tick_size,
-            point_value,
-            tick_quotient,
-        }
-    }
-
-    pub fn tick_size(&self) -> &TickSize {
-        &self.tick_size
-    }
-
-    pub fn scalar_tick_size(&self) -> Price {
-        self.tick_size.0
-    }
-
-    pub fn currency_tick_size(&self) -> Price {
-        self.tick_size.1
-    }
-
-    pub fn point_value(&self) -> PointValue {
-        self.point_value
-    }
-
-    pub fn tick_quotient(&self) -> u64 {
-        self.tick_quotient
-    }
-}
-
-// ----------------
-// --- Wrappers ---
-// ----------------
-#[derive(Debug)]
-pub struct TickSize(Price, Price);
-
-impl TickSize {
-    /// Creates a new `TickSize` from a `Price`.
-    /// Returns `None` if the price is not positive or greater than 1.
-    ///
-    /// If `TickSize` is equal to `Price::ONE`, that means that
-    /// `PointValue == TickSize` (common case for stock-like instruments)
-    pub fn new(scalar: Price, currency: Price) -> Option<Self> {
-        if scalar <= Price::ZERO || scalar > Price::ONE {
-            return None;
-        }
-        Some(Self(scalar, currency))
-    }
-}
-
-impl From<(Price, Price)> for TickSize {
-    fn from((scalar, currency): (Price, Price)) -> Self {
-        Self::new(scalar, currency).unwrap()
     }
 }
 
@@ -306,8 +215,6 @@ mod tests {
         }
     }
 
-    /// Independent reference for `PointValue * QuoteNotional`
-
     #[test]
     fn test_point_value_init() {
         assert!(PointValue::new(PointValue::MIN_RAW).is_some());
@@ -409,10 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn random_tests() {
-        // u64::max
-        // 18_446_744_073_709_551_615
-        // 18_446_744_073_709_551_615
+    fn specification_tests() {
         // default case for a common shares
         // usd, cents
         let ts_p = Price::from_str_unchecked("0.01");
@@ -421,6 +325,7 @@ mod tests {
         assert_eq!(ts_p, spec.tick_size_price());
         assert_eq!(ts_c.0, spec.tick_size_currency().0);
         assert_eq!(PointValue::from_str_unchecked("1.0"), spec.point_value());
+        assert_eq!(spec.tick_size_currency.1, Currency::usd());
 
         // ZW, 5k bushels, price in cents, tick_size_currency in $
         // I had to multiply 0.0025 by 100...
@@ -446,7 +351,7 @@ mod tests {
             spec.tick_size_currency().0
         );
         assert_eq!(
-            PointValue::from_str_unchecked("42_000.0"),
+            PointValue::from_str_unchecked("42000.0"),
             spec.point_value()
         );
 
@@ -462,10 +367,7 @@ mod tests {
             Price::from_str_unchecked("31.25"),
             spec.tick_size_currency().0
         );
-        assert_eq!(
-            PointValue::from_str_unchecked("1_000.0"),
-            spec.point_value()
-        );
+        assert_eq!(PointValue::from_str_unchecked("1000.0"), spec.point_value());
 
         // 6J, contract_unit = 12,500,000 Japanese yen,
         // price U.S. dollars and cent per JPY increment,
@@ -483,7 +385,7 @@ mod tests {
             spec.tick_size_currency().0
         );
         assert_eq!(
-            PointValue::from_str_unchecked("12_500_000.0"),
+            PointValue::from_str_unchecked("12500000.0"),
             spec.point_value()
         );
     }
