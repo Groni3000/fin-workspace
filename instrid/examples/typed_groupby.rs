@@ -77,7 +77,11 @@ fn main() {
     println!();
 
     header("signed cashflow by base");
-    for (base, by_quote) in &signed_cashflow_by_base(&fills, &registry) {
+    let mut by_base: Vec<_> = signed_cashflow_by_base(&fills, &registry)
+        .into_iter()
+        .collect();
+    by_base.sort_by(|a, b| a.0.to_string().cmp(&b.0.to_string()));
+    for (base, by_quote) in by_base {
         println!("  {base}:");
         print_aligned(
             "        ",
@@ -121,9 +125,10 @@ fn header(title: &str) {
     println!("\x1b[4m{title}\x1b[0m");
 }
 
-/// To make results prettier
+/// To make results prettier. Sorts by key so the output is deterministic
 fn print_aligned<V: std::fmt::Display>(indent: &str, rows: impl IntoIterator<Item = (String, V)>) {
-    let rows: Vec<(String, V)> = rows.into_iter().collect();
+    let mut rows: Vec<(String, V)> = rows.into_iter().collect();
+    rows.sort_by(|a, b| a.0.cmp(&b.0));
     let width = rows
         .iter()
         .map(|(k, _)| k.chars().count())
