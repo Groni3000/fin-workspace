@@ -1,6 +1,6 @@
 use std::{fmt::Display, num::ParseIntError, ops::Add};
 
-use crate::{currency::Currency, price::Price};
+use crate::{currency::CurrencyTag, price::Price};
 
 /// Has fixed scale and max value.
 ///
@@ -28,12 +28,31 @@ impl CurrencyNotional {
 
     pub const ONE_RAW: i128 = Self::SCALE;
     pub const ZERO_RAW: i128 = 0_i128;
+    pub const MAX_RAW: i128 = i128::MAX;
+    /// Though it is declared, I do not use it.
+    ///
+    /// It would be naturally used in `Self::new`
+    /// and ignored in `Self::new_unchecked`, but...
+    ///
+    /// It seems to be a very rare problem.
+    ///
+    /// Regardless, what can happen?
+    /// Debug: panic
+    /// Release: negate i128::MIN will be identity mapping
+    /// CurrencyNotional(i128::MIN).neg() == CurrencyNotional(i128::MIN)
+    ///
+    /// I don't know... We can get it only from raw
+    /// `CurrencyNotional::new(i128::MIN...)` it's just... Malicious?
+    /// Do I really want to protect from such code?
+    pub const MIN_RAW: i128 = -Self::MAX_RAW;
+    pub const MAX_INTEGER_PART: i128 = Self::MAX_RAW / Self::SCALE;
 
+    /// Construct a `CurrencyNotional` from a raw value and currency tag.
+    ///
+    /// # Note
+    ///
+    /// `value == i128::MIN` can lead to problems described in `CurrencyNotional::MIN_RAW`.
     pub const fn new(value: i128, currency: CurrencyTag) -> Self {
-        Self { value, currency }
-    }
-
-    pub const fn new_unchecked(value: i128, currency: Currency) -> Self {
         Self { value, currency }
     }
 
@@ -50,7 +69,7 @@ impl Add for CurrencyNotional {
         if self.currency != rhs.currency {
             panic!("Cannot add different currencies");
         }
-        CurrencyNotional::new_unchecked(self.value.checked_add(rhs.value).unwrap(), self.currency)
+        CurrencyNotional::new(self.value.checked_add(rhs.value).unwrap(), self.currency)
     }
 }
 
@@ -108,12 +127,16 @@ mod tests {
 
     // helper
     fn usd() -> CurrencyNotional {
-        CurrencyNotional::new_unchecked(0, Currency::usd().into())
+        CurrencyNotional::new(0, Currency::usd().into())
     }
 
     // helper that uses helper
     fn usd_raw(raw: i128) -> CurrencyNotional {
-        CurrencyNotional::new_unchecked(raw, usd().currency)
+        CurrencyNotional::new(raw, usd().currency)
+    }
+
+    fn eur_raw(raw: i128) -> CurrencyNotional {
+        CurrencyNotional::new(raw, Currency::eur().into())
     }
 
     #[test]
@@ -144,5 +167,33 @@ mod tests {
     #[test]
     fn display_negative() {
         assert_eq!(usd_raw(-100_050_000_000).to_string(), "-100.05 (USD)");
+    }
+
+    #[test]
+    fn add_same_currency_sums_and_keeps_tag() {
+        // 100.05 + 50.20 = 150.25, still USD.
+        let sum = usd_raw(100_050_000_000) + usd_raw(50_200_000_000);
+        assert_eq!(sum, usd_raw(150_250_000_000));
+        assert_eq!(sum.to_string(), "150.25 (USD)");
+    }
+
+    #[test]
+    fn add_negative_element_results_in_zero_element() {
+        // -100.05 + 100.05 == 0.
+        let net = usd_raw(-100_050_000_000) + usd_raw(100_050_000_000);
+        assert_eq!(net, usd_raw(0));
+    }
+
+    #[test]
+    #[should_panic(expected = "Cannot add different currencies")]
+    fn add_different_currencies_panics() {
+        let _ = usd_raw(1) + eur_raw(1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn add_overflow_panics() {
+        // there should be checked_add
+        let _ = usd_raw(CurrencyNotional::MAX_RAW) + usd_raw(1);
     }
 }

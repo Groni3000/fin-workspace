@@ -479,7 +479,7 @@ mod tests {
         // Readme example, should be equal to 552_812.5
         assert_eq!(
             cn,
-            CurrencyNotional::new_unchecked(552_812_500_000_000, Currency::usd().into())
+            CurrencyNotional::new(552_812_500_000_000, Currency::usd().into())
         );
 
         // 6J, contract_unit = 12,500,000 Japanese yen,
@@ -505,7 +505,7 @@ mod tests {
         let cn = spec.currency_notional(qn);
         assert_eq!(
             cn,
-            CurrencyNotional::new_unchecked(382812500000000, Currency::usd().into())
+            CurrencyNotional::new(382812500000000, Currency::usd().into())
         )
     }
 }
