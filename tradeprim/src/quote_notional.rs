@@ -1,6 +1,11 @@
 #[cfg(feature = "serde")]
 use std::borrow::Cow;
-use std::{fmt::Display, num::ParseIntError, ops::Mul, str::FromStr};
+use std::{
+    fmt::Display,
+    num::ParseIntError,
+    ops::{Mul, Neg},
+    str::FromStr,
+};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -125,6 +130,13 @@ impl QuoteNotional {
         // 1_000_000_000 / 1_000_000_000
         // 1
         (value + value.signum() * (Self::SCALE / 2)) / Self::SCALE
+    }
+}
+
+impl Neg for QuoteNotional {
+    type Output = QuoteNotional;
+    fn neg(self) -> Self {
+        QuoteNotional::new_unchecked(-self.value())
     }
 }
 
@@ -287,6 +299,27 @@ mod tests {
 
         assert!(QuoteNotional::new(QuoteNotional::MAX_RAW + 1).is_none());
         assert!(QuoteNotional::new(QuoteNotional::MIN_RAW - 1).is_none());
+    }
+
+    #[test]
+    fn neg_is_symmetric_at_bounds() {
+        // Bounds are symmetric (MIN_RAW == -MAX_RAW)
+        assert_eq!(-QuoteNotional::MAX, QuoteNotional::MIN);
+        assert_eq!(-QuoteNotional::MIN, QuoteNotional::MAX);
+        assert_eq!(-QuoteNotional::ZERO, QuoteNotional::ZERO);
+    }
+
+    proptest! {
+        #[test]
+        fn neg_negates_value_and_is_involution(
+            raw in QuoteNotional::MIN_RAW..=QuoteNotional::MAX_RAW,
+        ) {
+            let x = QuoteNotional::new_unchecked(raw);
+            // Single negation flips the raw value
+            prop_assert_eq!((-x).value(), -raw);
+            // And negating twice is the identity.
+            prop_assert_eq!(-(-x), x);
+        }
     }
 
     #[test]
