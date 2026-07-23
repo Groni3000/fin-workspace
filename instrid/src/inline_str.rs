@@ -52,6 +52,15 @@ pub enum InlineStrError {
     NotAscii,
 }
 
+impl Display for InlineStrError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InlineStrError::NotAscii => write!(f, "NotAscii"),
+            InlineStrError::TooLong { got, cap } => write!(f, "TooLong: got={} cap={}", got, cap),
+        }
+    }
+}
+
 impl<const N: usize> InlineStr<N> {
     pub const fn new(code: &str) -> Result<Self, InlineStrError> {
         const { assert!(N <= 255, "N must be <= 255") }
