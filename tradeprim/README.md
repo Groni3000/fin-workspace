@@ -106,7 +106,7 @@ Let `quantity = 5 (contract)`, `price = 3.2062 ($ / gallon)`.
 
 `point_value = gallon / contract`
 
-`point_value = 4.20 * 1 / (1 / 0.0001) = 4.2 * 10_000 = 42_000 (gallon / contract)`
+`point_value = 4.20 * (1 / 0.0001) = 4.2 * 10_000 = 42_000 (gallon / contract)`
 
 `currency_notional = point_value * quote_notional = (gallon / contract) * (contract * $ / gallon)`
 
@@ -145,13 +145,28 @@ Let `quantity = 5 (contract)`, `price = 696'4 ($cents / bushel) = 696 + 4/8 ($ce
 
 `point_value = bushel / contract`
 
-`point_value = 12.5 * 1 / (1 / 0.0025) = 12.5 * 400 = 5_000 (bushel / contract)`
+`point_value = 12.5 * (1 / 0.0025) = 12.5 * 400 = 5_000 (bushel / contract)`
 
 `currency_notional = point_value * quote_notional = (bushel / contract) * (contract * $cents / bushel)`
 
 `currency_notional = $cents`
 
 `currency_notional = 5_000 * 3_482.5 = 17_412_500 ($cents) = 174_125.0 ($)`
+
+The last part is the problem - you don't know that you need to multiply by 100 to get major form of the currency.
+So, when we write specification, we need to manually do it once.
+
+`tick_size = (0.25, 12.5) = (cent / bushel, $ / contract)`
+
+`point_value = ($ / contract) / (cent / bushel)  = ($ * bushel) / (cent * contract)`
+
+`point_value = 12.5 * (1 / 0.25) = 12.5 * 4 = 50 ($ * bushel) / (cent * contract)`
+
+`currency_notional = ($ * bushel) / (cent * contract) * (contract * cent / bushel)`
+
+`currency_notional = $`
+
+`currency_notional = 50 * 3_482.5 = 174_125.0 ($)`
 
 ## Price concept
 

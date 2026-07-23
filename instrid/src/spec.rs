@@ -29,17 +29,45 @@ impl Default for Specification {
 }
 
 impl Specification {
-    pub fn new(tick_size_price: Price, tick_size_currency: (Price, Currency)) -> Self {
+    /// Builds a `Specification`, deriving `point_value` from the tick pair as
+    /// `tick_size_currency.0 / tick_size_price`.
+    ///
+    /// # **Error-prone**: units are NOT verifiable
+    ///
+    /// Let's say that Currency has 2 forms: major and minor.
+    /// We usually use major form: 2.13 ($)
+    /// Minor form would use cents: 213 (cents)
+    ///
+    /// Usually `tick_size_currency` is in major form. At least I haven't seen
+    /// a case where it's in minor form.
+    ///
+    /// But `tick_size_price` is in price quotation units and if price quotation in
+    /// minor form - it should be in minor form. But, unfortunately, at least CME,
+    /// can sometimes convert it to major form.
+    ///
+    /// Example of such case:
+    /// - ZW - CME spec says its `tick_size_price` is 1/4 of a cent and write 0.0025
+    ///     and you may think that you can just copy-paste its value like you do with other
+    ///     futures contracts. But no, 1/4 of a cent is 0.25, but CME shows 0.0025 which is in major
+    ///     form - wrong one, price is in minor.
+    ///     So we should use 0.25. For an explanation, look at README.md, ZW example.
+    ///     So the correct values are:
+    ///     `(0.25, (12.5, USD))` - you can't copy-paste values from CME specification.
+    ///
+    /// So, fill a spec **once**, verify by hand and reuse specs.
+    pub fn new(tick_size_price: Price, tick_size_currency: (Price, Currency)) -> Option<Self> {
+        if tick_size_price <= Price::ZERO || tick_size_price > Price::ONE {
+            return None;
+        }
         let point_value = PointValue::new(
             (tick_size_currency.0.value() as i128 * PointValue::SCALE)
                 / tick_size_price.value() as i128,
-        )
-        .unwrap();
-        Self {
+        )?;
+        Some(Self {
             tick_size_price,
             tick_size_currency,
             point_value,
-        }
+        })
     }
 }
 
@@ -321,7 +349,7 @@ mod tests {
         // usd, cents
         let ts_p = Price::from_str_unchecked("0.01");
         let ts_c = (Price::from_str_unchecked("0.01"), Currency::default());
-        let spec = Specification::new(ts_p, ts_c);
+        let spec = Specification::new(ts_p, ts_c).unwrap();
         assert_eq!(ts_p, spec.tick_size_price());
         assert_eq!(ts_c.0, spec.tick_size_currency().0);
         assert_eq!(PointValue::from_str_unchecked("1.0"), spec.point_value());
@@ -332,7 +360,8 @@ mod tests {
         let spec = Specification::new(
             Price::from_str_unchecked("0.25"),
             (Price::from_str_unchecked("12.5"), Currency::usd()),
-        );
+        )
+        .unwrap();
         assert_eq!(Price::from_str_unchecked("0.25"), spec.tick_size_price());
         assert_eq!(
             Price::from_str_unchecked("12.5"),
@@ -344,7 +373,8 @@ mod tests {
         let spec = Specification::new(
             Price::from_str_unchecked("0.0001"),
             (Price::from_str_unchecked("4.2"), Currency::usd()),
-        );
+        )
+        .unwrap();
         assert_eq!(Price::from_str_unchecked("0.0001"), spec.tick_size_price());
         assert_eq!(
             Price::from_str_unchecked("4.2"),
@@ -361,7 +391,8 @@ mod tests {
         let spec = Specification::new(
             Price::from_str_unchecked("0.03125"),
             (Price::from_str_unchecked("31.25"), Currency::usd()),
-        );
+        )
+        .unwrap();
         assert_eq!(Price::from_str_unchecked("0.03125"), spec.tick_size_price());
         assert_eq!(
             Price::from_str_unchecked("31.25"),
@@ -375,7 +406,8 @@ mod tests {
         let spec = Specification::new(
             Price::from_str_unchecked("0.0000005"),
             (Price::from_str_unchecked("6.25"), Currency::usd()),
-        );
+        )
+        .unwrap();
         assert_eq!(
             Price::from_str_unchecked("0.0000005"),
             spec.tick_size_price()
@@ -387,6 +419,33 @@ mod tests {
         assert_eq!(
             PointValue::from_str_unchecked("12500000.0"),
             spec.point_value()
+        );
+    }
+
+    /// - `tick_size_price` is in `(0, Price::ONE)`
+    /// - `tick_size_price` that is `Price::ONE` accepted
+    /// - `tick_size_price = Price::ONE + min increment` - not accepted
+    #[test]
+    fn new_tick_size_price_boundary() {
+        let usd = (Price::ONE, Currency::usd());
+
+        // Below the range: zero tick would divide by zero deriving point_value.
+        assert!(
+            Specification::new(Price::ZERO, usd).is_none(),
+            "tick_size_price = 0 must be rejected"
+        );
+
+        // Upper edge is inclusive: exactly one whole price unit is valid.
+        assert!(
+            Specification::new(Price::ONE, usd).is_some(),
+            "tick_size_price == Price::ONE must be accepted"
+        );
+
+        // One raw step above the edge: not a valid tick.
+        let above_one = Price::from_str_unchecked("1.000000001");
+        assert!(
+            Specification::new(above_one, usd).is_none(),
+            "tick_size_price > Price::ONE must be rejected"
         );
     }
 }
