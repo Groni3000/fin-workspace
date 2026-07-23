@@ -168,6 +168,14 @@ So, when we write specification, we need to manually do it once.
 
 `currency_notional = 50 * 3_482.5 = 174_125.0 ($)`
 
+## Currency concept
+
+- Parsed from ISO 4217
+- Only currently used currencies.
+- Usually we use derived `CurrencyTag` (`.into`) that holds only `alphabetic_code` and precision.
+  `CurrencyTag` basically a subset of `Currency`.
+- `CurrencyTag` is used when we use `CurrencyNotional` (definition below).
+
 ## Price concept
 
 - `i64` under the hood.
@@ -202,3 +210,14 @@ So, when we write specification, we need to manually do it once.
   requires more.
 - Has **canonical** (`-1.32` for example) conversion from `&str` to `QuoteNotional`.
   Can reject overprecise `str`/out of range values/wrong format.
+
+## CurrencyNotional concept
+
+- Basically, the same idea as QuoteNotional, but tagged with a real currency.
+- min/max values are `-i128::MAX, i128::MAX` in a raw int representation.
+- Used via the `Specification` of an instrument.
+- Very limited in ways to get this type: either Spec or deliberately `::new`.
+  At least for now I think this is a very delicate type and allowing to get it
+  in a lot of different ways may hurt more than help. Though... Strategy's state
+  will require ser/de so... It's probably unavoidable? At least formatters will do the work
+  not the user of this library.
