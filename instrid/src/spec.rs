@@ -1,6 +1,9 @@
 use std::{fmt::Display, num::ParseIntError, str::FromStr};
 
-use tradeprim::{currency::Currency, price::Price, quote_notional::QuoteNotional};
+use tradeprim::{
+    currency::Currency, currency_notional::CurrencyNotional, price::Price,
+    quote_notional::QuoteNotional,
+};
 
 /// Has essential trading specification parameters.
 ///
@@ -8,6 +11,7 @@ pub trait Spec {
     fn tick_size_price(&self) -> Price;
     fn tick_size_currency(&self) -> (Price, Currency);
     fn point_value(&self) -> PointValue;
+    fn currency_notional(&self, quote_notional: QuoteNotional) -> CurrencyNotional;
 }
 
 /// Represents the essential trading specification parameters.
@@ -82,6 +86,13 @@ impl Spec for Specification {
 
     fn point_value(&self) -> PointValue {
         self.point_value
+    }
+
+    fn currency_notional(&self, quote_notional: QuoteNotional) -> CurrencyNotional {
+        CurrencyNotional::new(
+            self.point_value.0 * quote_notional.value() / CurrencyNotional::SCALE,
+            self.tick_size_currency.1,
+        )
     }
 }
 
@@ -447,5 +458,51 @@ mod tests {
             Specification::new(above_one, usd).is_none(),
             "tick_size_price > Price::ONE must be rejected"
         );
+    }
+
+    #[test]
+    fn test_currency_notional() {
+        // ZB, Face value at maturity of $100,000,
+        // price Points and fractions of points with par on the basis of 100 points,
+        // tick_size_currency in $
+        let spec = Specification::new(
+            Price::from_str_unchecked("0.03125"),
+            (Price::from_str_unchecked("31.25"), Currency::usd()),
+        )
+        .unwrap();
+        let qn = QuoteNotional::from_str_unchecked("552.8125");
+        let cn = spec.currency_notional(qn);
+
+        // Readme example, should be equal to 552_812.5
+        assert_eq!(
+            cn,
+            CurrencyNotional::new_unchecked(552_812_500_000_000, Currency::usd())
+        );
+
+        // 6J, contract_unit = 12,500,000 Japanese yen,
+        // price U.S. dollars and cent per JPY increment,
+        // 0.0000005 per JPY increment = $6.25
+        //
+        // ($ / JPY, $ / contract)
+        // pv = JPY / contract
+        // qn = contract * $ / JPY
+        // cn = pv * qn = JPY / contract * contract * $ / JPY
+        // cn = $
+        //
+        // let qty = 5, let px = 0.006125
+        // qn = 5 * 0.006125 = 0.030625
+        // pv = 12_500_000.0
+        // cn = pv * qn = 12_500_000 * 0.030625 = 382812.5
+        let spec = Specification::new(
+            Price::from_str_unchecked("0.0000005"),
+            (Price::from_str_unchecked("6.25"), Currency::usd()),
+        )
+        .unwrap();
+        let qn = QuoteNotional::from_str_unchecked("0.030625");
+        let cn = spec.currency_notional(qn);
+        assert_eq!(
+            cn,
+            CurrencyNotional::new_unchecked(382812500000000, Currency::usd())
+        )
     }
 }

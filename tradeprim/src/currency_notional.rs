@@ -1,3 +1,5 @@
+use std::{fmt::Display, num::ParseIntError};
+
 use crate::{currency::Currency, price::Price};
 
 /// Has fixed scale and max value.
@@ -22,6 +24,7 @@ pub struct CurrencyNotional {
 
 impl CurrencyNotional {
     pub const SCALE: i128 = Price::SCALE as i128;
+    pub const PRECISION: i128 = 9;
 
     pub const ONE_RAW: i128 = Self::SCALE;
     pub const ZERO_RAW: i128 = 0_i128;
@@ -36,5 +39,26 @@ impl CurrencyNotional {
 
     pub fn value(&self) -> i128 {
         self.value
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParseCurrencyNotionalError {
+    InvalidFormat,
+    OutOfBounds,
+    PrecisionError(usize),
+    ParseIntError(ParseIntError),
+}
+
+impl Display for ParseCurrencyNotionalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseCurrencyNotionalError::InvalidFormat => write!(f, "Invalid format"),
+            ParseCurrencyNotionalError::OutOfBounds => write!(f, "Out of bounds"),
+            ParseCurrencyNotionalError::PrecisionError(precision) => {
+                write!(f, "Precision error: {}", precision)
+            }
+            ParseCurrencyNotionalError::ParseIntError(err) => err.fmt(f),
+        }
     }
 }
