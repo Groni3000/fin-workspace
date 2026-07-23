@@ -53,28 +53,28 @@ fn main() {
 
     header("signed cashflow by currency");
     for (asset, notional) in &signed_cashflow_by_currency(&fills, &registry) {
-        println!("  {asset:?}: {notional}");
+        println!("  {asset}: {notional}");
     }
     println!();
 
     header("signed cashflow by base");
     for (base, by_quote) in &signed_cashflow_by_base(&fills, &registry) {
-        println!("  {base:?}:");
+        println!("  {base}:");
         for (quote, notional) in by_quote {
-            println!("        {quote:?}: {notional}");
+            println!("        {quote}: {notional}");
         }
     }
     println!();
 
     header("fills by asset class");
     for (class, class_fills) in &fills_by_asset_class(&fills) {
-        println!("  {class:?}: {} fills", class_fills.len());
+        println!("  {class}: {} fills", class_fills.len());
     }
     println!();
 
     header("signed cashflow by asset class");
     for ((class, quote), notional) in &signed_cashflow_by_asset_class(&fills, &registry) {
-        println!("  ({class:?}, {quote:?}): {notional}");
+        println!("  ({class}, {quote}): {notional}");
     }
 }
 
