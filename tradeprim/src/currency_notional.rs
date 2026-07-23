@@ -80,10 +80,11 @@ impl Display for CurrencyNotional {
         }
 
         let abs = self.value.unsigned_abs();
-        let integer_part = abs / Self::SCALE as u128;
         let mut fractional_part = abs % Self::SCALE as u128;
+
+        write_grouped(f, abs / Self::SCALE as u128)?;
         if fractional_part == 0 {
-            return write!(f, "{} ({})", integer_part, self.currency);
+            return write!(f, " ({})", self.currency);
         }
 
         let mut pow = Self::PRECISION as usize;
@@ -91,11 +92,17 @@ impl Display for CurrencyNotional {
             fractional_part /= 10;
             pow -= 1;
         }
-        write!(
-            f,
-            "{}.{:0pow$} ({})",
-            integer_part, fractional_part, self.currency
-        )
+        write!(f, ".{:0pow$} ({})", fractional_part, self.currency)
+    }
+}
+
+/// Writes an integer with `_`-separated triples (e.g. `3000000` -> `3_000_000`).
+fn write_grouped(f: &mut std::fmt::Formatter<'_>, value: u128) -> std::fmt::Result {
+    if value >= 1000 {
+        write_grouped(f, value / 1000)?;
+        write!(f, "_{:03}", value % 1000)
+    } else {
+        write!(f, "{value}")
     }
 }
 
@@ -141,7 +148,7 @@ mod tests {
 
     #[test]
     fn display_half_dollar_fraction() {
-        assert_eq!(usd_raw(552_812_500_000_000).to_string(), "552812.5 (USD)");
+        assert_eq!(usd_raw(552_812_500_000_000).to_string(), "552_812.5 (USD)");
     }
 
     #[test]
@@ -156,7 +163,7 @@ mod tests {
 
     #[test]
     fn display_zero_fraction_has_no_dot() {
-        assert_eq!(usd_raw(552_812_000_000_000).to_string(), "552812 (USD)");
+        assert_eq!(usd_raw(552_812_000_000_000).to_string(), "552_812 (USD)");
     }
 
     #[test]
