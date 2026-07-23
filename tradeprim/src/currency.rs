@@ -88,6 +88,12 @@ pub struct CurrencyTag {
     precision: u8,
 }
 
+impl Display for CurrencyTag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.alphabetic_code.as_str())
+    }
+}
+
 impl CurrencyTag {
     pub fn new(alphabetic_code: AsciiCode<3>, precision: u8) -> Self {
         Self {
@@ -108,6 +114,12 @@ impl CurrencyTag {
 impl PartialEq for CurrencyTag {
     fn eq(&self, other: &Self) -> bool {
         self.alphabetic_code == other.alphabetic_code
+    }
+}
+
+impl From<Currency> for CurrencyTag {
+    fn from(value: Currency) -> Self {
+        CurrencyTag::new(value.alphabetic_code, value.precision)
     }
 }
 

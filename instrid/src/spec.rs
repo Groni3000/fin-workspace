@@ -88,10 +88,13 @@ impl Spec for Specification {
         self.point_value
     }
 
+    /// Convert `QuoteNotional` to `CurrencyNotional` using specification.
     fn currency_notional(&self, quote_notional: QuoteNotional) -> CurrencyNotional {
+        // QuoteNotional is already half-away-rounded upstream,
+        // so truncating the final divide only drops sub-1e-9 noise
         CurrencyNotional::new(
             self.point_value.0 * quote_notional.value() / CurrencyNotional::SCALE,
-            self.tick_size_currency.1,
+            self.tick_size_currency.1.into(),
         )
     }
 }
@@ -476,7 +479,7 @@ mod tests {
         // Readme example, should be equal to 552_812.5
         assert_eq!(
             cn,
-            CurrencyNotional::new_unchecked(552_812_500_000_000, Currency::usd())
+            CurrencyNotional::new_unchecked(552_812_500_000_000, Currency::usd().into())
         );
 
         // 6J, contract_unit = 12,500,000 Japanese yen,
@@ -502,7 +505,7 @@ mod tests {
         let cn = spec.currency_notional(qn);
         assert_eq!(
             cn,
-            CurrencyNotional::new_unchecked(382812500000000, Currency::usd())
+            CurrencyNotional::new_unchecked(382812500000000, Currency::usd().into())
         )
     }
 }
