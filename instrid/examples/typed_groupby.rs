@@ -39,16 +39,16 @@ fn main() {
     registry.register(XAU_CHF, xau_chf_spec);
 
     let fills = vec![
-        Fill::new(&AAPL_XNAS, Side::Buy, qty("1"), px("300.0")),
+        Fill::new(&AAPL_XNAS, Side::Buy, qty("1"), px("300.15")),
         Fill::new(&AAPL_XLON, Side::Sell, qty("1"), px("300.34")),
         Fill::new(&AAPL_XNAS, Side::Sell, qty("1"), px("300.19")),
         Fill::new(&AAPL_XLON, Side::Buy, qty("1"), px("300.24")),
-        Fill::new(&ES_CME, Side::Buy, qty("1"), px("24000.0")),
-        Fill::new(&FDAX_EUREX, Side::Sell, qty("3"), px("40000.0")),
-        Fill::new(&XAU_USD, Side::Buy, qty("10"), px("2650.0")),
-        Fill::new(&XAU_USD, Side::Sell, qty("4"), px("2661.5")),
-        Fill::new(&XAU_EUR, Side::Buy, qty("5"), px("2440.0")),
-        Fill::new(&XAU_CHF, Side::Buy, qty("2"), px("2400.0")),
+        Fill::new(&ES_CME, Side::Buy, qty("1"), px("24000.25")),
+        Fill::new(&FDAX_EUREX, Side::Sell, qty("3"), px("40000.50")),
+        Fill::new(&XAU_USD, Side::Buy, qty("10"), px("2650.30")),
+        Fill::new(&XAU_USD, Side::Sell, qty("4"), px("2661.55")),
+        Fill::new(&XAU_EUR, Side::Buy, qty("5"), px("2440.75")),
+        Fill::new(&XAU_CHF, Side::Buy, qty("2"), px("2400.40")),
     ];
 
     header("signed cashflow by currency");
