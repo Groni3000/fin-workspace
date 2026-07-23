@@ -174,7 +174,7 @@ mod tests {
     fn display_full() {
         assert_eq!(
             aapl_call_200_dec25().to_string(),
-            "Option:(Equity)AAPL/(Currency)USD@XNAS 2025-12-19 American::Call#200",
+            "Option:Equity|AAPL/Currency|USD@XNAS 2025-12-19 American::Call#200",
         );
     }
 

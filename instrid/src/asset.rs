@@ -43,7 +43,7 @@ impl Asset {
 
 impl Display for Asset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}){}", self.class, self.name.as_str())
+        write!(f, "{}|{}", self.class, self.name.as_str())
     }
 }
 

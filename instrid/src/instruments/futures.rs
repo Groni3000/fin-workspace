@@ -155,7 +155,7 @@ mod tests {
         let f = cl();
         assert_eq!(
             f.to_string(),
-            "Futures:(Commodity)CL/(Currency)USD@XNAS(USD) 2026-06",
+            "Futures:Commodity|CL/Currency|USD@XNAS(USD) 2026-06",
         );
     }
 
@@ -164,7 +164,7 @@ mod tests {
         let f = cl_with_day();
         assert_eq!(
             f.to_string(),
-            "Futures:(Commodity)CL/(Currency)USD@XNAS(USD) 2026-06-20",
+            "Futures:Commodity|CL/Currency|USD@XNAS(USD) 2026-06-20",
         );
     }
 

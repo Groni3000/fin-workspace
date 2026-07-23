@@ -81,7 +81,7 @@ mod tests {
 
         assert_eq!(
             format!("{}", stock),
-            "Stock:(Equity)AAPL/(Currency)USD@XNAS(USD)"
+            "Stock:Equity|AAPL/Currency|USD@XNAS(USD)"
         );
     }
 
