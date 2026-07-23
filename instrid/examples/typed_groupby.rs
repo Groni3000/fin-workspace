@@ -11,8 +11,7 @@ use instrid::{
     tenor::Tenor,
 };
 use tradeprim::{
-    Side, currency::Currency, currency_notional::CurrencyNotional, price::Price,
-    quantity::Quantity, quote_notional::QuoteNotional,
+    Side, currency::Currency, currency_notional::CurrencyNotional, price::Price, quantity::Quantity,
 };
 
 fn main() {
@@ -31,13 +30,13 @@ fn main() {
     ) = create_specs();
 
     let mut registry = Registry::new();
-    registry.register(aapl_xnas, aapl_xnas_spec);
-    registry.register(aapl_xlon, aapl_xlon_spec);
-    registry.register(es_cme, es_cme_spec);
-    registry.register(fdax_eurex, fdax_eurex_spec);
-    registry.register(xau_usd, xau_usd_spec);
-    registry.register(xau_eur, xau_eur_spec);
-    registry.register(xau_chf, xau_chf_spec);
+    registry.register(AAPL_XNAS, aapl_xnas_spec);
+    registry.register(AAPL_XLON, aapl_xlon_spec);
+    registry.register(ES_CME, es_cme_spec);
+    registry.register(FDAX_EUREX, fdax_eurex_spec);
+    registry.register(XAU_USD, xau_usd_spec);
+    registry.register(XAU_EUR, xau_eur_spec);
+    registry.register(XAU_CHF, xau_chf_spec);
 }
 
 // We need:
@@ -58,19 +57,19 @@ const fn unwrap_asset(asset: Result<Asset, InlineStrError>) -> Asset {
         Err(_e) => panic!("Asset got incorrect parameters"),
     }
 }
-const aapl_xnas: Instrument = Instrument::Stock(Stock::new(
+const AAPL_XNAS: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("AAPL", AssetClass::Equity)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
     Mic::xnas(),
     Currency::usd(),
 ));
-const aapl_xlon: Instrument = Instrument::Stock(Stock::new(
+const AAPL_XLON: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("AAPL", AssetClass::Equity)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
     Mic::xlon(),
     Currency::usd(),
 ));
-const es_cme: Instrument = Instrument::Futures(FuturesContract::new(
+const ES_CME: Instrument = Instrument::Futures(FuturesContract::new(
     unwrap_asset(Asset::new("ES", AssetClass::Index)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
     Mic::xcme(),
@@ -79,7 +78,7 @@ const es_cme: Instrument = Instrument::Futures(FuturesContract::new(
     Tenor::June,
     None,
 ));
-const fdax_eurex: Instrument = Instrument::Futures(FuturesContract::new(
+const FDAX_EUREX: Instrument = Instrument::Futures(FuturesContract::new(
     unwrap_asset(Asset::new("FDX", AssetClass::Index)),
     unwrap_asset(Asset::new("EUR", AssetClass::Currency)),
     Mic::xeur(),
@@ -94,14 +93,14 @@ const fdax_eurex: Instrument = Instrument::Futures(FuturesContract::new(
 //  - We don't care about Delivery Location right now.
 
 // Canonical XAU quote: LBMA Gold Price, USD.
-const xau_usd: Instrument = Instrument::Stock(Stock::new(
+const XAU_USD: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("XAU", AssetClass::Commodity)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
     Mic::xlbm(),
     Currency::usd(),
 ));
 // Same LBMA gold, quoted in EUR by the FX desk.
-const xau_eur: Instrument = Instrument::Stock(Stock::new(
+const XAU_EUR: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("XAU", AssetClass::Commodity)),
     unwrap_asset(Asset::new("EUR", AssetClass::Currency)),
     Mic::xlbm(),
@@ -110,7 +109,7 @@ const xau_eur: Instrument = Instrument::Stock(Stock::new(
 // Shanghai Gold Exchange, CNY (onshore yuan). Materially different
 // market from LBMA due to China's capital controls — the Shanghai-London
 // spread is a real, tradable basis, not a quote conversion.
-const xau_chf: Instrument = Instrument::Stock(Stock::new(
+const XAU_CHF: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("XAU", AssetClass::Commodity)),
     unwrap_asset(Asset::new("CHF", AssetClass::Currency)),
     Mic::xsge(),
