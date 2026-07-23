@@ -1,14 +1,19 @@
 // This file is created to test the usage of new `tradeprim` types.
 
+use std::collections::HashMap;
+
 use instrid::{
     asset::{Asset, AssetClass},
     inline_str::InlineStrError,
-    instruments::{FuturesContract, Instrument, Stock},
+    instruments::{FuturesContract, Instrument, Stock, TradedInstrument},
     mic::Mic,
-    spec::Specification,
+    spec::{Spec, Specification},
     tenor::Tenor,
 };
-use tradeprim::{Side, currency::Currency, price::Price, quantity::Quantity};
+use tradeprim::{
+    Side, currency::Currency, currency_notional::CurrencyNotional, price::Price,
+    quantity::Quantity, quote_notional::QuoteNotional,
+};
 
 fn main() {
     // Specifications can't be const created due to various checks
@@ -24,6 +29,15 @@ fn main() {
         xau_eur_spec,
         xau_chf_spec,
     ) = create_specs();
+
+    let mut registry = Registry::new();
+    registry.register(aapl_xnas, aapl_xnas_spec);
+    registry.register(aapl_xlon, aapl_xlon_spec);
+    registry.register(es_cme, es_cme_spec);
+    registry.register(fdax_eurex, fdax_eurex_spec);
+    registry.register(xau_usd, xau_usd_spec);
+    registry.register(xau_eur, xau_eur_spec);
+    registry.register(xau_chf, xau_chf_spec);
 }
 
 // We need:
@@ -154,6 +168,29 @@ fn create_specs() -> (
     )
 }
 
+/// Our own binding of instruments to their specifications.
+///
+/// The exchange gives us executions; the spec is reference data we own, so the
+/// registry lives on our side and a `Fill` resolves its spec through it.
+#[derive(Debug, Default)]
+pub struct Registry {
+    specs: HashMap<Instrument, Specification>,
+}
+
+impl Registry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn register(&mut self, instrument: Instrument, spec: Specification) {
+        self.specs.insert(instrument, spec);
+    }
+
+    pub fn spec(&self, instrument: &Instrument) -> Option<&Specification> {
+        self.specs.get(instrument)
+    }
+}
+
 /// Simple placeholder fill on an instrument, using the typed `Quantity`/`Price`.
 #[derive(Debug)]
 pub struct Fill<'a> {
@@ -172,4 +209,43 @@ impl<'a> Fill<'a> {
             price,
         }
     }
+
+    /// Signed cashflow of the fill in the instrument's settlement currency.
+    ///
+    /// The spec is looked up from the registry by the fill's instrument.
+    pub fn signed_cashflow(&self, registry: &Registry) -> CurrencyNotional {
+        let spec = registry
+            .spec(self.instrument)
+            .expect("instrument must be registered");
+        let quote_notional = self.quantity * self.price;
+        // TODO: Mul for Side and QuoteNotional?
+        let signed = match self.side {
+            Side::Buy => -quote_notional,
+            Side::Sell => quote_notional,
+        };
+        spec.currency_notional(signed)
+    }
+}
+
+/// Sums signed cashflow per price-quotation asset.
+///
+/// Each fill resolves its spec from the registry. Grouping by price-quotation
+/// asset keeps one currency per bucket, so the `CurrencyNotional` `Add` never
+/// has to mix currencies (it would panic otherwise).
+pub fn signed_cashflow_by_currency<'a>(
+    fills: &[Fill<'a>],
+    registry: &Registry,
+) -> HashMap<&'a Asset, CurrencyNotional> {
+    let mut cashflow_by_currency = HashMap::new();
+    for fill in fills {
+        let price_quotation = fill.instrument.price_quotation();
+        let cashflow = fill.signed_cashflow(registry);
+
+        cashflow_by_currency
+            .entry(price_quotation)
+            .and_modify(|acc: &mut CurrencyNotional| *acc = *acc + cashflow)
+            .or_insert(cashflow);
+    }
+
+    cashflow_by_currency
 }
