@@ -243,7 +243,51 @@ include!(concat!(env!("OUT_DIR"), "/currency_generated.rs"));
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    use crate::currency::CurrencyTag;
     use crate::{ascii_code::AsciiCode, currency::Currency};
+
+    fn hash_of<T: Hash>(value: &T) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[test]
+    fn currency_eq_and_hash_are_code_only() {
+        let code = AsciiCode::try_from("USD").expect("code");
+        let numeric = AsciiCode::try_from("000").expect("code");
+        // Same alphabetic code, every other field deliberately wrong.
+        let real = Currency::usd();
+        let fake = Currency::new("Not A Dollar", code, numeric, 9);
+
+        // Equal by code, so Eq/Hash must agree despite the differing fields.
+        assert_eq!(real, fake);
+        assert_eq!(hash_of(&real), hash_of(&fake));
+
+        // And they must collide as the same HashMap key.
+        let mut map = HashMap::new();
+        map.insert(fake, 7);
+        assert_eq!(map.get(&real), Some(&7));
+    }
+
+    #[test]
+    fn currency_tag_eq_and_hash_are_code_only() {
+        let code = AsciiCode::try_from("USD").expect("code");
+        // Same code, different precision.
+        let a = CurrencyTag::new(code, 2);
+        let b = CurrencyTag::new(code, 9);
+
+        assert_eq!(a, b);
+        assert_eq!(hash_of(&a), hash_of(&b));
+
+        let mut map = HashMap::new();
+        map.insert(a, 7);
+        assert_eq!(map.get(&b), Some(&7));
+    }
 
     #[test]
     fn check_registry() {

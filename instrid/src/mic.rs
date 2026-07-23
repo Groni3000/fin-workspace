@@ -533,6 +533,30 @@ mod tests {
     }
 
     #[test]
+    fn eq_and_hash_agree_and_key_a_hashmap() {
+        use std::collections::HashMap;
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        fn hash_of(mic: &Mic) -> u64 {
+            let mut hasher = DefaultHasher::new();
+            mic.hash(&mut hasher);
+            hasher.finish()
+        }
+
+        // Equal Mics must hash equal (the Eq/Hash contract).
+        assert_eq!(Mic::xnas(), Mic::xnas());
+        assert_eq!(hash_of(&Mic::xnas()), hash_of(&Mic::xnas()));
+        assert_ne!(hash_of(&Mic::xnas()), hash_of(&Mic::xlon()));
+
+        // And Mic works as a HashMap key.
+        let mut map = HashMap::new();
+        map.insert(Mic::xnas(), "nasdaq");
+        assert_eq!(map.get(&Mic::xnas()), Some(&"nasdaq"));
+        assert_eq!(map.get(&Mic::xlon()), None);
+    }
+
+    #[test]
     fn unknown_code_returns_none() {
         assert!(mic_by_code("ZZZZ").is_none());
     }
