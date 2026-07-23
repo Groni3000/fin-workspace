@@ -68,40 +68,70 @@ fn main() {
     ];
 
     header("signed cashflow by currency");
-    for (asset, notional) in &signed_cashflow_by_currency(&fills, &registry) {
-        println!("  {asset}: {notional}");
-    }
+    print_aligned(
+        "  ",
+        signed_cashflow_by_currency(&fills, &registry)
+            .into_iter()
+            .map(|(asset, notional)| (asset.to_string(), notional)),
+    );
     println!();
 
     header("signed cashflow by base");
     for (base, by_quote) in &signed_cashflow_by_base(&fills, &registry) {
         println!("  {base}:");
-        for (quote, notional) in by_quote {
-            println!("        {quote}: {notional}");
-        }
+        print_aligned(
+            "        ",
+            by_quote
+                .iter()
+                .map(|(quote, notional)| (quote.to_string(), *notional)),
+        );
     }
     println!();
 
     header("fills by asset class");
-    for (class, class_fills) in &fills_by_asset_class(&fills) {
-        println!("  {class}: {} fills", class_fills.len());
-    }
+    print_aligned(
+        "  ",
+        fills_by_asset_class(&fills)
+            .into_iter()
+            .map(|(class, class_fills)| {
+                (class.to_string(), format!("{} fills", class_fills.len()))
+            }),
+    );
     println!();
 
     header("signed cashflow by asset class");
-    for ((class, quote), notional) in &signed_cashflow_by_asset_class(&fills, &registry) {
-        println!("  ({class}, {quote}): {notional}");
-    }
+    print_aligned(
+        "  ",
+        signed_cashflow_by_asset_class(&fills, &registry)
+            .into_iter()
+            .map(|((class, quote), notional)| (format!("({class}, {quote})"), notional)),
+    );
     println!();
 
     header("realized pnl per instrument (flat positions only, no FIFO/LIFO matcher yet)");
-    for (instrument, pnl) in &realized_pnl_by_instrument_for_flat_positions(&fills, &registry) {
-        println!("  {instrument}: {pnl}");
-    }
+    print_aligned(
+        "  ",
+        realized_pnl_by_instrument_for_flat_positions(&fills, &registry)
+            .into_iter()
+            .map(|(instrument, pnl)| (instrument.to_string(), pnl)),
+    );
 }
 
 fn header(title: &str) {
     println!("\x1b[4m{title}\x1b[0m");
+}
+
+/// To make results prettier
+fn print_aligned<V: std::fmt::Display>(indent: &str, rows: impl IntoIterator<Item = (String, V)>) {
+    let rows: Vec<(String, V)> = rows.into_iter().collect();
+    let width = rows
+        .iter()
+        .map(|(k, _)| k.chars().count())
+        .max()
+        .unwrap_or(0);
+    for (key, value) in rows {
+        println!("{indent}{key:<width$}: {value}");
+    }
 }
 
 fn qty(s: &str) -> Quantity {
