@@ -51,12 +51,12 @@ impl Specification {
     ///
     /// Example of such case:
     /// - ZW - CME spec says its `tick_size_price` is 1/4 of a cent and write 0.0025
-    ///     and you may think that you can just copy-paste its value like you do with other
-    ///     futures contracts. But no, 1/4 of a cent is 0.25, but CME shows 0.0025 which is in major
-    ///     form - wrong one, price is in minor.
-    ///     So we should use 0.25. For an explanation, look at README.md, ZW example.
-    ///     So the correct values are:
-    ///     `(0.25, (12.5, USD))` - you can't copy-paste values from CME specification.
+    ///   and you may think that you can just copy-paste its value like you do with other
+    ///   futures contracts. But no, 1/4 of a cent is 0.25, but CME shows 0.0025 which is in major
+    ///   form - wrong one, price is in minor.
+    ///   So we should use 0.25. For an explanation, look at README.md, ZW example.
+    ///   So the correct values are:
+    ///   `(0.25, (12.5, USD))` - you can't copy-paste values from CME specification.
     ///
     /// So, fill a spec **once**, verify by hand and reuse specs.
     pub fn new(tick_size_price: Price, tick_size_currency: (Price, Currency)) -> Option<Self> {
