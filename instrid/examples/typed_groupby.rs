@@ -51,18 +51,35 @@ fn main() {
         Fill::new(&XAU_CHF, Side::Buy, qty("2"), px("2400.0")),
     ];
 
-    println!("signed cashflow by currency:");
+    header("signed cashflow by currency");
     for (asset, notional) in &signed_cashflow_by_currency(&fills, &registry) {
         println!("  {asset:?}: {notional}");
     }
+    println!();
 
-    println!("signed cashflow by base:");
+    header("signed cashflow by base");
     for (base, by_quote) in &signed_cashflow_by_base(&fills, &registry) {
         println!("  {base:?}:");
         for (quote, notional) in by_quote {
             println!("        {quote:?}: {notional}");
         }
     }
+    println!();
+
+    header("fills by asset class");
+    for (class, class_fills) in &fills_by_asset_class(&fills) {
+        println!("  {class:?}: {} fills", class_fills.len());
+    }
+    println!();
+
+    header("signed cashflow by asset class");
+    for ((class, quote), notional) in &signed_cashflow_by_asset_class(&fills, &registry) {
+        println!("  ({class:?}, {quote:?}): {notional}");
+    }
+}
+
+fn header(title: &str) {
+    println!("\x1b[4m{title}\x1b[0m");
 }
 
 fn qty(s: &str) -> Quantity {
@@ -303,4 +320,40 @@ pub fn signed_cashflow_by_base<'a>(
     }
 
     cashflow_by_base
+}
+
+/// Buckets fills by the base asset's class. No summation, so no currency concern.
+pub fn fills_by_asset_class<'a, 'b>(
+    fills: &'b [Fill<'a>],
+) -> HashMap<AssetClass, Vec<&'b Fill<'a>>> {
+    let mut grouped = HashMap::new();
+    for fill in fills {
+        let class = fill.instrument.base().class();
+        grouped.entry(class).or_insert_with(Vec::new).push(fill);
+    }
+
+    grouped
+}
+
+/// Sums signed cashflow by (base asset class, price-quotation asset).
+///
+/// The price-quotation asset is part of the key, so each bucket is one currency
+/// and the `CurrencyNotional` `Add` never mixes currencies.
+pub fn signed_cashflow_by_asset_class<'a>(
+    fills: &[Fill<'a>],
+    registry: &Registry,
+) -> HashMap<(AssetClass, &'a Asset), CurrencyNotional> {
+    let mut grouped = HashMap::new();
+    for fill in fills {
+        let base_class = fill.instrument.base().class();
+        let price_quotation = fill.instrument.price_quotation();
+        let cashflow = fill.signed_cashflow(registry);
+
+        grouped
+            .entry((base_class, price_quotation))
+            .and_modify(|acc: &mut CurrencyNotional| *acc = *acc + cashflow)
+            .or_insert(cashflow);
+    }
+
+    grouped
 }
