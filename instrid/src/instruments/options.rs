@@ -22,7 +22,7 @@ pub struct OptionContract {
 ///
 /// **Exercise style agnostic.**
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum OptionKind {
     /// Put = right to **sell** the underlying at the strike,
     /// the **exercise style** (European/American/Bermudan)
@@ -50,7 +50,7 @@ impl Display for OptionKind {
 /// Represents the exercise style of an option contract,
 /// determining when the right can be exercised.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum ExerciseStyle {
     /// European = the right can be exercised only at the expiration date.
     European,

@@ -15,7 +15,7 @@ use std::{fmt::Display, num::ParseIntError, str::FromStr};
 /// But for now, no math operations are implemented.
 /// For now this struct can be used for retrieving price values from the API or sending orders.
 /// Though `Notional` is probably gonna be implemented in the end.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Price {
     value: i64,
 }

@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use std::fmt::Display;
+use std::hash::{Hash, Hasher};
 
 use crate::ascii_code::{AsciiCode, AsciiCodeError};
 
@@ -16,7 +17,7 @@ use crate::ascii_code::{AsciiCode, AsciiCodeError};
 /// `include!` at the bottom of this file — same mechanism as `Mic`.
 ///
 /// Every field is a string except `precision`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct Currency {
     /// Human-readable currency name, e.g. "US Dollar".
     name: &'static str,
@@ -111,9 +112,31 @@ impl CurrencyTag {
     }
 }
 
+impl PartialEq for Currency {
+    fn eq(&self, other: &Self) -> bool {
+        self.alphabetic_code == other.alphabetic_code
+    }
+}
+
+impl Eq for Currency {}
+
+impl Hash for Currency {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.alphabetic_code.hash(state);
+    }
+}
+
 impl PartialEq for CurrencyTag {
     fn eq(&self, other: &Self) -> bool {
         self.alphabetic_code == other.alphabetic_code
+    }
+}
+
+impl Eq for CurrencyTag {}
+
+impl Hash for CurrencyTag {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.alphabetic_code.hash(state);
     }
 }
 
@@ -122,8 +145,6 @@ impl From<Currency> for CurrencyTag {
         CurrencyTag::new(value.alphabetic_code, value.precision)
     }
 }
-
-impl Eq for CurrencyTag {}
 
 static CURRENCY_RECORDS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/currency_records.bin"));
 static CURRENCY_STRINGS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/currency_strings.bin"));

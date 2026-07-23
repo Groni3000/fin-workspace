@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "serde")]
 use std::borrow::Cow;
 use std::cmp::Eq;
+use std::hash::{Hash, Hasher};
 use std::{fmt::Display, str::FromStr};
 use tradeprim::ascii_code::AsciiCode;
 
@@ -100,6 +101,12 @@ impl PartialEq for Mic {
 }
 
 impl Eq for Mic {}
+
+impl Hash for Mic {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.code.hash(state);
+    }
+}
 
 impl Display for Mic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
