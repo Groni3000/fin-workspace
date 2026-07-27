@@ -42,7 +42,10 @@ impl EndOfTrading for NthCalendarDayOfCurrentMonth {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use instrid::prelude::{Asset, AssetClass, MicIso, Tenor};
+    use instrid::{
+        mic::Mic,
+        prelude::{Asset, AssetClass, Tenor},
+    };
     use tradeprim::currency::Currency;
 
     /// https://www.eurex.com/ex-en/markets/int/fix/government-bonds/Euro-Bund-Futures-137298
@@ -55,7 +58,7 @@ mod tests {
         FuturesContract::new(
             Asset::new("FGBL", AssetClass::FixedIncome).expect("Asset got incorrect parameters"),
             Asset::new("EUR", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            MicIso::xeur(),
+            Mic::xeur(),
             Currency::eur(),
             year,
             tenor,

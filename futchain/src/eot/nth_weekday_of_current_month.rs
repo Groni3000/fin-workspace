@@ -36,14 +36,17 @@ impl EndOfTrading for NthWeekdayOfCurrentMonth {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use instrid::prelude::{Asset, AssetClass, MicIso, Tenor};
+    use instrid::{
+        mic::Mic,
+        prelude::{Asset, AssetClass, Tenor},
+    };
     use tradeprim::currency::Currency;
 
     fn es(year: u16, tenor: Tenor) -> FuturesContract {
         FuturesContract::new(
             Asset::new("ES", AssetClass::Index).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            MicIso::xcme(),
+            Mic::xcme(),
             Currency::usd(),
             year,
             tenor,

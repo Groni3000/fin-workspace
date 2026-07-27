@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "serde")]
 use std::borrow::Cow;
 use std::cmp::Eq;
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::{fmt::Display, str::FromStr};
 use tradeprim::ascii_code::AsciiCode;
@@ -91,6 +92,74 @@ impl MicIso {
             expiry_date,
             comments,
         }
+    }
+
+    pub fn code(&self) -> AsciiCode<4> {
+        self.code
+    }
+
+    pub fn operating(&self) -> AsciiCode<4> {
+        self.operating
+    }
+
+    pub fn mic_type(&self) -> MicType {
+        self.mic_type
+    }
+
+    pub fn market_name(&self) -> &'static str {
+        self.market_name
+    }
+
+    pub fn legal_entity_name(&self) -> Option<&'static str> {
+        self.legal_entity_name
+    }
+
+    pub fn lei_code(&self) -> Option<AsciiCode<20>> {
+        self.lei_code
+    }
+
+    pub fn market_category_code(&self) -> MarketCategoryCode {
+        self.market_category_code
+    }
+
+    pub fn acronym(&self) -> Option<&'static str> {
+        self.acronym
+    }
+
+    pub fn iso_country_code(&self) -> AsciiCode<2> {
+        self.iso_country_code
+    }
+
+    pub fn city(&self) -> &'static str {
+        self.city
+    }
+
+    pub fn website(&self) -> Option<&'static str> {
+        self.website
+    }
+
+    pub fn status(&self) -> MicStatus {
+        self.status
+    }
+
+    pub fn creation_date(&self) -> Date {
+        self.creation_date
+    }
+
+    pub fn last_update_date(&self) -> Date {
+        self.last_update_date
+    }
+
+    pub fn last_validation_date(&self) -> Option<Date> {
+        self.last_validation_date
+    }
+
+    pub fn expiry_date(&self) -> Option<Date> {
+        self.expiry_date
+    }
+
+    pub fn comments(&self) -> Option<&'static str> {
+        self.comments
     }
 }
 
@@ -341,7 +410,61 @@ impl<'de> Deserialize<'de> for MicIso {
         D: serde::Deserializer<'de>,
     {
         let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
-        mic_by_code(&s).ok_or_else(|| serde::de::Error::custom(format!("MIC not found: {s}")))
+        mic_iso_by_code(&s).ok_or_else(|| serde::de::Error::custom(format!("MIC not found: {s}")))
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Mic {
+    code: AsciiCode<4>,
+}
+
+impl Mic {
+    pub fn code(&self) -> AsciiCode<4> {
+        self.code
+    }
+}
+
+impl Debug for Mic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.code().as_str())
+    }
+}
+
+impl From<MicIso> for Mic {
+    fn from(value: MicIso) -> Self {
+        Mic { code: value.code }
+    }
+}
+
+impl Display for Mic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.code.as_str())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for Mic {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_str(&self.code)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for Mic {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let code: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
+        mic_iso_by_code(&code)
+            .and_then(|x| Some(Into::<Mic>::into(x)))
+            .ok_or_else(|| {
+                serde::de::Error::custom(format!("Couldn't find MIC for code: {}", code))
+            })
     }
 }
 
@@ -405,9 +528,13 @@ fn registry() -> &'static HashMap<[u8; 4], MicIso> {
 /// assert!(mic_by_code("ZZZZ").is_none());
 /// assert!(mic_by_code("XNA").is_none());   // wrong length
 /// ```
-pub fn mic_by_code(code: &str) -> Option<MicIso> {
+pub fn mic_iso_by_code(code: &str) -> Option<MicIso> {
     let bytes: &[u8; 4] = code.as_bytes().try_into().ok()?;
     registry().get(bytes).copied()
+}
+
+pub fn mic_by_code(code: &str) -> Option<Mic> {
+    mic_iso_by_code(code).map(Mic::from)
 }
 
 fn parse_record(r: &[u8]) -> MicIso {
@@ -529,7 +656,7 @@ mod tests {
 
     #[test]
     fn xnas_lookup_returns_some() {
-        assert!(mic_by_code("XNAS").is_some());
+        assert!(mic_iso_by_code("XNAS").is_some());
     }
 
     #[test]
@@ -558,14 +685,14 @@ mod tests {
 
     #[test]
     fn unknown_code_returns_none() {
-        assert!(mic_by_code("ZZZZ").is_none());
+        assert!(mic_iso_by_code("ZZZZ").is_none());
     }
 
     #[test]
     fn wrong_length_returns_none() {
-        assert!(mic_by_code("XNA").is_none());
-        assert!(mic_by_code("XNASD").is_none());
-        assert!(mic_by_code("").is_none());
+        assert!(mic_iso_by_code("XNA").is_none());
+        assert!(mic_iso_by_code("XNASD").is_none());
+        assert!(mic_iso_by_code("").is_none());
     }
 
     /// Hits `visit_borrowed_str(&'de str)`
@@ -573,7 +700,7 @@ mod tests {
     #[test]
     fn full_registry_includes_obscure_mic() {
         // Present only in the full registry, not in the curated set.
-        assert!(mic_by_code("DRSP").is_some());
+        assert!(mic_iso_by_code("DRSP").is_some());
     }
 
     /// Hits `visit_str(&str)`
@@ -630,7 +757,7 @@ mod tests {
     #[test]
     fn serialize_full_registry_mic() {
         // Present only in the full registry, not in the curated set.
-        let mic = mic_by_code("DRSP").expect("Mic not found");
+        let mic = mic_iso_by_code("DRSP").expect("Mic not found");
         let serialized = serde_json::to_string(&mic).expect("Mic should be serializable");
         let expected = "\"DRSP\"";
 
@@ -642,7 +769,7 @@ mod tests {
     fn deserialize_full_registry_mic() {
         let mic_str = "\"DRSP\"";
         let mic: MicIso = serde_json::from_str(&mic_str).expect("Mic should be deserializable");
-        let expected = mic_by_code("DRSP").expect("Mic not found");
+        let expected = mic_iso_by_code("DRSP").expect("Mic not found");
 
         assert_eq!(mic, expected);
     }

@@ -129,6 +129,7 @@ fn main() {
     let mut strings: Vec<u8> = Vec::new();
     let mut intern: HashMap<String, (u32, u16)> = HashMap::new();
     let mut ctors = String::new();
+    let mut tag_ctors = String::new();
     let mut count = 0usize;
 
     for record in reader.records() {
@@ -169,6 +170,11 @@ fn main() {
                 "    /// {market_name} (`{code}`, {kind}).\n    pub const fn {fn_name}() -> Self {{ {expr} }}",
             )
             .unwrap();
+            writeln!(
+                tag_ctors,
+                "    /// {market_name} (`{code}`, {kind}).\n    pub const fn {fn_name}() -> Self {{ Mic {{ code: AsciiCode::new(*b\"{code}\").unwrap() }} }}",
+            )
+            .unwrap();
         }
 
         count += 1;
@@ -187,11 +193,19 @@ fn main() {
 /// Curated MIC constructors. Always compiled in regardless of features.
 impl MicIso {{
 {ctors}}}
+
+/// Curated `Mic` (4-byte code) constructors. Always compiled in regardless of
+/// features. These are the const-friendly ones: no registry lookup, no
+/// metadata, just the validated code. Use `Mic::resolve` / `mic_iso_by_code`
+/// when you actually need the ISO record.
+impl Mic {{
+{tag_ctors}}}
 "#,
         csv = CSV_PATH,
         bytes = records.len(),
         strs = strings.len(),
     );
+
     fs::write(out_dir.join("mic_generated.rs"), body)
         .expect("build.rs: failed to write mic_generated.rs");
 }

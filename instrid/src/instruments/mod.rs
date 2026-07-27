@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use crate::{asset::Asset, mic::MicIso};
+use crate::{asset::Asset, mic::Mic};
 
 pub mod futures;
 pub mod options;
@@ -34,7 +34,7 @@ pub trait TradedInstrument {
     /// Returns a reference to the price quotation asset of this instrument.
     fn price_quotation(&self) -> &Asset;
     /// Returns a reference to the MIC of this instrument.
-    fn mic(&self) -> &MicIso;
+    fn mic(&self) -> &Mic;
     /// Returns a settlement currency.
     fn settlement_currency(&self) -> &Currency;
 }
@@ -56,7 +56,7 @@ impl TradedInstrument for Instrument {
         }
     }
 
-    fn mic(&self) -> &MicIso {
+    fn mic(&self) -> &Mic {
         match self {
             Instrument::Stock(stock) => stock.mic(),
             Instrument::Futures(futures) => futures.mic(),
@@ -112,6 +112,7 @@ mod tests {
     #[cfg(feature = "serde")]
     use crate::_assert_owned;
     use crate::asset::AssetClass;
+    use crate::mic::MicIso;
     use crate::tenor::Tenor;
 
     use super::*;
@@ -120,7 +121,7 @@ mod tests {
         Stock::new(
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            MicIso::xnas(),
+            MicIso::xnas().into(),
             Currency::usd(),
         )
     }
@@ -129,7 +130,7 @@ mod tests {
         FuturesContract::new(
             Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            MicIso::xnas(),
+            MicIso::xnas().into(),
             Currency::usd(),
             2026,
             Tenor::June,
@@ -142,7 +143,7 @@ mod tests {
         OptionContract::new(
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            MicIso::xnas(),
+            Mic::xnas(),
             Currency::usd(),
             2025,
             Tenor::December,

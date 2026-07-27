@@ -13,7 +13,7 @@ fn main() -> Result<(), FrdMdError> {
     let instrument: FuturesContract = FuturesContract::new(
         Asset::new("RB", instrid::asset::AssetClass::Commodity).expect("Failed to create Asset"),
         Asset::new("USD", instrid::asset::AssetClass::Currency).expect("Failed to create Asset"),
-        MicIso::xnym(),
+        MicIso::xnym().into(),
         Currency::usd(),
         2025,
         Tenor::December,
