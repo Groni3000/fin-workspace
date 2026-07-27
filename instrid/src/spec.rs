@@ -63,10 +63,13 @@ impl Specification {
         if tick_size_price <= Price::ZERO || tick_size_price > Price::ONE {
             return None;
         }
-        let point_value = PointValue::new(
-            (tick_size_currency.0.value() as i128 * PointValue::SCALE)
-                / tick_size_price.value() as i128,
-        )?;
+        let numerator = tick_size_currency.0.value() as i128 * PointValue::SCALE;
+        let denominator = tick_size_price.value() as i128;
+        // Not representable in 9 digits
+        if numerator % denominator != 0 {
+            return None;
+        }
+        let point_value = PointValue::new(numerator / denominator)?;
         Some(Self {
             tick_size_price,
             tick_size_currency,
@@ -507,5 +510,63 @@ mod tests {
             cn,
             CurrencyNotional::new(382812500000000, Currency::usd().into())
         )
+    }
+
+    /// `currency_notional` must round its final divide to the nearest 1e-9,
+    /// not truncate (I was wrong :/ ).
+    ///
+    /// point_value = 0.95 / 0.5 = 1.9 (exact).
+    ///
+    /// With qn = 1e-9 the true product is 1.9e-9,
+    /// whose nearest 1e-9 is 2e-9 — truncation would give 1e-9.
+    ///
+    /// This should never happen in real life though.
+    #[test]
+    fn currency_notional_rounds_to_nearest_positive() {
+        let spec = Specification::new(
+            Price::from_str_unchecked("0.5"),
+            (Price::from_str_unchecked("0.95"), Currency::usd()),
+        )
+        .unwrap();
+        let qn = QuoteNotional::from_str_unchecked("0.000000001");
+        assert_eq!(
+            spec.currency_notional(qn),
+            CurrencyNotional::new(2, Currency::usd().into()),
+            "1.9e-9 must round to 2e-9, not to 1e-9"
+        );
+    }
+
+    /// Same magnitude, opposite sign.
+    #[test]
+    fn currency_notional_rounds_symmetrically_for_negatives() {
+        let spec = Specification::new(
+            Price::from_str_unchecked("0.5"),
+            (Price::from_str_unchecked("0.95"), Currency::usd()),
+        )
+        .unwrap();
+        let qn = QuoteNotional::from_str_unchecked("-0.000000001");
+        assert_eq!(
+            spec.currency_notional(qn),
+            CurrencyNotional::new(-2, Currency::usd().into()),
+            "-1.9e-9 must round to -2e-9, symmetric with the positive case"
+        );
+    }
+
+    /// A spec whose `point_value` (`tick_size_currency.0 / tick_size_price`)
+    /// does not terminate within 9 digits must be rejected at construction,
+    /// rather than silently truncating and losing a ULP downstream.
+    ///
+    /// This should never happen in real life though.
+    #[test]
+    fn new_rejects_non_terminating_point_value() {
+        // 0.01 / 0.03 = 1/3 — not representable in 9-digit fixed point.
+        assert!(
+            Specification::new(
+                Price::from_str_unchecked("0.03"),
+                (Price::from_str_unchecked("0.01"), Currency::usd()),
+            )
+            .is_none(),
+            "non-terminating tick ratio must be rejected"
+        );
     }
 }
