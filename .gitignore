@@ -23,6 +23,7 @@ comptime_test
 
 # My notes
 architecture.md
+things_to_fix
 
 # Profiler
 profile.json.gz
