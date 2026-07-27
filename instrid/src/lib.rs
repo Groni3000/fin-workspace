@@ -5,6 +5,10 @@ pub mod mic;
 pub mod spec;
 pub mod tenor;
 
+// TODO:
+//  - serde deserializes Cow always using Owned arm...
+//    It seems I need to write my visitors to get rid of allocations (for 2/3 cases).
+
 /// Common imports for users of this crate.
 ///
 /// ```
