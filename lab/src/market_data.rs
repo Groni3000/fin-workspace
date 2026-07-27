@@ -7,7 +7,6 @@ use std::{
 
 use chrono::{DateTime, Utc};
 use futchain::FutChain;
-use instrid::instruments::TradedInstrument;
 use tradeprim::price::Price;
 
 use crate::{FrdCandle, FrdCandleParsingError};

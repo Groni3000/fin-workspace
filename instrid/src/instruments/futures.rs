@@ -76,6 +76,22 @@ impl FuturesContract {
     pub fn day(&self) -> Option<u8> {
         self.day
     }
+
+    pub fn base(&self) -> &Asset {
+        &self.base
+    }
+
+    pub fn price_quotation(&self) -> &Asset {
+        &self.price_quotation
+    }
+
+    pub fn mic(&self) -> &Mic {
+        &self.mic
+    }
+
+    pub fn settlement_currency(&self) -> &Currency {
+        &self.settlement_currency
+    }
 }
 
 impl TradedInstrument for FuturesContract {

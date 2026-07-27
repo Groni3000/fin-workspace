@@ -20,7 +20,7 @@ pub struct Asset {
 
 impl Asset {
     pub const fn new(
-        name: &'static str,
+        name: &str,
         class: AssetClass,
     ) -> Result<Self, crate::inline_str::InlineStrError> {
         let asset_name = match AssetName::new(name) {

@@ -14,7 +14,7 @@ use tradeprim::currency::Currency;
 /// Represents a trading instrument.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Instrument {
     Stock(Stock),
     Futures(FuturesContract),

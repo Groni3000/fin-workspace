@@ -4,7 +4,7 @@ use tradeprim::{currency::Currency, prelude::Price};
 use crate::{asset::Asset, mic::Mic, prelude::TradedInstrument, tenor::Tenor};
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct OptionContract {
     base: Asset,
     price_quotation: Asset,
@@ -22,7 +22,7 @@ pub struct OptionContract {
 ///
 /// **Exercise style agnostic.**
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum OptionKind {
     /// Put = right to **sell** the underlying at the strike,
     /// the **exercise style** (European/American/Bermudan)
@@ -50,7 +50,7 @@ impl Display for OptionKind {
 /// Represents the exercise style of an option contract,
 /// determining when the right can be exercised.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ExerciseStyle {
     /// European = the right can be exercised only at the expiration date.
     European,
@@ -104,6 +104,42 @@ impl OptionContract {
 
     pub fn settlement_currency(&self) -> &Currency {
         &self.settlement_currency
+    }
+
+    pub fn base(&self) -> &Asset {
+        &self.base
+    }
+
+    pub fn price_quotation(&self) -> &Asset {
+        &self.price_quotation
+    }
+
+    pub fn mic(&self) -> &Mic {
+        &self.mic
+    }
+
+    pub fn year(&self) -> u16 {
+        self.year
+    }
+
+    pub fn tenor(&self) -> Tenor {
+        self.tenor
+    }
+
+    pub fn day(&self) -> u8 {
+        self.day
+    }
+
+    pub fn kind(&self) -> OptionKind {
+        self.kind
+    }
+
+    pub fn style(&self) -> ExerciseStyle {
+        self.style
+    }
+
+    pub fn strike(&self) -> Price {
+        self.strike
     }
 }
 

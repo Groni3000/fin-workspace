@@ -15,7 +15,7 @@ pub trait Spec {
 }
 
 /// Represents the essential trading specification parameters.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Specification {
     tick_size_price: Price,
     tick_size_currency: (Price, Currency),
