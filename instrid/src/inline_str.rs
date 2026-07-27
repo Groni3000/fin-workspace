@@ -14,6 +14,8 @@
 //! longer than 12 chars (at least to my knowledge),
 //! we can build our own bounded string representation
 
+#[cfg(feature = "serde")]
+use std::borrow::Cow;
 use std::fmt::Display;
 
 #[cfg(feature = "serde")]
@@ -128,12 +130,45 @@ impl<'de, const N: usize> Deserialize<'de> for InlineStr<N> {
     where
         D: serde::Deserializer<'de>,
     {
-        let s: &str = serde::Deserialize::deserialize(deserializer)?;
-        Self::new(s).map_err(|e| match e {
+        let s: Cow<'de, str> = serde::Deserialize::deserialize(deserializer)?;
+        Self::new(&s).map_err(|e| match e {
             InlineStrError::TooLong { got, cap } => serde::de::Error::custom(format!(
                 "string too long: got {got} bytes, capacity {cap}"
             )),
             InlineStrError::NotAscii => serde::de::Error::custom("string contains non-ASCII bytes"),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::inline_str::InlineStr;
+    #[cfg(feature = "serde")]
+    use serde_json::json;
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn deserialize_inline_str() {
+        let expected = InlineStr::<12>::new("XCEC").unwrap();
+        // from_reader can NEVER borrow from `'de` (bytes live in a read buffer),
+        // Hits `visit_str(&str)`
+        let json = "\"XCEC\"";
+        let reader = std::io::Cursor::new(json.as_bytes().to_vec());
+        let inline_str: InlineStr<12> =
+            serde_json::from_reader(reader).expect("from_reader should work");
+        assert_eq!(inline_str, expected);
+
+        // Hits `visit_borrowed_str(&'de str)`
+        let input = "XCEC".to_string();
+        let val = json!(&input);
+        let inline_str: InlineStr<12> =
+            serde_json::from_value(val).expect("from_value should work");
+        assert_eq!(inline_str, expected);
+
+        // Hits `visit_string(String)`
+        let val = json!("XCEC");
+        let inline_str: InlineStr<12> =
+            serde_json::from_value(val).expect("from_value should work");
+        assert_eq!(inline_str, expected);
     }
 }
