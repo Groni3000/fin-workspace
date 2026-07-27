@@ -3,6 +3,6 @@
 members = [
     "instrid",
     "futchain",
-    "tradeprim", "oms", "lab",
+    "tradeprim", "oms", "lab", "comptime_test",
 ]
 resolver = "2"

@@ -181,6 +181,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "comptime_test"
+version = "0.1.0"
+dependencies = [
+ "tradeprim",
+]
+
+[[package]]
 name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -378,8 +385,6 @@ version = "0.1.0"
 dependencies = [
  "csv",
  "proptest",
- "rust_decimal",
- "rust_decimal_macros",
  "serde",
  "serde_json",
  "tradeprim",

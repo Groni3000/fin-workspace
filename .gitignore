@@ -17,3 +17,12 @@ NOTES.md
 
 # Data
 lab/data/files/futures/frd/*.txt
+
+# Some testing
+comptime_test
+
+# My notes
+architecture.md
+
+# Profiler
+profile.json.gz
