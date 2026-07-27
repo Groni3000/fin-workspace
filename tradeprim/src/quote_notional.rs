@@ -111,6 +111,7 @@ impl QuoteNotional {
     /// -0.5 -> -1, -0.4 -> 0.0
     ///
     /// Assuming `min < value < max` of `QuoteNotional`
+    #[inline]
     pub const fn round(value: i128) -> i128 {
         // 0.05 == 500_000
         // (500_000 + 1_000_000_000 / 2) / 1_000_000_000

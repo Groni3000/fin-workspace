@@ -96,7 +96,7 @@ impl Spec for Specification {
         // QuoteNotional is already half-away-rounded upstream,
         // so truncating the final divide only drops sub-1e-9 noise
         CurrencyNotional::new(
-            self.point_value.0 * quote_notional.value() / CurrencyNotional::SCALE,
+            QuoteNotional::round(self.point_value.0 * quote_notional.value()),
             self.tick_size_currency.1.into(),
         )
     }
