@@ -55,7 +55,7 @@ mod tests {
     /// Last trading day: 2 business days before delivery day
     /// Succeeding mode
     fn fgbl(year: u16, tenor: Tenor) -> FuturesContract {
-        FuturesContract::new(
+        FuturesContract::new_unchecked(
             Asset::new("FGBL", AssetClass::FixedIncome).expect("Asset got incorrect parameters"),
             Asset::new("EUR", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xeur(),

@@ -12,6 +12,10 @@ tradeprim = { path = "../tradeprim" }
 [dev-dependencies]
 proptest = "1.11.0"
 serde_json = { version = "1" }
+# Test-only oracle for calendar arithmetic: `days_in_month` and the instrument
+# constructors are property-checked against chrono. Deliberately NOT a runtime
+# dependency — `instrid` stays free of third-party deps.
+chrono = { version = "0.4.44", default-features = false, features = ["std"] }
 
 [build-dependencies]
 csv = { version = "1" }

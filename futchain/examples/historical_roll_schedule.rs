@@ -41,7 +41,7 @@ fn main() {
     // Begin at a contract whose EOT is on/after backtest_start. Easy way:
     // start somewhere safely in the past and roll forward to the first
     // not-yet-expired contract.
-    let seed = FuturesContract::new(
+    let seed = FuturesContract::new_unchecked(
         Asset::new("GC", AssetClass::Commodity).expect("Asset got incorrect parameters"),
         Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xnym(),

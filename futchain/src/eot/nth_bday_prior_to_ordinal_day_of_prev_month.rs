@@ -68,7 +68,7 @@ mod tests {
     // FND = EOT + 2 BDay => EOT - 3 business day before
     // the 25th calendar day of the month prior to the contract month
     fn cl(year: u16, tenor: Tenor) -> FuturesContract {
-        FuturesContract::new(
+        FuturesContract::new_unchecked(
             Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnym(),

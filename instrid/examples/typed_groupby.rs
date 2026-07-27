@@ -177,7 +177,7 @@ const AAPL_XLON: Instrument = Instrument::Stock(Stock::new(
     Mic::xlon(),
     Currency::usd(),
 ));
-const ES_CME: Instrument = Instrument::Futures(FuturesContract::new(
+const ES_CME: Instrument = Instrument::Futures(FuturesContract::new_unchecked(
     unwrap_asset(Asset::new("ES", AssetClass::Index)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
     Mic::xcme(),
@@ -186,7 +186,7 @@ const ES_CME: Instrument = Instrument::Futures(FuturesContract::new(
     Tenor::June,
     None,
 ));
-const FDAX_EUREX: Instrument = Instrument::Futures(FuturesContract::new(
+const FDAX_EUREX: Instrument = Instrument::Futures(FuturesContract::new_unchecked(
     unwrap_asset(Asset::new("FDX", AssetClass::Index)),
     unwrap_asset(Asset::new("EUR", AssetClass::Currency)),
     Mic::xeur(),
@@ -232,7 +232,7 @@ const XAU_CHF: Instrument = Instrument::Stock(Stock::new(
 
 // CME Japanese Yen future: price is USD per JPY, so the tick is tiny
 // (0.0000005) and the point value is huge (12_500_000). Granular price.
-const JPY_6J: Instrument = Instrument::Futures(FuturesContract::new(
+const JPY_6J: Instrument = Instrument::Futures(FuturesContract::new_unchecked(
     unwrap_asset(Asset::new("JPY", AssetClass::Currency)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
     Mic::xcme(),

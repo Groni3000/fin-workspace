@@ -27,7 +27,7 @@ fn main() {
         Mic::xlon(),
         Currency::usd(),
     ));
-    let es_cme = Instrument::Futures(FuturesContract::new(
+    let es_cme = Instrument::Futures(FuturesContract::new_unchecked(
         Asset::new("ES", AssetClass::Index).expect("Asset got incorrect parameters"),
         Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xcme(),
@@ -36,7 +36,7 @@ fn main() {
         Tenor::June,
         None,
     ));
-    let fdax_eurex = Instrument::Futures(FuturesContract::new(
+    let fdax_eurex = Instrument::Futures(FuturesContract::new_unchecked(
         Asset::new("FDX", AssetClass::Index).expect("Asset got incorrect parameters"),
         Asset::new("EUR", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xeur(),

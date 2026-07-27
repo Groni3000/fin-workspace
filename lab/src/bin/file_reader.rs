@@ -10,7 +10,7 @@ use tradeprim::currency::Currency;
 
 fn main() -> Result<(), FrdMdError> {
     let dir = Path::new("lab/data/files/futures/frd");
-    let instrument: FuturesContract = FuturesContract::new(
+    let instrument: FuturesContract = FuturesContract::new_unchecked(
         Asset::new("RB", instrid::asset::AssetClass::Commodity).expect("Failed to create Asset"),
         Asset::new("USD", instrid::asset::AssetClass::Currency).expect("Failed to create Asset"),
         MicIso::xnym().into(),

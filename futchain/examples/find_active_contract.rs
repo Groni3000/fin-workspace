@@ -39,7 +39,7 @@ fn main() {
 
     // Start at a known-historical front month. Conservative: pick something
     // we know is in the past relative to `today`.
-    let start = FuturesContract::new(
+    let start = FuturesContract::new_unchecked(
         Asset::new("ES", AssetClass::Index).expect("Asset got incorrect parameters"),
         Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xcme(),

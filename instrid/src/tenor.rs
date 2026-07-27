@@ -48,7 +48,7 @@ impl TryFrom<u8> for Tenor {
 }
 
 impl Tenor {
-    pub fn ordinal(&self) -> u8 {
+    pub const fn ordinal(&self) -> u8 {
         *self as u8
     }
 

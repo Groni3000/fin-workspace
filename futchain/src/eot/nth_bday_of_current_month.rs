@@ -57,7 +57,7 @@ mod tests {
     /// HE@XCME - Lean Hogs. LTD is the 10th business day of the contract
     /// month with a -1 BDay defensive offset.
     fn he(year: u16, tenor: Tenor) -> FuturesContract {
-        FuturesContract::new(
+        FuturesContract::new_unchecked(
             Asset::new("HE", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xcme(),

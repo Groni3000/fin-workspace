@@ -127,7 +127,7 @@ mod tests {
     }
 
     fn cl_future() -> FuturesContract {
-        FuturesContract::new(
+        FuturesContract::new_unchecked(
             Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             MicIso::xnas().into(),
@@ -140,7 +140,7 @@ mod tests {
 
     #[cfg(feature = "serde")]
     fn aapl_option() -> OptionContract {
-        OptionContract::new(
+        OptionContract::new_unchecked(
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),

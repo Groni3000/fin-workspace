@@ -61,7 +61,7 @@ mod tests {
     use tradeprim::currency::Currency;
 
     fn gc(year: u16, tenor: Tenor) -> FuturesContract {
-        FuturesContract::new(
+        FuturesContract::new_unchecked(
             Asset::new("GC", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnym(),

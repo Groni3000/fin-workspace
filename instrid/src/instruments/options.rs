@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use tradeprim::{currency::Currency, prelude::Price};
 
-use crate::{asset::Asset, mic::Mic, prelude::TradedInstrument, tenor::Tenor};
+use crate::{asset::Asset, days_in_month, mic::Mic, prelude::TradedInstrument, tenor::Tenor};
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -75,8 +75,40 @@ impl Display for ExerciseStyle {
 }
 
 impl OptionContract {
+    /// Create a new options contract with date validation.
     #[allow(clippy::too_many_arguments)]
     pub const fn new(
+        base: Asset,
+        price_quotation: Asset,
+        mic: Mic,
+        settlement_currency: Currency,
+        year: u16,
+        tenor: Tenor,
+        day: u8,
+        kind: OptionKind,
+        style: ExerciseStyle,
+        strike: Price,
+    ) -> Option<Self> {
+        if day == 0 || day > days_in_month(year, tenor.ordinal()) {
+            return None;
+        }
+
+        Some(Self {
+            base,
+            price_quotation,
+            mic,
+            settlement_currency,
+            year,
+            tenor,
+            day,
+            kind,
+            style,
+            strike,
+        })
+    }
+    /// Date validation is on user.
+    #[allow(clippy::too_many_arguments)]
+    pub const fn new_unchecked(
         base: Asset,
         price_quotation: Asset,
         mic: Mic,
@@ -192,7 +224,7 @@ mod tests {
     use super::*;
 
     fn aapl_call_200_dec25() -> OptionContract {
-        OptionContract::new(
+        OptionContract::new_unchecked(
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
@@ -217,7 +249,7 @@ mod tests {
     #[test]
     fn call_and_put_differ() {
         let call = aapl_call_200_dec25();
-        let put = OptionContract::new(
+        let put = OptionContract::new_unchecked(
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
@@ -235,7 +267,7 @@ mod tests {
     #[test]
     fn style_distinguishes_contracts() {
         let american = aapl_call_200_dec25();
-        let european = OptionContract::new(
+        let european = OptionContract::new_unchecked(
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
@@ -253,7 +285,7 @@ mod tests {
     #[test]
     fn different_strikes_differ() {
         let strike_200 = aapl_call_200_dec25();
-        let strike_210 = OptionContract::new(
+        let strike_210 = OptionContract::new_unchecked(
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),

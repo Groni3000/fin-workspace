@@ -3,6 +3,7 @@ use std::fmt::Display;
 use tradeprim::currency::Currency;
 
 use crate::asset::Asset;
+use crate::days_in_month;
 use crate::instruments::TradedInstrument;
 use crate::mic::Mic;
 use crate::tenor::Tenor;
@@ -20,7 +21,35 @@ pub struct FuturesContract {
 }
 
 impl FuturesContract {
+    /// Create a new futures contract with date validation.
     pub const fn new(
+        base: Asset,
+        price_quotation: Asset,
+        mic: Mic,
+        settlement_currency: Currency,
+        year: u16,
+        tenor: Tenor,
+        day: Option<u8>,
+    ) -> Option<Self> {
+        if let Some(day) = day {
+            let n_days = days_in_month(year, tenor.ordinal());
+            if day == 0 || day > n_days {
+                return None;
+            }
+        }
+
+        Some(Self {
+            base,
+            price_quotation,
+            mic,
+            settlement_currency,
+            year,
+            tenor,
+            day,
+        })
+    }
+    /// Date validation is on user.
+    pub const fn new_unchecked(
         base: Asset,
         price_quotation: Asset,
         mic: Mic,
@@ -143,7 +172,7 @@ mod tests {
 
     // fixtures
     fn cl() -> FuturesContract {
-        FuturesContract::new(
+        FuturesContract::new_unchecked(
             Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             MicIso::xnas().into(),
@@ -155,7 +184,7 @@ mod tests {
     }
 
     fn cl_with_day() -> FuturesContract {
-        FuturesContract::new(
+        FuturesContract::new_unchecked(
             Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             MicIso::xnas().into(),
