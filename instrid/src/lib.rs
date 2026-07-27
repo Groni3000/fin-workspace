@@ -20,7 +20,7 @@ pub mod prelude {
         ExerciseStyle, FuturesContract, Instrument, OptionContract, OptionKind, Stock,
         TradedInstrument,
     };
-    pub use crate::mic::{Date, MarketCategoryCode, Mic, MicStatus, MicType, mic_by_code};
+    pub use crate::mic::{Date, MarketCategoryCode, MicIso, MicStatus, MicType, mic_by_code};
     pub use crate::tenor::Tenor;
 }
 

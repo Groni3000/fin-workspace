@@ -14,7 +14,7 @@ use tradeprim::ascii_code::AsciiCode;
 /// in the ISO MIC registry.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Mic {
+pub struct MicIso {
     /// Four-character MIC assigned to the venue (e.g. `XNAS`).
     code: AsciiCode<4>,
     /// MIC of the operating/parent venue. Equals `code` for operating MICs.
@@ -51,7 +51,7 @@ pub struct Mic {
     comments: Option<&'static str>,
 }
 
-impl Mic {
+impl MicIso {
     #[allow(clippy::too_many_arguments)]
     pub const fn new(
         code: AsciiCode<4>,
@@ -72,7 +72,7 @@ impl Mic {
         expiry_date: Option<Date>,
         comments: Option<&'static str>,
     ) -> Self {
-        Mic {
+        MicIso {
             code,
             operating,
             mic_type,
@@ -94,21 +94,21 @@ impl Mic {
     }
 }
 
-impl PartialEq for Mic {
+impl PartialEq for MicIso {
     fn eq(&self, other: &Self) -> bool {
         self.code == other.code
     }
 }
 
-impl Eq for Mic {}
+impl Eq for MicIso {}
 
-impl Hash for Mic {
+impl Hash for MicIso {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.code.hash(state);
     }
 }
 
-impl Display for Mic {
+impl Display for MicIso {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.code.as_str())
     }
@@ -325,7 +325,7 @@ impl Display for Date {
 }
 
 #[cfg(feature = "serde")]
-impl Serialize for Mic {
+impl Serialize for MicIso {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -335,7 +335,7 @@ impl Serialize for Mic {
 }
 
 #[cfg(feature = "serde")]
-impl<'de> Deserialize<'de> for Mic {
+impl<'de> Deserialize<'de> for MicIso {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -368,9 +368,9 @@ static MIC_STRINGS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/mic_string
 // Keep in sync with the layout documented in build.rs.
 const RECORD_SIZE: usize = 96;
 
-static REGISTRY: OnceLock<HashMap<[u8; 4], Mic>> = OnceLock::new();
+static REGISTRY: OnceLock<HashMap<[u8; 4], MicIso>> = OnceLock::new();
 
-fn registry() -> &'static HashMap<[u8; 4], Mic> {
+fn registry() -> &'static HashMap<[u8; 4], MicIso> {
     REGISTRY.get_or_init(|| {
         debug_assert_eq!(
             MIC_RECORDS.len() % RECORD_SIZE,
@@ -405,12 +405,12 @@ fn registry() -> &'static HashMap<[u8; 4], Mic> {
 /// assert!(mic_by_code("ZZZZ").is_none());
 /// assert!(mic_by_code("XNA").is_none());   // wrong length
 /// ```
-pub fn mic_by_code(code: &str) -> Option<Mic> {
+pub fn mic_by_code(code: &str) -> Option<MicIso> {
     let bytes: &[u8; 4] = code.as_bytes().try_into().ok()?;
     registry().get(bytes).copied()
 }
 
-fn parse_record(r: &[u8]) -> Mic {
+fn parse_record(r: &[u8]) -> MicIso {
     let code: AsciiCode<4> = r[0..4].try_into().unwrap();
     let operating: AsciiCode<4> = r[4..8].try_into().unwrap();
     let mic_type = match r[8] {
@@ -439,7 +439,7 @@ fn parse_record(r: &[u8]) -> Mic {
     let expiry_date = read_opt_date(&r[84..89]);
     let comments = read_opt_str(&r[89..96]);
 
-    Mic {
+    MicIso {
         code,
         operating,
         mic_type,
@@ -538,22 +538,22 @@ mod tests {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
 
-        fn hash_of(mic: &Mic) -> u64 {
+        fn hash_of(mic: &MicIso) -> u64 {
             let mut hasher = DefaultHasher::new();
             mic.hash(&mut hasher);
             hasher.finish()
         }
 
         // Equal Mics must hash equal (the Eq/Hash contract).
-        assert_eq!(Mic::xnas(), Mic::xnas());
-        assert_eq!(hash_of(&Mic::xnas()), hash_of(&Mic::xnas()));
-        assert_ne!(hash_of(&Mic::xnas()), hash_of(&Mic::xlon()));
+        assert_eq!(MicIso::xnas(), MicIso::xnas());
+        assert_eq!(hash_of(&MicIso::xnas()), hash_of(&MicIso::xnas()));
+        assert_ne!(hash_of(&MicIso::xnas()), hash_of(&MicIso::xlon()));
 
         // And Mic works as a HashMap key.
         let mut map = HashMap::new();
-        map.insert(Mic::xnas(), "nasdaq");
-        assert_eq!(map.get(&Mic::xnas()), Some(&"nasdaq"));
-        assert_eq!(map.get(&Mic::xlon()), None);
+        map.insert(MicIso::xnas(), "nasdaq");
+        assert_eq!(map.get(&MicIso::xnas()), Some(&"nasdaq"));
+        assert_eq!(map.get(&MicIso::xlon()), None);
     }
 
     #[test]
@@ -583,8 +583,8 @@ mod tests {
         // from_reader can NEVER borrow from `'de` (bytes live in a read buffer),
         let json = "\"XCEC\"";
         let reader = std::io::Cursor::new(json.as_bytes().to_vec());
-        let mic: Mic = serde_json::from_reader(reader).expect("from_reader should work");
-        assert_eq!(mic, Mic::xcec());
+        let mic: MicIso = serde_json::from_reader(reader).expect("from_reader should work");
+        assert_eq!(mic, MicIso::xcec());
     }
 
     /// Hits `visit_string(String)`
@@ -592,8 +592,8 @@ mod tests {
     #[test]
     fn deserialize_mic_from_value() {
         let val = json!("XCEC");
-        let mic: Mic = serde_json::from_value(val).expect("from_value should work");
-        assert_eq!(mic, Mic::xcec());
+        let mic: MicIso = serde_json::from_value(val).expect("from_value should work");
+        assert_eq!(mic, MicIso::xcec());
     }
 
     /// Hits `visit_borrowed_str(&'de str)`
@@ -602,14 +602,14 @@ mod tests {
     fn deserialize_mic_from_value_ref() {
         let input = "XCEC".to_string();
         let val = json!(&input);
-        let mic: Mic = serde_json::from_value(val).expect("from_value should work");
-        assert_eq!(mic, Mic::xcec());
+        let mic: MicIso = serde_json::from_value(val).expect("from_value should work");
+        assert_eq!(mic, MicIso::xcec());
     }
 
     #[cfg(feature = "serde")]
     #[test]
     fn serialize_curated_mic() {
-        let mic = Mic::xcec();
+        let mic = MicIso::xcec();
         let serialized = serde_json::to_string(&mic).expect("Mic should be serializable");
         let expected = "\"XCEC\"";
 
@@ -620,8 +620,8 @@ mod tests {
     #[test]
     fn deserialize_curated_mic() {
         let str_mic = "\"XCEC\"";
-        let mic: Mic = serde_json::from_str(str_mic).expect("Mic should be deserializable");
-        let expected = Mic::xcec();
+        let mic: MicIso = serde_json::from_str(str_mic).expect("Mic should be deserializable");
+        let expected = MicIso::xcec();
 
         assert_eq!(mic, expected);
     }
@@ -641,7 +641,7 @@ mod tests {
     #[test]
     fn deserialize_full_registry_mic() {
         let mic_str = "\"DRSP\"";
-        let mic: Mic = serde_json::from_str(&mic_str).expect("Mic should be deserializable");
+        let mic: MicIso = serde_json::from_str(&mic_str).expect("Mic should be deserializable");
         let expected = mic_by_code("DRSP").expect("Mic not found");
 
         assert_eq!(mic, expected);
@@ -651,6 +651,6 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_mic_is_owned() {
-        _assert_owned::<Mic>();
+        _assert_owned::<MicIso>();
     }
 }

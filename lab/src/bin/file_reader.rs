@@ -1,6 +1,6 @@
 use futchain::{FutChain, ListedTenors};
 use instrid::asset::Asset;
-use instrid::mic::Mic;
+use instrid::mic::MicIso;
 use instrid::prelude::FuturesContract;
 use instrid::tenor::Tenor;
 use lab::market_data::{Candle, FrdFutChainMdReader, FrdMdError, MarketData};
@@ -13,7 +13,7 @@ fn main() -> Result<(), FrdMdError> {
     let instrument: FuturesContract = FuturesContract::new(
         Asset::new("RB", instrid::asset::AssetClass::Commodity).expect("Failed to create Asset"),
         Asset::new("USD", instrid::asset::AssetClass::Currency).expect("Failed to create Asset"),
-        Mic::xnym(),
+        MicIso::xnym(),
         Currency::usd(),
         2025,
         Tenor::December,

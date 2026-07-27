@@ -2,7 +2,7 @@ use tradeprim::currency::Currency;
 
 use crate::asset::Asset;
 use crate::instruments::TradedInstrument;
-use crate::mic::Mic;
+use crate::mic::MicIso;
 use std::fmt::Display;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -10,7 +10,7 @@ use std::fmt::Display;
 pub struct Stock {
     base: Asset,
     price_quotation: Asset,
-    mic: Mic,
+    mic: MicIso,
     settlement_currency: Currency,
 }
 
@@ -18,7 +18,7 @@ impl Stock {
     pub const fn new(
         base: Asset,
         price_quotation: Asset,
-        mic: Mic,
+        mic: MicIso,
         settlement_currency: Currency,
     ) -> Self {
         Self {
@@ -37,7 +37,7 @@ impl Stock {
         &self.price_quotation
     }
 
-    pub fn mic(&self) -> &Mic {
+    pub fn mic(&self) -> &MicIso {
         &self.mic
     }
 
@@ -55,7 +55,7 @@ impl TradedInstrument for Stock {
         &self.price_quotation
     }
 
-    fn mic(&self) -> &Mic {
+    fn mic(&self) -> &MicIso {
         &self.mic
     }
 
@@ -86,7 +86,7 @@ mod tests {
         Stock::new(
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            Mic::xnas(),
+            MicIso::xnas(),
             Currency::usd(),
         )
     }

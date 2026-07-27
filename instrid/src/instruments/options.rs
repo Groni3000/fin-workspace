@@ -1,14 +1,14 @@
 use std::fmt::Display;
 use tradeprim::{currency::Currency, prelude::Price};
 
-use crate::{asset::Asset, mic::Mic, prelude::TradedInstrument, tenor::Tenor};
+use crate::{asset::Asset, mic::MicIso, prelude::TradedInstrument, tenor::Tenor};
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct OptionContract {
     base: Asset,
     price_quotation: Asset,
-    mic: Mic,
+    mic: MicIso,
     settlement_currency: Currency,
     year: u16,
     tenor: Tenor,
@@ -79,7 +79,7 @@ impl OptionContract {
     pub const fn new(
         base: Asset,
         price_quotation: Asset,
-        mic: Mic,
+        mic: MicIso,
         settlement_currency: Currency,
         year: u16,
         tenor: Tenor,
@@ -114,7 +114,7 @@ impl OptionContract {
         &self.price_quotation
     }
 
-    pub fn mic(&self) -> &Mic {
+    pub fn mic(&self) -> &MicIso {
         &self.mic
     }
 
@@ -152,7 +152,7 @@ impl TradedInstrument for OptionContract {
         &self.price_quotation
     }
 
-    fn mic(&self) -> &Mic {
+    fn mic(&self) -> &MicIso {
         &self.mic
     }
 
@@ -195,7 +195,7 @@ mod tests {
         OptionContract::new(
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            Mic::xnas(),
+            MicIso::xnas(),
             Currency::usd(),
             2025,
             Tenor::December,
@@ -220,7 +220,7 @@ mod tests {
         let put = OptionContract::new(
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            Mic::xnas(),
+            MicIso::xnas(),
             Currency::usd(),
             2025,
             Tenor::December,
@@ -238,7 +238,7 @@ mod tests {
         let european = OptionContract::new(
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            Mic::xnas(),
+            MicIso::xnas(),
             Currency::usd(),
             2025,
             Tenor::December,
@@ -256,7 +256,7 @@ mod tests {
         let strike_210 = OptionContract::new(
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            Mic::xnas(),
+            MicIso::xnas(),
             Currency::usd(),
             2025,
             Tenor::December,

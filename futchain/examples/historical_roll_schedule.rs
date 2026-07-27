@@ -15,7 +15,7 @@ use futchain::{
     EndOfTrading, FutChain, ListedTenors,
     eot::{DateOffset, LastNthBDayOfPrevMonth},
 };
-use instrid::prelude::{Asset, AssetClass, FuturesContract, Mic, Tenor};
+use instrid::prelude::{Asset, AssetClass, FuturesContract, MicIso, Tenor};
 use tradeprim::currency::Currency;
 
 fn main() {
@@ -41,7 +41,7 @@ fn main() {
     let seed = FuturesContract::new(
         Asset::new("GC", AssetClass::Commodity).expect("Asset got incorrect parameters"),
         Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-        Mic::xnym(),
+        MicIso::xnym(),
         Currency::usd(),
         2023,
         Tenor::December,

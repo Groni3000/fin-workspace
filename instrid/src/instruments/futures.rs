@@ -4,7 +4,7 @@ use tradeprim::currency::Currency;
 
 use crate::asset::Asset;
 use crate::instruments::TradedInstrument;
-use crate::mic::Mic;
+use crate::mic::MicIso;
 use crate::tenor::Tenor;
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -12,7 +12,7 @@ use crate::tenor::Tenor;
 pub struct FuturesContract {
     base: Asset,
     price_quotation: Asset,
-    mic: Mic,
+    mic: MicIso,
     settlement_currency: Currency,
     year: u16,
     tenor: Tenor,
@@ -23,7 +23,7 @@ impl FuturesContract {
     pub const fn new(
         base: Asset,
         price_quotation: Asset,
-        mic: Mic,
+        mic: MicIso,
         settlement_currency: Currency,
         year: u16,
         tenor: Tenor,
@@ -85,7 +85,7 @@ impl FuturesContract {
         &self.price_quotation
     }
 
-    pub fn mic(&self) -> &Mic {
+    pub fn mic(&self) -> &MicIso {
         &self.mic
     }
 
@@ -103,7 +103,7 @@ impl TradedInstrument for FuturesContract {
         &self.price_quotation
     }
 
-    fn mic(&self) -> &Mic {
+    fn mic(&self) -> &MicIso {
         &self.mic
     }
 
@@ -146,7 +146,7 @@ mod tests {
         FuturesContract::new(
             Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            Mic::xnas(),
+            MicIso::xnas(),
             Currency::usd(),
             2026,
             Tenor::June,
@@ -158,7 +158,7 @@ mod tests {
         FuturesContract::new(
             Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            Mic::xnas(),
+            MicIso::xnas(),
             Currency::usd(),
             2026,
             Tenor::June,

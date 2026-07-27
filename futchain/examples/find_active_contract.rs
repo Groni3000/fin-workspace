@@ -12,7 +12,7 @@ use futchain::{
     EndOfTrading, FutChain, ListedTenors,
     eot::{DateOffset, NthInMonth, NthWeekdayOfCurrentMonth},
 };
-use instrid::prelude::{Asset, AssetClass, FuturesContract, Mic, Tenor};
+use instrid::prelude::{Asset, AssetClass, FuturesContract, MicIso, Tenor};
 use tradeprim::currency::Currency;
 
 fn main() {
@@ -39,7 +39,7 @@ fn main() {
     let start = FuturesContract::new(
         Asset::new("ES", AssetClass::Index).expect("Asset got incorrect parameters"),
         Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-        Mic::xcme(),
+        MicIso::xcme(),
         Currency::usd(),
         2024,
         Tenor::December,

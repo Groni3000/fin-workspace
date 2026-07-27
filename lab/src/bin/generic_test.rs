@@ -1,7 +1,7 @@
 use std::{path::Path, str::FromStr};
 
 use futchain::{FutChain, ListedTenors};
-use instrid::{asset::Asset, instruments::FuturesContract, mic::Mic, tenor::Tenor};
+use instrid::{asset::Asset, instruments::FuturesContract, mic::MicIso, tenor::Tenor};
 use lab::{
     formats::custom::CustomDatabentoConsumerMd,
     market_data::{Candle, FrdFutChainMdReader, FrdMdError},
@@ -71,7 +71,7 @@ fn init_files_md<'a>(listing: &'a ListedTenors) -> Result<FrdFutChainMdReader<'a
     let instrument: FuturesContract = FuturesContract::new(
         Asset::new("RB", instrid::asset::AssetClass::Commodity).expect("Failed to create Asset"),
         Asset::new("USD", instrid::asset::AssetClass::Currency).expect("Failed to create Asset"),
-        Mic::xnym(),
+        MicIso::xnym(),
         Currency::usd(),
         2025,
         Tenor::December,

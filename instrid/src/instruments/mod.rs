@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use crate::{asset::Asset, mic::Mic};
+use crate::{asset::Asset, mic::MicIso};
 
 pub mod futures;
 pub mod options;
@@ -34,7 +34,7 @@ pub trait TradedInstrument {
     /// Returns a reference to the price quotation asset of this instrument.
     fn price_quotation(&self) -> &Asset;
     /// Returns a reference to the MIC of this instrument.
-    fn mic(&self) -> &Mic;
+    fn mic(&self) -> &MicIso;
     /// Returns a settlement currency.
     fn settlement_currency(&self) -> &Currency;
 }
@@ -56,7 +56,7 @@ impl TradedInstrument for Instrument {
         }
     }
 
-    fn mic(&self) -> &Mic {
+    fn mic(&self) -> &MicIso {
         match self {
             Instrument::Stock(stock) => stock.mic(),
             Instrument::Futures(futures) => futures.mic(),
@@ -120,7 +120,7 @@ mod tests {
         Stock::new(
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            Mic::xnas(),
+            MicIso::xnas(),
             Currency::usd(),
         )
     }
@@ -129,7 +129,7 @@ mod tests {
         FuturesContract::new(
             Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            Mic::xnas(),
+            MicIso::xnas(),
             Currency::usd(),
             2026,
             Tenor::June,
@@ -142,7 +142,7 @@ mod tests {
         OptionContract::new(
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            Mic::xnas(),
+            MicIso::xnas(),
             Currency::usd(),
             2025,
             Tenor::December,

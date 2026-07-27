@@ -107,14 +107,14 @@ impl<'a> FutChain<'a> {
 mod tests {
     use super::*;
     use crate::listing::ListedTenors;
-    use instrid::prelude::{Asset, AssetClass, Mic, Tenor};
+    use instrid::prelude::{Asset, AssetClass, MicIso, Tenor};
     use tradeprim::currency::Currency;
 
     fn es(year: u16, tenor: Tenor, day: Option<u8>) -> FuturesContract {
         FuturesContract::new(
             Asset::new("ES", AssetClass::Index).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            Mic::xcme(),
+            MicIso::xcme(),
             Currency::usd(),
             year,
             tenor,

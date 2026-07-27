@@ -6,7 +6,7 @@ use instrid::{
     asset::{Asset, AssetClass},
     inline_str::InlineStrError,
     instruments::{FuturesContract, Instrument, Stock, TradedInstrument},
-    mic::Mic,
+    mic::MicIso,
     spec::{Spec, Specification},
     tenor::Tenor,
 };
@@ -168,19 +168,19 @@ const fn unwrap_asset(asset: Result<Asset, InlineStrError>) -> Asset {
 const AAPL_XNAS: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("AAPL", AssetClass::Equity)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
-    Mic::xnas(),
+    MicIso::xnas(),
     Currency::usd(),
 ));
 const AAPL_XLON: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("AAPL", AssetClass::Equity)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
-    Mic::xlon(),
+    MicIso::xlon(),
     Currency::usd(),
 ));
 const ES_CME: Instrument = Instrument::Futures(FuturesContract::new(
     unwrap_asset(Asset::new("ES", AssetClass::Index)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
-    Mic::xcme(),
+    MicIso::xcme(),
     Currency::usd(),
     2026,
     Tenor::June,
@@ -189,7 +189,7 @@ const ES_CME: Instrument = Instrument::Futures(FuturesContract::new(
 const FDAX_EUREX: Instrument = Instrument::Futures(FuturesContract::new(
     unwrap_asset(Asset::new("FDX", AssetClass::Index)),
     unwrap_asset(Asset::new("EUR", AssetClass::Currency)),
-    Mic::xeur(),
+    MicIso::xeur(),
     Currency::eur(),
     2026,
     Tenor::June,
@@ -204,14 +204,14 @@ const FDAX_EUREX: Instrument = Instrument::Futures(FuturesContract::new(
 const XAU_USD: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("XAU", AssetClass::Commodity)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
-    Mic::xlbm(),
+    MicIso::xlbm(),
     Currency::usd(),
 ));
 // Same LBMA gold, quoted in EUR by the FX desk.
 const XAU_EUR: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("XAU", AssetClass::Commodity)),
     unwrap_asset(Asset::new("EUR", AssetClass::Currency)),
-    Mic::xlbm(),
+    MicIso::xlbm(),
     Currency::eur(),
 ));
 // Shanghai Gold Exchange, CNY (onshore yuan). Materially different
@@ -220,7 +220,7 @@ const XAU_EUR: Instrument = Instrument::Stock(Stock::new(
 const XAU_CHF: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("XAU", AssetClass::Commodity)),
     unwrap_asset(Asset::new("CHF", AssetClass::Currency)),
-    Mic::xsge(),
+    MicIso::xsge(),
     Currency::chf(),
     // THIS CORRECT VALUE IS NOT CONST CURATED! Can't be used here.
     // So we are bullshiting right now with a not real currency for this instrument.
@@ -235,7 +235,7 @@ const XAU_CHF: Instrument = Instrument::Stock(Stock::new(
 const JPY_6J: Instrument = Instrument::Futures(FuturesContract::new(
     unwrap_asset(Asset::new("JPY", AssetClass::Currency)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
-    Mic::xcme(),
+    MicIso::xcme(),
     Currency::usd(),
     2026,
     Tenor::June,
@@ -245,7 +245,7 @@ const JPY_6J: Instrument = Instrument::Futures(FuturesContract::new(
 const BTC_USD: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("BTC", AssetClass::Crypto)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
-    Mic::iexg(),
+    MicIso::iexg(),
     Currency::usd(),
 ));
 // ---

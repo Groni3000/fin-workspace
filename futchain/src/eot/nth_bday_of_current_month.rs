@@ -48,7 +48,7 @@ impl EndOfTrading for NthBDayOfCurrentMonth {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use instrid::prelude::{Asset, AssetClass, Mic, Tenor};
+    use instrid::prelude::{Asset, AssetClass, MicIso, Tenor};
     use tradeprim::currency::Currency;
 
     /// HE@XCME - Lean Hogs. LTD is the 10th business day of the contract
@@ -57,7 +57,7 @@ mod tests {
         FuturesContract::new(
             Asset::new("HE", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            Mic::xcme(),
+            MicIso::xcme(),
             Currency::usd(),
             year,
             tenor,

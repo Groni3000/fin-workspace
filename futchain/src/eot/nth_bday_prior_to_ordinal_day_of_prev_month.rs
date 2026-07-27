@@ -58,7 +58,7 @@ impl EndOfTrading for NthBDayPriorToOrdinalDayOfPrevMonth {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use instrid::prelude::{Asset, AssetClass, Mic, Tenor};
+    use instrid::prelude::{Asset, AssetClass, MicIso, Tenor};
     use tradeprim::currency::Currency;
 
     // https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.contractSpecs.html
@@ -68,7 +68,7 @@ mod tests {
         FuturesContract::new(
             Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
-            Mic::xnym(),
+            MicIso::xnym(),
             Currency::usd(),
             year,
             tenor,
