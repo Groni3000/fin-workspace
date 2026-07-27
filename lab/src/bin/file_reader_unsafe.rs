@@ -40,8 +40,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 break;
             }
 
-            let candle = FrdCandle::from_frd_csv_line_unchecked(&line_bytes, &mut tz_cache)
-                .map_err(|e| e.to_string())?;
+            let candle = unsafe {
+                FrdCandle::from_frd_csv_line_unchecked(&line_bytes, &mut tz_cache)
+                    .map_err(|e| e.to_string())?
+            };
             lines += 1;
             last = Some(candle);
         }

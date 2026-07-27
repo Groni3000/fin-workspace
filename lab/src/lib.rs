@@ -354,14 +354,11 @@ impl<'a> TryFrom<RawFrdCandle<'a>> for FrdCandle {
             }
         };
 
-        let open =
-            Price::from_str(value.open).map_err(FrdCandleParsingError::PriceParsingError)?;
-        let close = Price::from_str(value.close)
-            .map_err(FrdCandleParsingError::PriceParsingError)?;
-        let high =
-            Price::from_str(value.high).map_err(FrdCandleParsingError::PriceParsingError)?;
-        let low =
-            Price::from_str(value.low).map_err(FrdCandleParsingError::PriceParsingError)?;
+        let open = Price::from_str(value.open).map_err(FrdCandleParsingError::PriceParsingError)?;
+        let close =
+            Price::from_str(value.close).map_err(FrdCandleParsingError::PriceParsingError)?;
+        let high = Price::from_str(value.high).map_err(FrdCandleParsingError::PriceParsingError)?;
+        let low = Price::from_str(value.low).map_err(FrdCandleParsingError::PriceParsingError)?;
         let volume: u64 = value
             .volume
             .parse()
@@ -419,7 +416,7 @@ pub(crate) mod untested {
         /// **DO NOT USE THIS FUNCTION**
         ///
         /// _Though it can give you ~2x speedup ;)_
-        pub fn from_frd_csv_line_unchecked(
+        pub unsafe fn from_frd_csv_line_unchecked(
             bytes: &[u8],
             tz_cache: &mut OffsetCache,
         ) -> Result<Self, FrdCandleParsingError> {
