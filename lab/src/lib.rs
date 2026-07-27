@@ -288,10 +288,13 @@ impl OffsetCache {
                 .with_timezone(&Utc)
         } else {
             // Transition day: full, correct lookup for this row.
-            tz.from_local_datetime(&naive)
-                .single()
-                .expect("unambiguous local time")
-                .with_timezone(&Utc)
+            match tz.from_local_datetime(&naive) {
+                chrono::LocalResult::Single(ts) => ts.with_timezone(&Utc),
+                chrono::LocalResult::Ambiguous(a, _) => a.with_timezone(&Utc),
+                chrono::LocalResult::None => {
+                    panic!("Non existent local time {:?} for timezone {:?}", naive, tz);
+                }
+            }
         }
     }
 
@@ -411,17 +414,19 @@ pub(crate) mod untested {
         /// It is pretty much experimental, no validation, unsafe,
         /// time logic is not tested,...
         ///
-        /// Unless you are ok to uphold some invariants of valid data,
+        /// Unless you are ok to uphold some invariants of valid data
+        /// and use untested cache,
         ///
         /// **DO NOT USE THIS FUNCTION**
         ///
-        /// _Though it can give you ~2x speedup ;)_
+        /// _Though it can give you ~1.7x speedup ;)_
+        ///
+        /// # Safety
+        /// `bytes` should be valid utf-8
         pub unsafe fn from_frd_csv_line_unchecked(
             bytes: &[u8],
             tz_cache: &mut OffsetCache,
         ) -> Result<Self, FrdCandleParsingError> {
-            // SAFETY:
-            //     - assuming bytes are valid utf-8
             let s = unsafe { str::from_utf8_unchecked(bytes) };
             let trimmed = s.trim_end();
 
