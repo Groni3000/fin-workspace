@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 pub mod asset;
 pub mod inline_str;
 pub mod instruments;

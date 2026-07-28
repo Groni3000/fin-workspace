@@ -5,7 +5,7 @@ of [`instrid`](../instrid).
 
 ## What it solves
 
-A futures product (ES, GC, CL, NG, …) is not one instrument — it's a *chain*
+A futures product (ES, GC, CL, NG, …) is not one instrument — it's a _chain_
 of contracts, each listed against a tenor in a fixed cycle (quarterly for ES,
 monthly for CL, etc.). Two pieces of logic show up in every backtest, every
 roll engine, every "what's the front month today?" query:
@@ -15,11 +15,11 @@ roll engine, every "what's the front month today?" query:
    itself can over/underflow if you walk far enough.
 2. **End-of-trading date** — when does a given contract stop being the right
    thing to hold? Each product has its own rule, written against the
-   contract-month calendar (e.g. *third Friday*, *last business day of the
-   prior month minus 3*).
+   contract-month calendar (e.g. _third Friday_, _last business day of the
+   prior month minus 3_).
 
 `futchain` keeps those two concerns separate and composable. The chain knows
-*nothing* about dates; the rule knows *nothing* about the cycle. You glue
+_nothing_ about dates; the rule knows _nothing_ about the cycle. You glue
 them together in a `while` loop.
 
 ## Quick start
@@ -30,6 +30,7 @@ use futchain::{
     EndOfTrading, FutChain, ListedTenors,
     eot::{DateOffset, NthInMonth, NthWeekdayOfCurrentMonth},
 };
+use tradeprim::prelude::{Currency, CurrencyTag};
 use instrid::prelude::{Asset, AssetClass, FuturesContract, Mic, Tenor};
 
 // ES: quarterly cycle, terminates 3rd Friday of contract month, -1 BDay defensive.
@@ -41,11 +42,12 @@ let rule = NthWeekdayOfCurrentMonth {
 };
 
 let start = FuturesContract::new(
-    Asset::new("ES", AssetClass::Index),
-    Asset::new("USD", AssetClass::Currency),
+    Asset::new("ES", AssetClass::Index).unwrap(),
+    Asset::new("USD", AssetClass::Currency).unwrap(),
     Mic::xcme(),
+    Currency::usd().into(),
     2024, Tenor::December, None,
-);
+).unwrap();
 
 let today = NaiveDate::from_ymd_opt(2026, 5, 13).unwrap();
 let mut chain = FutChain::new(start, &listing).unwrap();
@@ -87,11 +89,11 @@ cursor is a `FuturesContract`; navigation moves it through the cycle.
 
 A trait with a single method:
 
-```rust
+```ignore
 fn calculate(&self, contract: &FuturesContract) -> NaiveDate;
 ```
 
-Implementors hold the *rule parameters* (e.g. "third Friday, offset −1 BDay");
+Implementors hold the _rule parameters_ (e.g. "third Friday, offset −1 BDay");
 the contract supplies `(year, tenor)`. One rule instance applies to every
 contract in a chain, so reuse is free.
 
@@ -125,14 +127,14 @@ weekday.
 
 ## Available rules
 
-| Rule | Used by (examples) |
-|---|---|
-| `NthWeekdayOfCurrentMonth { n, weekday, offset }` | ES, NQ, FDAX, NKD (3rd Fri); BTC, ETH, MET (last Fri); 6E, 6B, 6A, 6C (3rd Wed −2 BDay); LE (1st Fri) |
-| `NthWeekdayOfNextMonth { n, weekday, offset }` | VX (3rd Fri of next month, −30 calendar days) |
-| `LastNthBDayOfPrevMonth { n, offset }` | GC, HG, PL, ZS, RB, HO, SI, SB, ZW (`n = 1`); NG (`n = 3`); KC (`n = 7`) |
-| `NthBDayOfCurrentMonth { n, offset }` | HE (`n = 10`) |
-| `NthBDayPriorToOrdinalDayOfPrevMonth { ordinal_day, n, offset }` | CL (`ordinal_day = 25`, `n = 3`) |
-| `NthCalendarDayOfCurrentMonth { n, mode, offset }` | FGBL (`n = 10`, `Succeeding`) |
+| Rule                                                             | Used by (examples)                                                                                    |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `NthWeekdayOfCurrentMonth { n, weekday, offset }`                | ES, NQ, FDAX, NKD (3rd Fri); BTC, ETH, MET (last Fri); 6E, 6B, 6A, 6C (3rd Wed −2 BDay); LE (1st Fri) |
+| `NthWeekdayOfNextMonth { n, weekday, offset }`                   | VX (3rd Fri of next month, −30 calendar days)                                                         |
+| `LastNthBDayOfPrevMonth { n, offset }`                           | GC, HG, PL, ZS, RB, HO, SI, SB, ZW (`n = 1`); NG (`n = 3`); KC (`n = 7`)                              |
+| `NthBDayOfCurrentMonth { n, offset }`                            | HE (`n = 10`)                                                                                         |
+| `NthBDayPriorToOrdinalDayOfPrevMonth { ordinal_day, n, offset }` | CL (`ordinal_day = 25`, `n = 3`)                                                                      |
+| `NthCalendarDayOfCurrentMonth { n, mode, offset }`               | FGBL (`n = 10`, `Succeeding`)                                                                         |
 
 All rules are `#[derive(Debug, Clone, Copy)]`.
 
@@ -143,7 +145,10 @@ compile time in a `const` context. For runtime input, build a `NonZeroU8`
 upstream and call `new`.
 
 ```rust
-LastNthBDayOfPrevMonth::from_u8(3, DateOffset::BusinessDays(-1))
+use futchain::eot::DateOffset;
+use futchain::eot::LastNthBDayOfPrevMonth;
+
+let _ = LastNthBDayOfPrevMonth::from_u8(3, DateOffset::BusinessDays(-1));
 ```
 
 ## Scope
@@ -160,7 +165,7 @@ Out of scope (intentionally):
   a separate problem.
 - Listing schedule changes mid-history. `ListedTenors` is one fixed cycle.
 - Prices, market data, orders.
-- Specs for every product on every venue. The crate gives you the *rules*;
+- Specs for every product on every venue. The crate gives you the _rules_;
   catalogues belong in a downstream layer.
 
 ## License

@@ -65,7 +65,7 @@ let cl_dec25 = FuturesContract::new(
     2025,
     Tenor::December,
     None,                          // unknown/unspecified day-of-month
-);
+).unwrap();
 
 let aapl_call = OptionContract::new(
     Asset::new("AAPL", AssetClass::Equity).unwrap(),
@@ -76,7 +76,7 @@ let aapl_call = OptionContract::new(
     OptionKind::Call,
     ExerciseStyle::American,
     Price::from_str("200.00").unwrap(),
-);
+).unwrap();
 
 // A little bit verbose, but it's not like we print instruments all the time
 // and it holds all essential information. `Stock` and `FuturesContract` append
@@ -104,7 +104,7 @@ a T-bond quote is in points, a grain quote is in cents.
 
 A `Specification` carries three things and derives the third from the first two:
 
-```rust
+```ignore
 pub struct Specification {
     tick_size_price: Price,                 // smallest price increment, in quote units
     tick_size_currency: (Price, Currency),  // money that one price-tick is worth, in currency major units
@@ -205,6 +205,7 @@ an operating or segment MIC.
 If a segment, it also shows the operating parent.
 
 ```rust
+# use instrid::prelude::Mic;
 // What comments says
 let nasdaq: Mic  = Mic::xnas();   // NASDAQ - ALL MARKETS (XNAS, operating).
 let bats:   Mic  = Mic::bats();   // CBOE BZX U.S. EQUITIES EXCHANGE (BATS, segment of XCBO).
@@ -243,9 +244,23 @@ Every type that implements `Deserialize` is `DeserializeOwned` — no borrowed
 fields, the bytes can come from a `Vec<u8>` and be dropped immediately.
 
 ```rust
-let opt = OptionContract::new(/* ... */);
-let json = serde_json::to_string(&opt)?;
-let back: OptionContract = serde_json::from_str(&json)?;
+# use instrid::prelude::*;
+# use tradeprim::prelude::{Currency, Price};
+let opt = OptionContract::new(
+    Asset::new("AAPL", AssetClass::Equity).unwrap(),
+    Asset::new("USD", AssetClass::Currency).unwrap(),
+    Mic::xnas(),
+    Currency::usd(),
+    2025,
+    Tenor::December,
+    19,
+    OptionKind::Call,
+    ExerciseStyle::American,
+    Price::from_str_unchecked("200"),
+).unwrap();
+
+let json = serde_json::to_string(&opt).unwrap();
+let back: OptionContract = serde_json::from_str(&json).unwrap();
 assert_eq!(opt, back);
 ```
 
@@ -276,7 +291,7 @@ Each venue has its own quirks for the `Symbol(55)` tag. Unity uses
 `EQ.SPY.ARCX` — Asset class + ticker + MIC, which is exactly the data
 `instrid` already encodes. A small adapter crate translates:
 
-```rust
+```ignore
 // pseudocode, in a separate `instrid-adapters` crate
 fn unity_symbol(s: &Stock) -> String {
     format!("{}.{}.{}",
