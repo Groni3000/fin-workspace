@@ -1,15 +1,21 @@
-use std::{fmt::Debug, str::Utf8Error, time::Duration};
-
 use chrono::{DateTime, Utc, serde::ts_nanoseconds};
+use serde::{Deserialize, Deserializer};
+use tradeprim::price::Price;
+
+use crate::market_data::{Candle, RelevantPrice};
+
+#[cfg(feature = "kafka")]
+use std::{str::Utf8Error, time::Duration};
+
+#[cfg(feature = "kafka")]
 use rdkafka::{
     ClientConfig, Message,
     consumer::{BaseConsumer, Consumer},
     error::KafkaError,
 };
-use serde::{Deserialize, Deserializer};
-use tradeprim::price::Price;
 
-use crate::market_data::{Candle, MarketData, RelevantPrice};
+#[cfg(feature = "kafka")]
+use crate::market_data::MarketData;
 
 // --------------
 // --- Record ---
@@ -86,10 +92,12 @@ impl Candle for CustomDatabentoAggregatedCandle {
 // -------------------
 // --- Market Data ---
 // -------------------
+#[cfg(feature = "kafka")]
 pub struct CustomDatabentoConsumerMd {
     consumer: BaseConsumer,
 }
 
+#[cfg(feature = "kafka")]
 impl CustomDatabentoConsumerMd {
     pub fn new(
         bootstrap_servers: &str,
@@ -118,6 +126,7 @@ impl CustomDatabentoConsumerMd {
     }
 }
 
+#[cfg(feature = "kafka")]
 #[derive(Debug)]
 pub enum KafkaMdError {
     Kafka(KafkaError),
@@ -126,18 +135,21 @@ pub enum KafkaMdError {
     Json(serde_json::Error),
 }
 
+#[cfg(feature = "kafka")]
 impl From<serde_json::Error> for KafkaMdError {
     fn from(value: serde_json::Error) -> Self {
         KafkaMdError::Json(value)
     }
 }
 
+#[cfg(feature = "kafka")]
 impl From<KafkaError> for KafkaMdError {
     fn from(value: KafkaError) -> Self {
         KafkaMdError::Kafka(value)
     }
 }
 
+#[cfg(feature = "kafka")]
 impl MarketData for CustomDatabentoConsumerMd {
     type Record = CustomDatabentoAggregatedCandle;
     type Error = KafkaMdError;

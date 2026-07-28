@@ -11,8 +11,20 @@ serde_json = { version = "1" }
 tradeprim = { path = "../tradeprim" }
 instrid = { path = "../instrid", features = ["mic-full"] }
 futchain = { path = "../futchain" }
-rdkafka = { version = "0.36", features = ["cmake-build"] }
+# `cmake-build` compiles librdkafka from C source, needing cmake + a C toolchain.
+rdkafka = { version = "0.36", features = ["cmake-build"], optional = true }
 
+[features]
+default = []
+kafka = ["dep:rdkafka"]
+
+[[bin]]
+name = "kafka_check"
+required-features = ["kafka"]
+
+[[bin]]
+name = "generic_test"
+required-features = ["kafka"]
 
 [profile.release]
 debug = true
