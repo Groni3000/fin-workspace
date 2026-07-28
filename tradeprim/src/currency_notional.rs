@@ -29,8 +29,6 @@ impl CurrencyNotional {
     pub const ONE_RAW: i128 = Self::SCALE;
     pub const ZERO_RAW: i128 = 0_i128;
     pub const MAX_RAW: i128 = i128::MAX;
-    /// Though it is declared, I do not use it.
-    ///
     /// It would be naturally used in `Self::new`
     /// and ignored in `Self::new_unchecked`, but...
     ///
@@ -44,6 +42,8 @@ impl CurrencyNotional {
     /// I don't know... We can get it only from raw
     /// `CurrencyNotional::new(i128::MIN...)` it's just... Malicious?
     /// Do I really want to protect from such code?
+    ///
+    /// Used only in Add as a guard
     pub const MIN_RAW: i128 = -Self::MAX_RAW;
     pub const MAX_INTEGER_PART: i128 = Self::MAX_RAW / Self::SCALE;
 
@@ -59,6 +59,44 @@ impl CurrencyNotional {
     pub fn value(&self) -> i128 {
         self.value
     }
+
+    /// Prefer `checked_add` over `add` when currency mismatch/overflow is expected to happen.
+    pub fn checked_add(self, rhs: Self) -> Result<Self, CnAddError> {
+        if self.currency != rhs.currency {
+            return Err(CnAddError::CurrencyMismatch(self.currency, rhs.currency));
+        }
+        if let Some(sum) = self.value.checked_add(rhs.value)
+            // Because CurrencyNotional::MIN_RAW != i128::MIN
+            // and it is only reachable via malicious raw construction
+            // or sum or two perfectly in range values
+            && sum != i128::MIN
+        {
+            return Ok(CurrencyNotional::new(sum, self.currency));
+        }
+
+        Err(CnAddError::Overflow(self.value, rhs.value))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CnAddError {
+    CurrencyMismatch(CurrencyTag, CurrencyTag),
+    Overflow(i128, i128),
+}
+
+impl std::error::Error for CnAddError {}
+
+impl Display for CnAddError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CurrencyMismatch(a, b) => {
+                write!(f, "Currency mismatch: {} != {}", a, b)
+            }
+            Self::Overflow(a, b) => {
+                write!(f, "Overflow: {} + {}", a, b)
+            }
+        }
+    }
 }
 
 impl Add for CurrencyNotional {
@@ -66,10 +104,7 @@ impl Add for CurrencyNotional {
 
     /// Perform checked add, panic on overflow or different currencies.
     fn add(self, rhs: Self) -> Self::Output {
-        if self.currency != rhs.currency {
-            panic!("Cannot add different currencies");
-        }
-        CurrencyNotional::new(self.value.checked_add(rhs.value).unwrap(), self.currency)
+        self.checked_add(rhs).unwrap_or_else(|e| panic!("{e}"))
     }
 }
 
@@ -192,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Cannot add different currencies")]
+    #[should_panic(expected = "Currency mismatch: USD != EUR")]
     fn add_different_currencies_panics() {
         let _ = usd_raw(1) + eur_raw(1);
     }
@@ -202,5 +237,120 @@ mod tests {
     fn add_overflow_panics() {
         // there should be checked_add
         let _ = usd_raw(CurrencyNotional::MAX_RAW) + usd_raw(1);
+    }
+
+    mod checked_add {
+        use super::*;
+
+        #[test]
+        fn rejects_currency_mismatch() {
+            let err = usd_raw(1).checked_add(eur_raw(1)).unwrap_err();
+            assert_eq!(
+                err,
+                CnAddError::CurrencyMismatch(Currency::usd().into(), Currency::eur().into())
+            );
+            assert_eq!(err.to_string(), "Currency mismatch: USD != EUR");
+        }
+
+        #[test]
+        fn mismatch_takes_priority_over_overflow() {
+            let err = usd_raw(CurrencyNotional::MAX_RAW)
+                .checked_add(eur_raw(CurrencyNotional::MAX_RAW))
+                .unwrap_err();
+            assert!(matches!(err, CnAddError::CurrencyMismatch(..)));
+        }
+
+        #[test]
+        fn positive_overflow() {
+            let err = usd_raw(CurrencyNotional::MAX_RAW)
+                .checked_add(usd_raw(1))
+                .unwrap_err();
+            assert_eq!(err, CnAddError::Overflow(CurrencyNotional::MAX_RAW, 1));
+            assert!(err.to_string().starts_with("Overflow: "));
+        }
+
+        #[test]
+        fn negative_overflow() {
+            let err = usd_raw(CurrencyNotional::MIN_RAW)
+                .checked_add(usd_raw(-2))
+                .unwrap_err();
+            assert_eq!(err, CnAddError::Overflow(CurrencyNotional::MIN_RAW, -2));
+        }
+
+        /// `i128::MIN` is excluded, so a successful result is always within `MIN_RAW..=MAX_RAW`.
+        #[test]
+        fn rejects_i128_min() {
+            let err = usd_raw(CurrencyNotional::MIN_RAW)
+                .checked_add(usd_raw(-1))
+                .unwrap_err();
+            assert_eq!(err, CnAddError::Overflow(CurrencyNotional::MIN_RAW, -1));
+        }
+
+        /// Malicious `CurrencyNotional::new` input will be reported as Overflow.
+        ///
+        /// A little bit... Desicive. But it makes `new` more ergonomic.
+        /// And the only desicive arm is 128::MIN, so... I take it.
+        #[test]
+        fn out_of_range_operand_is_rejected() {
+            let err = CurrencyNotional::new(i128::MIN, usd().currency)
+                .checked_add(usd_raw(0))
+                .unwrap_err();
+            assert_eq!(err, CnAddError::Overflow(i128::MIN, 0));
+        }
+
+        /// Precision is ignored when comparing `CurrencyTag` values during `Add`/`checked_add`.
+        #[test]
+        fn currency_equality_ignores_precision() {
+            let code: CurrencyTag = Currency::usd().into();
+            let loose = CurrencyTag::new(code.alphabetic_code(), 2);
+            let tight = CurrencyTag::new(code.alphabetic_code(), 8);
+
+            assert!(
+                CurrencyNotional::new(1, loose)
+                    .checked_add(CurrencyNotional::new(1, tight))
+                    .is_ok(),
+                "same code, different precision must still add"
+            );
+        }
+
+        /// Regression guards.
+        mod preserve_behavior {
+            use super::*;
+            use proptest::prelude::*;
+
+            #[test]
+            fn sums_and_keeps_tag() {
+                let sum = usd_raw(100_050_000_000)
+                    .checked_add(usd_raw(50_200_000_000))
+                    .expect("same currency, no overflow");
+                assert_eq!(sum, usd_raw(150_250_000_000));
+                assert_eq!(sum.to_string(), "150.25 (USD)");
+            }
+
+            #[test]
+            fn zero_is_identity() {
+                let a = usd_raw(552_812_500_000_000);
+                assert_eq!(a.checked_add(usd_raw(0)), Ok(a));
+                assert_eq!(usd_raw(0).checked_add(a), Ok(a));
+            }
+
+            #[test]
+            #[should_panic(expected = "Overflow")]
+            fn add_panics_where_checked_add_rejects() {
+                let _ = usd_raw(CurrencyNotional::MIN_RAW) + usd_raw(-1);
+            }
+
+            proptest! {
+                /// `Add = checked_add` when succeeds.
+                #[test]
+                fn agrees_with_add_wherever_checked_add_succeeds(
+                    a in any::<i128>(), b in any::<i128>(),
+                ) {
+                    if let Ok(sum) = usd_raw(a).checked_add(usd_raw(b)) {
+                        prop_assert_eq!(usd_raw(a) + usd_raw(b), sum);
+                    }
+                }
+            }
+        }
     }
 }
