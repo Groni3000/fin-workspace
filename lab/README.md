@@ -1,6 +1,14 @@
 # Lab
 
 A place where I experiment, trying to figure out what do I need to build next.
+Not held to the same bar as the other crates.
+
+The Kafka pieces are behind the `kafka` feature (`rdkafka` compiles librdkafka
+from C source, so it needs `cmake` and a C toolchain):
+
+```bash
+cargo run -p lab --features kafka --bin kafka_check
+```
 
 ## Entities
 

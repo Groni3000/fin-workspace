@@ -215,6 +215,15 @@ So, when we write specification, we need to manually do it once.
 
 - Basically, the same idea as QuoteNotional, but tagged with a real currency.
 - min/max values are `-i128::MAX, i128::MAX` in a raw int representation.
+  Note `-i128::MAX != i128::MIN`: `i128::MIN` is excluded so that negation is
+  always a true negation, never an identity mapping.
+- Addition comes in two forms:
+  - `checked_add` -> `Result<Self, CnAddError>`, reporting `CurrencyMismatch`
+    or `Overflow`. Use this anywhere the operands come from outside the process
+    (broker reports, config) — a mismatched currency is a data problem, not a
+    programmer error, and the layer above should decide whether to halt.
+  - `Add` (`+`) delegates to `checked_add` and panics on either failure.
+    Convenient when both operands are already known to share a currency.
 - Used via the `Specification` of an instrument.
 - Very limited in ways to get this type: either Spec or deliberately `::new`.
   At least for now I think this is a very delicate type and allowing to get it

@@ -25,13 +25,16 @@ granularities, and most type systems blur them into one:
 - [`Instrument`] - enum of concrete implementations
   (useful for gathering all instrument types together).
 
-Each element is kind of... Fat. `Stock`, the smallest, is 216 bytes.
-`OptionContract`, the largest is 232 bytes. Add 8 bytes for tag in `Instrument`
-and you'll get 240 bytes size. The main villain is MIC code - it holds all ISO information.
+These are small: `Stock` is 56 bytes, `FuturesContract` 64, `OptionContract` 72.
+`Instrument` is 72 bytes — the tag fits in existing padding.
 
-Despite that, this library has exactly one heap allocation
-at the first call to the MIC registry. Every value
-in this library lives on the stack and is `Copy`.
+`Mic` is 4 bytes: just the code. The full ISO 10383 record is a separate
+160-byte [`MicIso`], fetched from the registry only when you actually want the
+country, status or description — none of which belong in a hot loop.
+
+Every value in this library lives on the stack and is `Copy`. The only heap
+allocation is the lazy MIC registry, built once on first lookup (plus one more
+in `tradeprim` for the currency registry).
 
 That's the core product. No live prices, no orders, no connection state — just
 identity, with enough structure to compose into bigger things.
@@ -195,11 +198,16 @@ my rust-analyzer hung up for a minute or more. That's not acceptable.
 I tried `phf` - perfect hash map. The lag was shorter, but still long enough to make me mad.
 
 So, instead of having this whole registry at compile time with all types, it was embedded
-as pure static bytes. The registry is constructed once (that exact one heap allocation)
+as pure static bytes. The registry is constructed once (that one heap allocation)
 during first MIC lookup. All subsequent lookups are pure hashmap lookups.
 
+That registry stores [`MicIso`] — the full 160-byte ISO record. `Mic`, the
+4-byte code, is what instruments actually carry; `Mic::from(mic_iso)` narrows,
+and `mic_iso_by_code` goes the other way when you need the details.
+
 But that's not all. It would be nice to have some LSP support for the most common MICs.
-So, unconditionally, we codegen some of them as associated const constructors.
+So, unconditionally, we codegen 33 of them as associated const constructors
+(both `Mic::xnas()` and `MicIso::xnas()`).
 The docstring for each construction will tell you MIC's name and whether it's
 an operating or segment MIC.
 If a segment, it also shows the operating parent.
@@ -211,15 +219,21 @@ let nasdaq: Mic  = Mic::xnas();   // NASDAQ - ALL MARKETS (XNAS, operating).
 let bats:   Mic  = Mic::bats();   // CBOE BZX U.S. EQUITIES EXCHANGE (BATS, segment of XCBO).
 ```
 
-Usage of MIC the whole registry is performed via enabling the `mic-full` feature
-and using `mic_by_code` function:
+Lookup by code always works — the `mic-full` feature controls _how many_ records
+are embedded, not whether the registry exists. By default only the 33 curated
+MICs are compiled in; with `mic-full` you get all ~2_840.
 
 ```rust
-use instrid::mic::mic_by_code;
+use instrid::mic::{mic_by_code, mic_iso_by_code};
 
-assert!(mic_by_code("XNAS").is_some());
+assert!(mic_by_code("XNAS").is_some());      // -> Option<Mic>, 4 bytes
 assert!(mic_by_code("ZZZZ").is_none());      // unknown
 assert!(mic_by_code("XNA").is_none());       // wrong length
+
+// The full ISO record, when you need more than the code:
+let iso = mic_iso_by_code("XNAS").unwrap();
+assert_eq!(iso.iso_country_code().as_str(), "US");
+assert_eq!(iso.market_name(), "NASDAQ - ALL MARKETS");
 ```
 
 ## Serialization
