@@ -4,11 +4,15 @@ use tradeprim::currency::Currency;
 
 use crate::asset::Asset;
 use crate::days_in_month;
-use crate::instruments::TradedInstrument;
+use crate::instruments::{InvalidContractDate, TradedInstrument};
 use crate::mic::Mic;
 use crate::tenor::Tenor;
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+// `remote = "Self"` means that serde will generate ser/de functions for this type
+// but not the traits implementations, so we will manually implement traits,
+// we can use `new` to verify invariants
+#[cfg_attr(feature = "serde", serde(remote = "Self"))]
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub struct FuturesContract {
     base: Asset,
@@ -20,8 +24,37 @@ pub struct FuturesContract {
     day: Option<u8>,
 }
 
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for FuturesContract {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // Use generated deserialization.
+        let raw = FuturesContract::deserialize(deserializer)?;
+
+        // Verify invariants via `new`.
+        Self::new(
+            raw.base,
+            raw.price_quotation,
+            raw.mic,
+            raw.settlement_currency,
+            raw.year,
+            raw.tenor,
+            raw.day,
+        )
+        .map_err(serde::de::Error::custom)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for FuturesContract {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Use generated serialization.
+        FuturesContract::serialize(self, serializer)
+    }
+}
+
 impl FuturesContract {
-    /// Create a new futures contract with date validation.
+    /// Create a new futures contract, validating that `(year, tenor, day)` is a
+    /// real calendar date. A `day` of `None` is always accepted.
     pub const fn new(
         base: Asset,
         price_quotation: Asset,
@@ -30,15 +63,15 @@ impl FuturesContract {
         year: u16,
         tenor: Tenor,
         day: Option<u8>,
-    ) -> Option<Self> {
-        if let Some(day) = day {
+    ) -> Result<Self, InvalidContractDate> {
+        if let Some(d) = day {
             let n_days = days_in_month(year, tenor.ordinal());
-            if day == 0 || day > n_days {
-                return None;
+            if d == 0 || d > n_days {
+                return Err(InvalidContractDate { year, tenor, day });
             }
         }
 
-        Some(Self {
+        Ok(Self {
             base,
             price_quotation,
             mic,

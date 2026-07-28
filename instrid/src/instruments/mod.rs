@@ -11,6 +11,8 @@ pub use options::{ExerciseStyle, OptionContract, OptionKind};
 pub use stock::Stock;
 use tradeprim::currency::Currency;
 
+use crate::tenor::Tenor;
+
 /// Represents a trading instrument.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type"))]
@@ -97,6 +99,36 @@ impl Display for Instrument {
             Instrument::Stock(s) => std::fmt::Display::fmt(s, f),
             Instrument::Futures(fu) => std::fmt::Display::fmt(fu, f),
             Instrument::Option(option) => std::fmt::Display::fmt(option, f),
+        }
+    }
+}
+
+/// A struct representing an invalid contract date returned by Instrument constructors
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InvalidContractDate {
+    pub year: u16,
+    pub tenor: Tenor,
+    pub day: Option<u8>,
+}
+
+impl std::error::Error for InvalidContractDate {}
+
+impl Display for InvalidContractDate {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.day {
+            Some(day) => write!(
+                f,
+                "invalid contract date: {:04}-{:02}-{:02}",
+                self.year,
+                self.tenor.ordinal(),
+                day
+            ),
+            None => write!(
+                f,
+                "invalid contract date: {:04}-{:02}",
+                self.year,
+                self.tenor.ordinal()
+            ),
         }
     }
 }

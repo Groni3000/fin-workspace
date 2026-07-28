@@ -1,9 +1,14 @@
 use std::fmt::Display;
 use tradeprim::{currency::Currency, prelude::Price};
 
+use crate::instruments::InvalidContractDate;
 use crate::{asset::Asset, days_in_month, mic::Mic, prelude::TradedInstrument, tenor::Tenor};
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+// `remote = "Self"` means that serde will generate ser/de functions for this type
+// but not the traits implementations, so we will manually implement traits,
+// we can use `new` to verify invariants
+#[cfg_attr(feature = "serde", serde(remote = "Self"))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct OptionContract {
     base: Asset,
@@ -16,6 +21,37 @@ pub struct OptionContract {
     kind: OptionKind,
     style: ExerciseStyle,
     strike: Price,
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for OptionContract {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        // Use generated deserialization function.
+        let raw = OptionContract::deserialize(deserializer)?;
+
+        // Verify invariants via `new`.
+        Self::new(
+            raw.base,
+            raw.price_quotation,
+            raw.mic,
+            raw.settlement_currency,
+            raw.year,
+            raw.tenor,
+            raw.day,
+            raw.kind,
+            raw.style,
+            raw.strike,
+        )
+        .map_err(serde::de::Error::custom)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for OptionContract {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Use generated serialization.
+        OptionContract::serialize(self, serializer)
+    }
 }
 
 /// Represents the kind of option contract, either a Put or a Call.
@@ -75,7 +111,8 @@ impl Display for ExerciseStyle {
 }
 
 impl OptionContract {
-    /// Create a new options contract with date validation.
+    /// Create a new options contract, validating that `(year, tenor, day)` is a
+    /// real calendar date.
     #[allow(clippy::too_many_arguments)]
     pub const fn new(
         base: Asset,
@@ -88,12 +125,16 @@ impl OptionContract {
         kind: OptionKind,
         style: ExerciseStyle,
         strike: Price,
-    ) -> Option<Self> {
+    ) -> Result<Self, InvalidContractDate> {
         if day == 0 || day > days_in_month(year, tenor.ordinal()) {
-            return None;
+            return Err(InvalidContractDate {
+                year,
+                tenor,
+                day: Some(day),
+            });
         }
 
-        Some(Self {
+        Ok(Self {
             base,
             price_quotation,
             mic,
