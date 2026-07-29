@@ -40,6 +40,41 @@ impl Default for Specification {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum InvalidSpecification {
+    PointValueNotRepresentable {
+        tick_size_price: Price,
+        tick_size_currency: (Price, Currency),
+    },
+    PointValueOutOfRange(i128),
+    TickSizePrice(Price),
+}
+
+impl Display for InvalidSpecification {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InvalidSpecification::PointValueNotRepresentable {
+                tick_size_price,
+                tick_size_currency,
+            } => {
+                write!(
+                    f,
+                    "PointValueNotRepresentable {} / {} ({})",
+                    tick_size_price, tick_size_currency.0, tick_size_currency.1
+                )
+            }
+            InvalidSpecification::PointValueOutOfRange(out_of_range) => {
+                write!(f, "PointValueOutOfRange {}", out_of_range)
+            }
+            InvalidSpecification::TickSizePrice(tick_size_price) => {
+                write!(f, "TickSizePrice {}", tick_size_price)
+            }
+        }
+    }
+}
+
+impl std::error::Error for InvalidSpecification {}
+
 impl Specification {
     /// Builds a `Specification`, deriving `point_value` from the tick pair as
     /// `tick_size_currency.0 / tick_size_price`.
@@ -72,19 +107,23 @@ impl Specification {
         tick_size_currency: (Price, Currency),
         min_quantity: Quantity,
         step_quantity: QtyStep,
-        // TODO: Option<Self> -> Result<Self, InvalidSpecification>
-    ) -> Option<Self> {
+    ) -> Result<Self, InvalidSpecification> {
         if tick_size_price <= Price::ZERO || tick_size_price > Price::ONE {
-            return None;
+            return Err(InvalidSpecification::TickSizePrice(tick_size_price));
         }
         let numerator = tick_size_currency.0.value() as i128 * PointValue::SCALE;
         let denominator = tick_size_price.value() as i128;
         // Not representable in 9 digits
         if numerator % denominator != 0 {
-            return None;
+            return Err(InvalidSpecification::PointValueNotRepresentable {
+                tick_size_price,
+                tick_size_currency,
+            });
         }
-        let point_value = PointValue::new(numerator / denominator)?;
-        Some(Self {
+        let point_value = PointValue::new(numerator / denominator)
+            .ok_or_else(|| InvalidSpecification::PointValueOutOfRange(numerator / denominator))?;
+
+        Ok(Self {
             tick_size_price,
             tick_size_currency,
             point_value,
@@ -480,23 +519,31 @@ mod tests {
         let usd = (Price::ONE, Currency::usd());
 
         // Below the range: zero tick would divide by zero deriving point_value.
-        assert!(
-            Specification::new(Price::ZERO, usd, Quantity::ONE, QtyStep::default()).is_none(),
-            "tick_size_price = 0 must be rejected"
+        assert_eq!(
+            Specification::new(Price::ZERO, usd, Quantity::ONE, QtyStep::default()),
+            Err(InvalidSpecification::TickSizePrice(Price::ZERO))
         );
+        // assert!(
+        //     Specification::new(Price::ZERO, usd, Quantity::ONE, QtyStep::default()),
+        //     "tick_size_price = 0 must be rejected"
+        // );
 
         // Upper edge is inclusive: exactly one whole price unit is valid.
         assert!(
-            Specification::new(Price::ONE, usd, Quantity::ONE, QtyStep::default()).is_some(),
+            Specification::new(Price::ONE, usd, Quantity::ONE, QtyStep::default()).is_ok(),
             "tick_size_price == Price::ONE must be accepted"
         );
 
         // One raw step above the edge: not a valid tick.
         let above_one = Price::from_str_unchecked("1.000000001");
-        assert!(
-            Specification::new(above_one, usd, Quantity::ONE, QtyStep::default()).is_none(),
-            "tick_size_price > Price::ONE must be rejected"
+        assert_eq!(
+            Specification::new(above_one, usd, Quantity::ONE, QtyStep::default()),
+            Err(InvalidSpecification::TickSizePrice(above_one))
         );
+        // assert!(
+        //     Specification::new(above_one, usd, Quantity::ONE, QtyStep::default()).is_none(),
+        //     "tick_size_price > Price::ONE must be rejected"
+        // );
     }
 
     #[test]
@@ -601,15 +648,48 @@ mod tests {
     #[test]
     fn new_rejects_non_terminating_point_value() {
         // 0.01 / 0.03 = 1/3 — not representable in 9-digit fixed point.
-        assert!(
-            Specification::new(
-                Price::from_str_unchecked("0.03"),
-                (Price::from_str_unchecked("0.01"), Currency::usd()),
-                Quantity::ONE,
-                QtyStep::default()
-            )
-            .is_none(),
-            "non-terminating tick ratio must be rejected"
+        let tsp = Price::from_str_unchecked("0.03");
+        let tsc = (Price::from_str_unchecked("0.01"), Currency::usd());
+        assert_eq!(
+            Specification::new(tsp, tsc, Quantity::ONE, QtyStep::default()),
+            Err(InvalidSpecification::PointValueNotRepresentable {
+                tick_size_price: tsp,
+                tick_size_currency: tsc,
+            })
+        );
+        // assert!(
+        //     Specification::new(
+        //         Price::from_str_unchecked("0.03"),
+        //         (Price::from_str_unchecked("0.01"), Currency::usd()),
+        //         Quantity::ONE,
+        //         QtyStep::default()
+        //     )
+        //     .is_none(),
+        //     "non-terminating tick ratio must be rejected"
+        // );
+    }
+
+    /// A tick pair that divides exactly but lands outside `PointValue`'s range.
+    /// Both ends are reachable, and the error must carry the raw quotient.
+    #[test]
+    fn new_rejects_out_of_range_point_value() {
+        // Below MIN_RAW (== 1): an unfilled `tick_size_currency` divides to 0.
+        let tsp = Price::ONE;
+        let tsc = (Price::ZERO, Currency::usd());
+        assert_eq!(
+            Specification::new(tsp, tsc, Quantity::ONE, QtyStep::default()),
+            Err(InvalidSpecification::PointValueOutOfRange(0)),
+            "a zero currency tick is out of range, not a division failure"
+        );
+
+        // Above MAX_RAW: 1.0 / 1e-9 = 1e9 points.
+        let tsp = Price::from_str_unchecked("0.000000001");
+        let tsc = (Price::ONE, Currency::usd());
+        assert_eq!(
+            Specification::new(tsp, tsc, Quantity::ONE, QtyStep::default()),
+            Err(InvalidSpecification::PointValueOutOfRange(
+                1_000_000_000_000_000_000
+            ))
         );
     }
 }
