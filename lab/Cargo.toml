@@ -25,6 +25,3 @@ required-features = ["kafka"]
 [[bin]]
 name = "generic_test"
 required-features = ["kafka"]
-
-[profile.release]
-debug = true

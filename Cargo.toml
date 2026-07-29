@@ -9,3 +9,8 @@ members = [
 # fail on a fresh clone, since the directory isn't in the repo.
 exclude = ["comptime_test"]
 resolver = "2"
+
+# lab/how_to_profile.md.
+[profile.profiling]
+inherits = "release"
+debug = 1 # line tables: enough to symbolicate, far smaller than full DWARF
