@@ -3,6 +3,9 @@
 members = [
     "instrid",
     "futchain",
-    "tradeprim", "oms", "lab", "comptime_test",
+    "tradeprim", "oms", "lab",
 ]
+# Gitignored scratch crate: listing it as a member makes every cargo command
+# fail on a fresh clone, since the directory isn't in the repo.
+exclude = ["comptime_test"]
 resolver = "2"
