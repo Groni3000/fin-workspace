@@ -1,6 +1,11 @@
 #[cfg(feature = "serde")]
 use std::borrow::Cow;
-use std::{fmt::Display, num::ParseIntError, ops::Add, str::FromStr};
+use std::{
+    fmt::Display,
+    num::ParseIntError,
+    ops::{Add, Sub},
+    str::FromStr,
+};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -270,9 +275,22 @@ impl Add<Quantity> for QtyStep {
         Quantity::new(
             rhs.value
                 .checked_add(self.step.value)
-                .unwrap_or_else(|| panic!("wowowo")),
+                .unwrap_or_else(|| panic!("overflow")),
         )
-        .unwrap_or_else(|| panic!("one"))
+        .unwrap_or_else(|| panic!("Quantity overflow"))
+    }
+}
+
+impl Sub<Quantity> for Quantity {
+    type Output = Quantity;
+
+    fn sub(self, rhs: Quantity) -> Self::Output {
+        Quantity::new(
+            self.value
+                .checked_sub(rhs.value)
+                .unwrap_or_else(|| panic!("underflow")),
+        )
+        .unwrap_or_else(|| panic!("Quantity underflow"))
     }
 }
 

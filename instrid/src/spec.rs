@@ -16,6 +16,71 @@ pub trait Spec {
     fn point_value(&self) -> PointValue;
     fn currency_notional(&self, quote_notional: QuoteNotional) -> CurrencyNotional;
     fn min_quantity(&self) -> Quantity;
+    fn step_qty(&self) -> QtyStep;
+
+    // --- Validation
+
+    /// Returns `true` if, **roughly speaking**, `price.is_multiple_of(tick)`.
+    ///
+    /// Price does not require rounding to plug in orders.
+    fn is_price_on_tick(&self, price: Price) -> bool {
+        price
+            .value()
+            .unsigned_abs()
+            .is_multiple_of(self.tick_size_price().value() as u64)
+    }
+    /// Returns `true` if, for this specific instrument, it is safe to use in orders.
+    fn is_price_valid(&self, price: Price) -> bool {
+        self.is_price_on_tick(price)
+    }
+
+    /// Returns `true` if `quantity >= min_qty`.
+    fn is_qty_big_enough(&self, quantity: Quantity) -> bool {
+        quantity >= self.min_quantity()
+    }
+    /// Returns `true` if `quantity.is_multiple_of(step_qty)`.
+    fn is_qty_on_step(&self, quantity: Quantity) -> bool {
+        quantity
+            .value()
+            .checked_sub(self.min_quantity().value())
+            .is_some_and(|x| x.is_multiple_of(self.step_qty().step().value()))
+    }
+    /// Returns `true` if, for this specific instrument, it is safe to use in orders.
+    fn is_qty_valid(&self, quantity: Quantity) -> bool {
+        self.is_qty_big_enough(quantity) && self.is_qty_on_step(quantity)
+    }
+
+    // ---
+
+    // --- Rounding
+
+    /// Round price to tick size using half-away rounding.
+    fn round_price(&self, price: Price) -> Option<Price> {
+        todo!()
+    }
+    /// Round price up to tick size.
+    fn round_up_price(&self, price: Price) -> Option<Price> {
+        todo!()
+    }
+    /// Round price down to tick size.
+    fn round_down_price(&self, price: Price) -> Option<Price> {
+        todo!()
+    }
+
+    /// Round quantity to quantity_step using half-away rounding.
+    fn round_quantity(&self, quantity: Quantity) -> Option<Quantity> {
+        todo!()
+    }
+    /// Round quantity up to quantity_step.
+    fn round_up_quantity(&self, quantity: Quantity) -> Option<Quantity> {
+        todo!()
+    }
+    /// Round quantity down to quantity_step.
+    fn round_down_quantity(&self, quantity: Quantity) -> Option<Quantity> {
+        todo!()
+    }
+
+    // ---
 }
 
 /// Represents the essential trading specification parameters.
@@ -48,6 +113,7 @@ pub enum InvalidSpecification {
     },
     PointValueOutOfRange(i128),
     TickSizePrice(Price),
+    ZeroMinQty,
 }
 
 impl Display for InvalidSpecification {
@@ -69,6 +135,7 @@ impl Display for InvalidSpecification {
             InvalidSpecification::TickSizePrice(tick_size_price) => {
                 write!(f, "TickSizePrice {}", tick_size_price)
             }
+            InvalidSpecification::ZeroMinQty => write!(f, "Min quantity should not be zero"),
         }
     }
 }
@@ -110,6 +177,9 @@ impl Specification {
     ) -> Result<Self, InvalidSpecification> {
         if tick_size_price <= Price::ZERO || tick_size_price > Price::ONE {
             return Err(InvalidSpecification::TickSizePrice(tick_size_price));
+        }
+        if min_quantity == Quantity::ZERO {
+            return Err(InvalidSpecification::ZeroMinQty);
         }
         let numerator = tick_size_currency.0.value() as i128 * PointValue::SCALE;
         let denominator = tick_size_price.value() as i128;
@@ -162,6 +232,10 @@ impl Spec for Specification {
 
     fn min_quantity(&self) -> Quantity {
         self.min_quantity
+    }
+
+    fn step_qty(&self) -> QtyStep {
+        self.step_quantity
     }
 }
 
@@ -690,6 +764,65 @@ mod tests {
             Err(InvalidSpecification::PointValueOutOfRange(
                 1_000_000_000_000_000_000
             ))
+        );
+    }
+
+    /// ZW-spec with the quantity grid as the parameter under test.
+    fn zw_spec_with(min_quantity: &str, step: &str) -> Specification {
+        Specification::new(
+            Price::from_str_unchecked("0.25"),
+            (Price::from_str_unchecked("12.5"), Currency::usd()),
+            Quantity::from_str_unchecked(min_quantity),
+            QtyStep::new(Quantity::from_str_unchecked(step)).expect("step must be non-zero"),
+        )
+        .expect("ZW tick pair is valid")
+    }
+
+    /// The grid is anchored at `min_quantity`: valid sizes are `min + k*step`.
+    #[test]
+    fn quantity_grid_is_anchored_at_the_minimum() {
+        let spec = zw_spec_with("10", "3");
+        assert!(spec.is_qty_valid(Quantity::from_str_unchecked("10")));
+        assert!(spec.is_qty_valid(Quantity::from_str_unchecked("13")));
+        assert!(
+            !spec.is_qty_valid(Quantity::from_str_unchecked("12")),
+            "12 is a multiple of 3 but is not on the offset grid"
+        );
+    }
+
+    /// `min - step` would be on the grid, but below `min`, so it should not.
+    #[test]
+    fn below_min_is_neither_big_enough_nor_on_step() {
+        let spec = zw_spec_with("10", "3");
+        let q = Quantity::from_str_unchecked("7");
+        assert!(!spec.is_qty_big_enough(q));
+        // main check - it's not on the grid
+        assert!(
+            !spec.is_qty_on_step(q),
+            "no grid point exists below the minimum"
+        );
+    }
+
+    /// Tick checks must survive zero/negative prices.
+    #[test]
+    fn negative_price_is_checked_against_the_tick() {
+        let spec = zw_spec_with("1", "1");
+        assert!(spec.is_price_on_tick(Price::from_str_unchecked("-0.5")));
+        assert!(!spec.is_price_on_tick(Price::from_str_unchecked("-0.6")));
+        assert!(spec.is_price_on_tick(Price::ZERO));
+    }
+
+    /// Zero quantity orders are not allowed, that's why we reject such spec
+    #[test]
+    fn new_spec_rejects_min_zero_quantity() {
+        assert_eq!(
+            Specification::new(
+                Price::from_str_unchecked("0.25"),
+                (Price::from_str_unchecked("12.5"), Currency::usd()),
+                Quantity::from_str_unchecked("0"),
+                QtyStep::new(Quantity::from_str_unchecked("3")).expect("step must be non-zero"),
+            ),
+            Err(InvalidSpecification::ZeroMinQty)
         );
     }
 }
