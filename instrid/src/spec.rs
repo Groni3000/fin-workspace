@@ -1,7 +1,10 @@
 use std::{fmt::Display, num::ParseIntError, str::FromStr};
 
 use tradeprim::{
-    currency::Currency, currency_notional::CurrencyNotional, price::Price,
+    currency::Currency,
+    currency_notional::CurrencyNotional,
+    price::Price,
+    quantity::{QtyStep, Quantity},
     quote_notional::QuoteNotional,
 };
 
@@ -12,6 +15,7 @@ pub trait Spec {
     fn tick_size_currency(&self) -> (Price, Currency);
     fn point_value(&self) -> PointValue;
     fn currency_notional(&self, quote_notional: QuoteNotional) -> CurrencyNotional;
+    fn min_quantity(&self) -> Quantity;
 }
 
 /// Represents the essential trading specification parameters.
@@ -20,6 +24,8 @@ pub struct Specification {
     tick_size_price: Price,
     tick_size_currency: (Price, Currency),
     point_value: PointValue,
+    min_quantity: Quantity,
+    step_quantity: QtyStep,
 }
 
 impl Default for Specification {
@@ -28,6 +34,8 @@ impl Default for Specification {
             tick_size_price: Price::from_str_unchecked("0.01"),
             tick_size_currency: (Price::from_str_unchecked("0.01"), Currency::default()),
             point_value: PointValue::ONE,
+            min_quantity: Quantity::ONE,
+            step_quantity: QtyStep::default(),
         }
     }
 }
@@ -59,7 +67,13 @@ impl Specification {
     ///   `(0.25, (12.5, USD))` - you can't copy-paste values from CME specification.
     ///
     /// So, fill a spec **once**, verify by hand and reuse specs.
-    pub fn new(tick_size_price: Price, tick_size_currency: (Price, Currency)) -> Option<Self> {
+    pub fn new(
+        tick_size_price: Price,
+        tick_size_currency: (Price, Currency),
+        min_quantity: Quantity,
+        step_quantity: QtyStep,
+        // TODO: Option<Self> -> Result<Self, InvalidSpecification>
+    ) -> Option<Self> {
         if tick_size_price <= Price::ZERO || tick_size_price > Price::ONE {
             return None;
         }
@@ -74,7 +88,13 @@ impl Specification {
             tick_size_price,
             tick_size_currency,
             point_value,
+            min_quantity,
+            step_quantity,
         })
+    }
+
+    pub fn min_quantity(&self) -> Quantity {
+        self.min_quantity
     }
 }
 
@@ -99,6 +119,10 @@ impl Spec for Specification {
             QuoteNotional::round(self.point_value.0 * quote_notional.value()),
             self.tick_size_currency.1.into(),
         )
+    }
+
+    fn min_quantity(&self) -> Quantity {
+        self.min_quantity
     }
 }
 
@@ -362,11 +386,12 @@ mod tests {
 
     #[test]
     fn specification_tests() {
+        let min_qty = Quantity::ONE;
         // default case for a common shares
         // usd, cents
         let ts_p = Price::from_str_unchecked("0.01");
         let ts_c = (Price::from_str_unchecked("0.01"), Currency::default());
-        let spec = Specification::new(ts_p, ts_c).unwrap();
+        let spec = Specification::new(ts_p, ts_c, min_qty, QtyStep::default()).unwrap();
         assert_eq!(ts_p, spec.tick_size_price());
         assert_eq!(ts_c.0, spec.tick_size_currency().0);
         assert_eq!(PointValue::from_str_unchecked("1.0"), spec.point_value());
@@ -377,6 +402,8 @@ mod tests {
         let spec = Specification::new(
             Price::from_str_unchecked("0.25"),
             (Price::from_str_unchecked("12.5"), Currency::usd()),
+            min_qty,
+            QtyStep::default(),
         )
         .unwrap();
         assert_eq!(Price::from_str_unchecked("0.25"), spec.tick_size_price());
@@ -390,6 +417,8 @@ mod tests {
         let spec = Specification::new(
             Price::from_str_unchecked("0.0001"),
             (Price::from_str_unchecked("4.2"), Currency::usd()),
+            min_qty,
+            QtyStep::default(),
         )
         .unwrap();
         assert_eq!(Price::from_str_unchecked("0.0001"), spec.tick_size_price());
@@ -408,6 +437,8 @@ mod tests {
         let spec = Specification::new(
             Price::from_str_unchecked("0.03125"),
             (Price::from_str_unchecked("31.25"), Currency::usd()),
+            min_qty,
+            QtyStep::default(),
         )
         .unwrap();
         assert_eq!(Price::from_str_unchecked("0.03125"), spec.tick_size_price());
@@ -423,6 +454,8 @@ mod tests {
         let spec = Specification::new(
             Price::from_str_unchecked("0.0000005"),
             (Price::from_str_unchecked("6.25"), Currency::usd()),
+            min_qty,
+            QtyStep::default(),
         )
         .unwrap();
         assert_eq!(
@@ -448,20 +481,20 @@ mod tests {
 
         // Below the range: zero tick would divide by zero deriving point_value.
         assert!(
-            Specification::new(Price::ZERO, usd).is_none(),
+            Specification::new(Price::ZERO, usd, Quantity::ONE, QtyStep::default()).is_none(),
             "tick_size_price = 0 must be rejected"
         );
 
         // Upper edge is inclusive: exactly one whole price unit is valid.
         assert!(
-            Specification::new(Price::ONE, usd).is_some(),
+            Specification::new(Price::ONE, usd, Quantity::ONE, QtyStep::default()).is_some(),
             "tick_size_price == Price::ONE must be accepted"
         );
 
         // One raw step above the edge: not a valid tick.
         let above_one = Price::from_str_unchecked("1.000000001");
         assert!(
-            Specification::new(above_one, usd).is_none(),
+            Specification::new(above_one, usd, Quantity::ONE, QtyStep::default()).is_none(),
             "tick_size_price > Price::ONE must be rejected"
         );
     }
@@ -474,6 +507,8 @@ mod tests {
         let spec = Specification::new(
             Price::from_str_unchecked("0.03125"),
             (Price::from_str_unchecked("31.25"), Currency::usd()),
+            Quantity::ONE,
+            QtyStep::default(),
         )
         .unwrap();
         let qn = QuoteNotional::from_str_unchecked("552.8125");
@@ -502,6 +537,8 @@ mod tests {
         let spec = Specification::new(
             Price::from_str_unchecked("0.0000005"),
             (Price::from_str_unchecked("6.25"), Currency::usd()),
+            Quantity::ONE,
+            QtyStep::default(),
         )
         .unwrap();
         let qn = QuoteNotional::from_str_unchecked("0.030625");
@@ -526,6 +563,8 @@ mod tests {
         let spec = Specification::new(
             Price::from_str_unchecked("0.5"),
             (Price::from_str_unchecked("0.95"), Currency::usd()),
+            Quantity::ONE,
+            QtyStep::default(),
         )
         .unwrap();
         let qn = QuoteNotional::from_str_unchecked("0.000000001");
@@ -542,6 +581,8 @@ mod tests {
         let spec = Specification::new(
             Price::from_str_unchecked("0.5"),
             (Price::from_str_unchecked("0.95"), Currency::usd()),
+            Quantity::ONE,
+            QtyStep::default(),
         )
         .unwrap();
         let qn = QuoteNotional::from_str_unchecked("-0.000000001");
@@ -564,6 +605,8 @@ mod tests {
             Specification::new(
                 Price::from_str_unchecked("0.03"),
                 (Price::from_str_unchecked("0.01"), Currency::usd()),
+                Quantity::ONE,
+                QtyStep::default()
             )
             .is_none(),
             "non-terminating tick ratio must be rejected"

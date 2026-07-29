@@ -1,6 +1,6 @@
 #[cfg(feature = "serde")]
 use std::borrow::Cow;
-use std::{fmt::Display, num::ParseIntError, str::FromStr};
+use std::{fmt::Display, num::ParseIntError, ops::Add, str::FromStr};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,8 @@ impl Quantity {
     pub const MIN_RAW: u64 = 0;
     /// Zero value
     pub const ZERO: Self = Self::new_unchecked(0);
+    /// One value
+    pub const ONE: Self = Self::new_unchecked(Self::SCALE);
     // Powers of ten indexed by remaining precision (0..=PRECISION), so the
     // per-parse scaling is a table lookup instead of a runtime `pow`.
     const POW10: [u64; Self::PRECISION as usize + 1] = [
@@ -238,6 +240,45 @@ impl Serialize for Quantity {
         S: serde::Serializer,
     {
         serializer.collect_str(self)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QtyStep {
+    step: Quantity,
+}
+
+impl QtyStep {
+    /// Creates a new `QtyStep` with the given quantity.
+    /// Returns `None` if the quantity is zero.
+    pub fn new(quantity: Quantity) -> Option<Self> {
+        if quantity == Quantity::ZERO {
+            return None;
+        }
+        Some(Self { step: quantity })
+    }
+
+    pub fn step(&self) -> Quantity {
+        self.step
+    }
+}
+
+impl Add<Quantity> for QtyStep {
+    type Output = Quantity;
+
+    fn add(self, rhs: Quantity) -> Self::Output {
+        Quantity::new(
+            rhs.value
+                .checked_add(self.step.value)
+                .unwrap_or_else(|| panic!("wowowo")),
+        )
+        .unwrap_or_else(|| panic!("one"))
+    }
+}
+
+impl Default for QtyStep {
+    fn default() -> Self {
+        Self::new(Quantity::ONE).unwrap()
     }
 }
 
