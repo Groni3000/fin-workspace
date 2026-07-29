@@ -55,29 +55,77 @@ pub trait Spec {
     // --- Rounding
 
     /// Round price to tick size using half-away rounding.
+    /// `None` if the result leaves `Price`'s range.
     fn round_price(&self, price: Price) -> Option<Price> {
-        todo!()
+        let tick = self.tick_size_price().value();
+        let remainder = price.value().checked_rem_euclid(tick)?;
+        if remainder == 0 {
+            return Some(price);
+        }
+        // `rem_euclid` is non-negative, so these distances hold for negative prices too.
+        let leftover = tick - remainder;
+        // [----|----]
+        //        ^    ==> round-up
+        if remainder > leftover || (leftover == remainder && price.value() > 0) {
+            self.round_up_price(price)
+        } else {
+            self.round_down_price(price)
+        }
     }
     /// Round price up to tick size.
+    /// `None` if the result leaves `Price`'s range.
     fn round_up_price(&self, price: Price) -> Option<Price> {
-        todo!()
+        let tick = self.tick_size_price().value();
+        let remainder = price.value().checked_rem_euclid(tick)?;
+        if remainder == 0 {
+            return Some(price);
+        }
+        Price::new(price.value().checked_add(tick - remainder)?)
     }
     /// Round price down to tick size.
+    /// `None` if the result leaves `Price`'s range.
     fn round_down_price(&self, price: Price) -> Option<Price> {
-        todo!()
+        let tick = self.tick_size_price().value();
+        // Euclidean, so negative prices floor toward -inf instead of toward zero.
+        let quotient = price.value().checked_div_euclid(tick)?;
+        Price::new(quotient.checked_mul(tick)?)
     }
 
     /// Round quantity to quantity_step using half-away rounding.
+    /// `None` below `min_quantity`, where no valid quantity exists.
     fn round_quantity(&self, quantity: Quantity) -> Option<Quantity> {
-        todo!()
+        let step = self.step_qty().step().value();
+        let offset = quantity.value().checked_sub(self.min_quantity().value())?;
+        // `QtyStep` cannot hold zero, so this never divides by zero.
+        let remainder = offset % step;
+        if remainder == 0 {
+            return Some(quantity);
+        }
+        if step - remainder <= remainder {
+            self.round_up_quantity(quantity)
+        } else {
+            self.round_down_quantity(quantity)
+        }
     }
     /// Round quantity up to quantity_step.
+    /// `None` below `min_quantity`: bumping up to it could magnify a size
+    /// without bound, so that has to be the caller's explicit decision.
     fn round_up_quantity(&self, quantity: Quantity) -> Option<Quantity> {
-        todo!()
+        let step = self.step_qty().step().value();
+        let offset = quantity.value().checked_sub(self.min_quantity().value())?;
+        let remainder = offset % step;
+        if remainder == 0 {
+            return Some(quantity);
+        }
+        Quantity::new(quantity.value().checked_add(step - remainder)?)
     }
     /// Round quantity down to quantity_step.
+    /// `None` below `min_quantity`, where the grid has no point at all.
     fn round_down_quantity(&self, quantity: Quantity) -> Option<Quantity> {
-        todo!()
+        let step = self.step_qty().step().value();
+        let min = self.min_quantity().value();
+        let offset = quantity.value().checked_sub(min)?;
+        Quantity::new(min + offset / step * step)
     }
 
     // ---
@@ -824,5 +872,128 @@ mod tests {
             ),
             Err(InvalidSpecification::ZeroMinQty)
         );
+    }
+
+    mod rounding {
+        use super::*;
+
+        #[test]
+        fn round_down_floors_negative_prices() {
+            let spec = zw_spec_with("1", "1");
+            let price = Price::from_str_unchecked("-0.6");
+            assert_eq!(
+                spec.round_down_price(price),
+                Some(Price::from_str_unchecked("-0.75"))
+            );
+            assert_eq!(
+                spec.round_up_price(price),
+                Some(Price::from_str_unchecked("-0.5"))
+            );
+        }
+
+        /// Away from tick by half => round away from zero in both directions.
+        #[test]
+        fn price_half_away_from_tick_round_away_from_zero() {
+            let spec = zw_spec_with("1", "1");
+            assert_eq!(
+                spec.round_price(Price::from_str_unchecked("0.125")),
+                Some(Price::from_str_unchecked("0.25"))
+            );
+            assert_eq!(
+                spec.round_price(Price::from_str_unchecked("-0.125")),
+                Some(Price::from_str_unchecked("-0.25"))
+            );
+        }
+
+        /// Imagine you are trading something like BTC and accidentally put wrong spec.
+        /// If we rounded correct quantity of 0.001 but with min_qty = 10 to that min_qty
+        /// We would get tremendous error.
+        ///
+        /// So once qty is out of range, no valid quantity exists in any direction.
+        #[test]
+        fn below_min_has_no_valid_quantity_in_any_direction() {
+            let spec = zw_spec_with("10", "3");
+            for raw in ["0", "0.001", "7", "9.999999999"] {
+                let q = Quantity::from_str_unchecked(raw);
+                assert_eq!(spec.round_down_quantity(q), None, "{raw}");
+                assert_eq!(spec.round_up_quantity(q), None, "{raw}");
+                assert_eq!(spec.round_quantity(q), None, "{raw}");
+            }
+        }
+
+        /// Rounding up types MAX values are `None`.
+        #[test]
+        fn rounding_up_past_the_type_maximum_is_none() {
+            let spec = zw_spec_with("1", "3");
+
+            let price = Price::new(Price::MAX_RAW).expect("MAX_RAW is a Price");
+            assert_eq!(spec.round_up_price(price), None);
+            assert_eq!(
+                spec.round_down_price(price),
+                Price::new(1_000_000_750_000_000)
+            );
+
+            let qty = Quantity::new(Quantity::MAX_RAW).expect("MAX_RAW is a Quantity");
+            assert_eq!(spec.round_up_quantity(qty), None);
+            assert_eq!(
+                spec.round_down_quantity(qty),
+                Quantity::new(4_999_999_000_000_000)
+            );
+
+            // Nearest resolves upward.
+            assert_eq!(spec.round_price(price), None);
+            assert_eq!(spec.round_quantity(qty), None);
+        }
+
+        proptest! {
+            /// `round_down <= q <= round_up`, both land on the grid, and they are
+            /// never more than one step apart.
+            #[test]
+            //                                    10.0              ..1_000.0
+            fn rounding_brackets_the_input(raw in 10_000_000_000_u64..1_000_000_000_000) {
+                let spec = zw_spec_with("10", "3");
+                let q = Quantity::new(raw).expect("in range");
+                let down = spec.round_down_quantity(q).expect("at or above min");
+                let up = spec.round_up_quantity(q).expect("far from MAX");
+
+                // regular rounding property
+                prop_assert!(down <= q && q <= up, "down={down} q={q} up={up}");
+                // both ends are correct qty for orders
+                prop_assert!(spec.is_qty_valid(down));
+                prop_assert!(spec.is_qty_valid(up));
+                // check quantity step property
+                prop_assert!(
+                    up.value() - down.value() <= spec.step_qty().step().value(),
+                    "down={down} up={up}"
+                );
+            }
+        }
+
+        /// Regression guards
+        mod preserve_behavior {
+            use super::*;
+
+            #[test]
+            fn on_tick_prices_are_unchanged() {
+                let spec = zw_spec_with("1", "1");
+                for raw in ["12.5", "-0.75", "0"] {
+                    let price = Price::from_str_unchecked(raw);
+                    assert_eq!(spec.round_price(price), Some(price), "{raw}");
+                    assert_eq!(spec.round_up_price(price), Some(price), "{raw}");
+                    assert_eq!(spec.round_down_price(price), Some(price), "{raw}");
+                }
+            }
+
+            #[test]
+            fn on_grid_quantities_are_unchanged() {
+                let spec = zw_spec_with("10", "3");
+                for raw in ["10", "13", "100"] {
+                    let q = Quantity::from_str_unchecked(raw);
+                    assert_eq!(spec.round_quantity(q), Some(q), "{raw}");
+                    assert_eq!(spec.round_up_quantity(q), Some(q), "{raw}");
+                    assert_eq!(spec.round_down_quantity(q), Some(q), "{raw}");
+                }
+            }
+        }
     }
 }
