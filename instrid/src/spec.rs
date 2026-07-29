@@ -16,6 +16,7 @@ pub trait Spec {
     fn point_value(&self) -> PointValue;
     fn currency_notional(&self, quote_notional: QuoteNotional) -> CurrencyNotional;
     fn min_quantity(&self) -> Quantity;
+    fn max_quantity(&self) -> Quantity;
     fn step_qty(&self) -> QtyStep;
 
     // --- Validation
@@ -38,6 +39,10 @@ pub trait Spec {
     fn is_qty_big_enough(&self, quantity: Quantity) -> bool {
         quantity >= self.min_quantity()
     }
+    /// Returns `true` if `quantity <= max_qty`.
+    fn is_qty_small_enough(&self, quantity: Quantity) -> bool {
+        quantity <= self.max_quantity()
+    }
     /// Returns `true` if `quantity.is_multiple_of(step_qty)`.
     fn is_qty_on_step(&self, quantity: Quantity) -> bool {
         quantity
@@ -47,7 +52,9 @@ pub trait Spec {
     }
     /// Returns `true` if, for this specific instrument, it is safe to use in orders.
     fn is_qty_valid(&self, quantity: Quantity) -> bool {
-        self.is_qty_big_enough(quantity) && self.is_qty_on_step(quantity)
+        self.is_qty_big_enough(quantity)
+            && self.is_qty_small_enough(quantity)
+            && self.is_qty_on_step(quantity)
     }
 
     // ---
@@ -92,8 +99,11 @@ pub trait Spec {
     }
 
     /// Round quantity to quantity_step using half-away rounding.
-    /// `None` below `min_quantity`, where no valid quantity exists.
+    /// `None` outside `min_quantity..=max_quantity`, where no valid quantity exists.
     fn round_quantity(&self, quantity: Quantity) -> Option<Quantity> {
+        if !self.is_qty_small_enough(quantity) {
+            return None;
+        }
         let step = self.step_qty().step().value();
         let offset = quantity.value().checked_sub(self.min_quantity().value())?;
         // `QtyStep` cannot hold zero, so this never divides by zero.
@@ -108,20 +118,28 @@ pub trait Spec {
         }
     }
     /// Round quantity up to quantity_step.
-    /// `None` below `min_quantity`: bumping up to it could magnify a size
-    /// without bound, so that has to be the caller's explicit decision.
+    /// `None` outside `min_quantity..=max_quantity`: clamping to either bound
+    /// could change a size without bound, so that is the caller's decision.
     fn round_up_quantity(&self, quantity: Quantity) -> Option<Quantity> {
+        if !self.is_qty_small_enough(quantity) {
+            return None;
+        }
         let step = self.step_qty().step().value();
         let offset = quantity.value().checked_sub(self.min_quantity().value())?;
         let remainder = offset % step;
         if remainder == 0 {
             return Some(quantity);
         }
-        Quantity::new(quantity.value().checked_add(step - remainder)?)
+        // Rounding up can cross `max_quantity` even when the input did not.
+        let rounded = Quantity::new(quantity.value().checked_add(step - remainder)?)?;
+        self.is_qty_small_enough(rounded).then_some(rounded)
     }
     /// Round quantity down to quantity_step.
-    /// `None` below `min_quantity`, where the grid has no point at all.
+    /// `None` outside `min_quantity..=max_quantity`, where the grid has no point.
     fn round_down_quantity(&self, quantity: Quantity) -> Option<Quantity> {
+        if !self.is_qty_small_enough(quantity) {
+            return None;
+        }
         let step = self.step_qty().step().value();
         let min = self.min_quantity().value();
         let offset = quantity.value().checked_sub(min)?;
@@ -138,6 +156,7 @@ pub struct Specification {
     tick_size_currency: (Price, Currency),
     point_value: PointValue,
     min_quantity: Quantity,
+    max_quantity: Quantity,
     step_quantity: QtyStep,
 }
 
@@ -148,6 +167,7 @@ impl Default for Specification {
             tick_size_currency: (Price::from_str_unchecked("0.01"), Currency::default()),
             point_value: PointValue::ONE,
             min_quantity: Quantity::ONE,
+            max_quantity: Quantity::MAX,
             step_quantity: QtyStep::default(),
         }
     }
@@ -162,6 +182,10 @@ pub enum InvalidSpecification {
     PointValueOutOfRange(i128),
     TickSizePrice(Price),
     ZeroMinQty,
+    MaxQtyBelowMinQty {
+        min_quantity: Quantity,
+        max_quantity: Quantity,
+    },
 }
 
 impl Display for InvalidSpecification {
@@ -184,6 +208,10 @@ impl Display for InvalidSpecification {
                 write!(f, "TickSizePrice {}", tick_size_price)
             }
             InvalidSpecification::ZeroMinQty => write!(f, "Min quantity should not be zero"),
+            InvalidSpecification::MaxQtyBelowMinQty {
+                min_quantity,
+                max_quantity,
+            } => write!(f, "MaxQtyBelowMinQty {} < {}", max_quantity, min_quantity),
         }
     }
 }
@@ -221,6 +249,7 @@ impl Specification {
         tick_size_price: Price,
         tick_size_currency: (Price, Currency),
         min_quantity: Quantity,
+        max_quantity: Quantity,
         step_quantity: QtyStep,
     ) -> Result<Self, InvalidSpecification> {
         if tick_size_price <= Price::ZERO || tick_size_price > Price::ONE {
@@ -228,6 +257,13 @@ impl Specification {
         }
         if min_quantity == Quantity::ZERO {
             return Err(InvalidSpecification::ZeroMinQty);
+        }
+        // `max == min` is a fixed-size instrument, which is legitimate.
+        if max_quantity < min_quantity {
+            return Err(InvalidSpecification::MaxQtyBelowMinQty {
+                min_quantity,
+                max_quantity,
+            });
         }
         let numerator = tick_size_currency.0.value() as i128 * PointValue::SCALE;
         let denominator = tick_size_price.value() as i128;
@@ -246,6 +282,7 @@ impl Specification {
             tick_size_currency,
             point_value,
             min_quantity,
+            max_quantity,
             step_quantity,
         })
     }
@@ -280,6 +317,10 @@ impl Spec for Specification {
 
     fn min_quantity(&self) -> Quantity {
         self.min_quantity
+    }
+
+    fn max_quantity(&self) -> Quantity {
+        self.max_quantity
     }
 
     fn step_qty(&self) -> QtyStep {
@@ -548,11 +589,12 @@ mod tests {
     #[test]
     fn specification_tests() {
         let min_qty = Quantity::ONE;
+        let max_qty = Quantity::MAX;
         // default case for a common shares
         // usd, cents
         let ts_p = Price::from_str_unchecked("0.01");
         let ts_c = (Price::from_str_unchecked("0.01"), Currency::default());
-        let spec = Specification::new(ts_p, ts_c, min_qty, QtyStep::default()).unwrap();
+        let spec = Specification::new(ts_p, ts_c, min_qty, max_qty, QtyStep::default()).unwrap();
         assert_eq!(ts_p, spec.tick_size_price());
         assert_eq!(ts_c.0, spec.tick_size_currency().0);
         assert_eq!(PointValue::from_str_unchecked("1.0"), spec.point_value());
@@ -564,6 +606,7 @@ mod tests {
             Price::from_str_unchecked("0.25"),
             (Price::from_str_unchecked("12.5"), Currency::usd()),
             min_qty,
+            max_qty,
             QtyStep::default(),
         )
         .unwrap();
@@ -579,6 +622,7 @@ mod tests {
             Price::from_str_unchecked("0.0001"),
             (Price::from_str_unchecked("4.2"), Currency::usd()),
             min_qty,
+            max_qty,
             QtyStep::default(),
         )
         .unwrap();
@@ -599,6 +643,7 @@ mod tests {
             Price::from_str_unchecked("0.03125"),
             (Price::from_str_unchecked("31.25"), Currency::usd()),
             min_qty,
+            max_qty,
             QtyStep::default(),
         )
         .unwrap();
@@ -616,6 +661,7 @@ mod tests {
             Price::from_str_unchecked("0.0000005"),
             (Price::from_str_unchecked("6.25"), Currency::usd()),
             min_qty,
+            max_qty,
             QtyStep::default(),
         )
         .unwrap();
@@ -642,30 +688,41 @@ mod tests {
 
         // Below the range: zero tick would divide by zero deriving point_value.
         assert_eq!(
-            Specification::new(Price::ZERO, usd, Quantity::ONE, QtyStep::default()),
+            Specification::new(
+                Price::ZERO,
+                usd,
+                Quantity::ONE,
+                Quantity::MAX,
+                QtyStep::default()
+            ),
             Err(InvalidSpecification::TickSizePrice(Price::ZERO))
         );
-        // assert!(
-        //     Specification::new(Price::ZERO, usd, Quantity::ONE, QtyStep::default()),
-        //     "tick_size_price = 0 must be rejected"
-        // );
 
         // Upper edge is inclusive: exactly one whole price unit is valid.
         assert!(
-            Specification::new(Price::ONE, usd, Quantity::ONE, QtyStep::default()).is_ok(),
+            Specification::new(
+                Price::ONE,
+                usd,
+                Quantity::ONE,
+                Quantity::MAX,
+                QtyStep::default()
+            )
+            .is_ok(),
             "tick_size_price == Price::ONE must be accepted"
         );
 
         // One raw step above the edge: not a valid tick.
         let above_one = Price::from_str_unchecked("1.000000001");
         assert_eq!(
-            Specification::new(above_one, usd, Quantity::ONE, QtyStep::default()),
+            Specification::new(
+                above_one,
+                usd,
+                Quantity::ONE,
+                Quantity::MAX,
+                QtyStep::default()
+            ),
             Err(InvalidSpecification::TickSizePrice(above_one))
         );
-        // assert!(
-        //     Specification::new(above_one, usd, Quantity::ONE, QtyStep::default()).is_none(),
-        //     "tick_size_price > Price::ONE must be rejected"
-        // );
     }
 
     #[test]
@@ -677,6 +734,7 @@ mod tests {
             Price::from_str_unchecked("0.03125"),
             (Price::from_str_unchecked("31.25"), Currency::usd()),
             Quantity::ONE,
+            Quantity::MAX,
             QtyStep::default(),
         )
         .unwrap();
@@ -707,6 +765,7 @@ mod tests {
             Price::from_str_unchecked("0.0000005"),
             (Price::from_str_unchecked("6.25"), Currency::usd()),
             Quantity::ONE,
+            Quantity::MAX,
             QtyStep::default(),
         )
         .unwrap();
@@ -733,6 +792,7 @@ mod tests {
             Price::from_str_unchecked("0.5"),
             (Price::from_str_unchecked("0.95"), Currency::usd()),
             Quantity::ONE,
+            Quantity::MAX,
             QtyStep::default(),
         )
         .unwrap();
@@ -751,6 +811,7 @@ mod tests {
             Price::from_str_unchecked("0.5"),
             (Price::from_str_unchecked("0.95"), Currency::usd()),
             Quantity::ONE,
+            Quantity::MAX,
             QtyStep::default(),
         )
         .unwrap();
@@ -773,22 +834,12 @@ mod tests {
         let tsp = Price::from_str_unchecked("0.03");
         let tsc = (Price::from_str_unchecked("0.01"), Currency::usd());
         assert_eq!(
-            Specification::new(tsp, tsc, Quantity::ONE, QtyStep::default()),
+            Specification::new(tsp, tsc, Quantity::ONE, Quantity::MAX, QtyStep::default()),
             Err(InvalidSpecification::PointValueNotRepresentable {
                 tick_size_price: tsp,
                 tick_size_currency: tsc,
             })
         );
-        // assert!(
-        //     Specification::new(
-        //         Price::from_str_unchecked("0.03"),
-        //         (Price::from_str_unchecked("0.01"), Currency::usd()),
-        //         Quantity::ONE,
-        //         QtyStep::default()
-        //     )
-        //     .is_none(),
-        //     "non-terminating tick ratio must be rejected"
-        // );
     }
 
     /// A tick pair that divides exactly but lands outside `PointValue`'s range.
@@ -799,7 +850,7 @@ mod tests {
         let tsp = Price::ONE;
         let tsc = (Price::ZERO, Currency::usd());
         assert_eq!(
-            Specification::new(tsp, tsc, Quantity::ONE, QtyStep::default()),
+            Specification::new(tsp, tsc, Quantity::ONE, Quantity::MAX, QtyStep::default()),
             Err(InvalidSpecification::PointValueOutOfRange(0)),
             "a zero currency tick is out of range, not a division failure"
         );
@@ -808,7 +859,7 @@ mod tests {
         let tsp = Price::from_str_unchecked("0.000000001");
         let tsc = (Price::ONE, Currency::usd());
         assert_eq!(
-            Specification::new(tsp, tsc, Quantity::ONE, QtyStep::default()),
+            Specification::new(tsp, tsc, Quantity::ONE, Quantity::MAX, QtyStep::default()),
             Err(InvalidSpecification::PointValueOutOfRange(
                 1_000_000_000_000_000_000
             ))
@@ -817,10 +868,15 @@ mod tests {
 
     /// ZW-spec with the quantity grid as the parameter under test.
     fn zw_spec_with(min_quantity: &str, step: &str) -> Specification {
+        zw_spec_with_max(min_quantity, Quantity::MAX, step)
+    }
+
+    fn zw_spec_with_max(min_quantity: &str, max_quantity: Quantity, step: &str) -> Specification {
         Specification::new(
             Price::from_str_unchecked("0.25"),
             (Price::from_str_unchecked("12.5"), Currency::usd()),
             Quantity::from_str_unchecked(min_quantity),
+            max_quantity,
             QtyStep::new(Quantity::from_str_unchecked(step)).expect("step must be non-zero"),
         )
         .expect("ZW tick pair is valid")
@@ -868,10 +924,33 @@ mod tests {
                 Price::from_str_unchecked("0.25"),
                 (Price::from_str_unchecked("12.5"), Currency::usd()),
                 Quantity::from_str_unchecked("0"),
+                Quantity::MAX,
                 QtyStep::new(Quantity::from_str_unchecked("3")).expect("step must be non-zero"),
             ),
             Err(InvalidSpecification::ZeroMinQty)
         );
+    }
+
+    #[test]
+    fn new_spec_rejects_max_below_min() {
+        let (min, max) = (
+            Quantity::from_str_unchecked("10"),
+            Quantity::from_str_unchecked("9.999999999"),
+        );
+        assert_eq!(
+            Specification::new(
+                Price::from_str_unchecked("0.25"),
+                (Price::from_str_unchecked("12.5"), Currency::usd()),
+                min,
+                max,
+                QtyStep::default(),
+            ),
+            Err(InvalidSpecification::MaxQtyBelowMinQty {
+                min_quantity: min,
+                max_quantity: max,
+            })
+        );
+        assert!(zw_spec_with_max("10", min, "3").is_qty_valid(min));
     }
 
     mod rounding {
@@ -919,6 +998,55 @@ mod tests {
                 assert_eq!(spec.round_up_quantity(q), None, "{raw}");
                 assert_eq!(spec.round_quantity(q), None, "{raw}");
             }
+        }
+
+        /// Symmetric with the minimum.
+        #[test]
+        fn above_max_has_no_valid_quantity_in_any_direction() {
+            let max = Quantity::from_str_unchecked("22");
+            let spec = zw_spec_with_max("10", max, "3");
+            assert!(
+                spec.is_qty_valid(max),
+                "22 == 10 + 4*3, so max is on the grid"
+            );
+            for raw in ["22.000000001", "23", "1000"] {
+                let q = Quantity::from_str_unchecked(raw);
+                assert_eq!(spec.round_down_quantity(q), None, "{raw}");
+                assert_eq!(spec.round_up_quantity(q), None, "{raw}");
+                assert_eq!(spec.round_quantity(q), None, "{raw}");
+            }
+        }
+
+        /// An in-range quantity whose rounded value crosses the maximum.
+        ///
+        /// Round-down is still ok.
+        #[test]
+        fn rounding_up_across_max_is_none() {
+            // Grid 10, 13, 16, 19, 22; max sits between two grid points.
+            let spec = zw_spec_with_max("10", Quantity::from_str_unchecked("21"), "3");
+            let q = Quantity::from_str_unchecked("20");
+            assert_eq!(spec.round_up_quantity(q), None, "22 is above max 21");
+            assert_eq!(
+                spec.round_down_quantity(q),
+                Some(Quantity::from_str_unchecked("19"))
+            );
+            // Nearest is 19 (distance 1) over 22 (distance 2), so it succeeds.
+            assert_eq!(
+                spec.round_quantity(q),
+                Some(Quantity::from_str_unchecked("19"))
+            );
+        }
+
+        /// A maximum off the grid means the last reachable size is below it.
+        #[test]
+        fn max_off_the_grid_lowers_the_effective_maximum() {
+            let spec = zw_spec_with_max("10", Quantity::from_str_unchecked("21"), "3");
+            let max = Quantity::from_str_unchecked("21");
+            assert!(!spec.is_qty_valid(max), "21 is not on the 10+3k grid");
+            assert_eq!(
+                spec.round_down_quantity(max),
+                Some(Quantity::from_str_unchecked("19"))
+            );
         }
 
         /// Rounding up types MAX values are `None`.

@@ -49,6 +49,8 @@ impl Quantity {
     pub const ZERO: Self = Self::new_unchecked(0);
     /// One value
     pub const ONE: Self = Self::new_unchecked(Self::SCALE);
+    /// Largest representable value
+    pub const MAX: Self = Self::new_unchecked(Self::MAX_RAW);
     // Powers of ten indexed by remaining precision (0..=PRECISION), so the
     // per-parse scaling is a table lookup instead of a runtime `pow`.
     const POW10: [u64; Self::PRECISION as usize + 1] = [

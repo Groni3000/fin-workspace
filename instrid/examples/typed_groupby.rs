@@ -273,6 +273,7 @@ fn create_specs() -> (
         Price::from_str_unchecked("0.25"),
         (Price::from_str_unchecked("12.5"), Currency::usd().into()),
         min_qty,
+        Quantity::MAX,
         QtyStep::default(),
     )
     .unwrap();
@@ -280,6 +281,7 @@ fn create_specs() -> (
         Price::from_str_unchecked("1.0"),
         (Price::from_str_unchecked("25.0"), Currency::eur().into()),
         min_qty,
+        Quantity::MAX,
         QtyStep::default(),
     )
     .unwrap();
@@ -288,6 +290,7 @@ fn create_specs() -> (
         Price::from_str_unchecked("0.01"),
         (Price::from_str_unchecked("0.01"), Currency::eur().into()),
         min_qty,
+        Quantity::MAX,
         QtyStep::default(),
     )
     .unwrap();
@@ -295,6 +298,7 @@ fn create_specs() -> (
         Price::from_str_unchecked("0.01"),
         (Price::from_str_unchecked("0.01"), Currency::chf().into()),
         min_qty,
+        Quantity::MAX,
         QtyStep::default(),
     )
     .unwrap();
@@ -302,6 +306,7 @@ fn create_specs() -> (
         Price::from_str_unchecked("0.0000005"),
         (Price::from_str_unchecked("6.25"), Currency::usd().into()),
         min_qty,
+        Quantity::MAX,
         QtyStep::default(),
     )
     .unwrap();
