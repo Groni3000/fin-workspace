@@ -11,7 +11,11 @@ use instrid::{
     tenor::Tenor,
 };
 use tradeprim::{
-    Side, currency::Currency, currency_notional::CurrencyNotional, price::Price, quantity::Quantity,
+    Side,
+    currency::Currency,
+    currency_notional::CurrencyNotional,
+    price::Price,
+    quantity::{QtyStep, Quantity},
 };
 
 fn main() {
@@ -261,32 +265,49 @@ fn create_specs() -> (
     Specification,
     Specification,
 ) {
+    let min_qty = Quantity::ONE;
+
     let aapl_xnas_spec: Specification = Specification::default();
     let aapl_xlon_spec: Specification = Specification::default();
     let es_cme_spec: Specification = Specification::new(
         Price::from_str_unchecked("0.25"),
         (Price::from_str_unchecked("12.5"), Currency::usd().into()),
+        min_qty,
+        Quantity::MAX,
+        QtyStep::default(),
     )
     .unwrap();
     let fdax_eurex_spec: Specification = Specification::new(
         Price::from_str_unchecked("1.0"),
         (Price::from_str_unchecked("25.0"), Currency::eur().into()),
+        min_qty,
+        Quantity::MAX,
+        QtyStep::default(),
     )
     .unwrap();
     let xau_usd_spec: Specification = Specification::default();
     let xau_eur_spec: Specification = Specification::new(
         Price::from_str_unchecked("0.01"),
         (Price::from_str_unchecked("0.01"), Currency::eur().into()),
+        min_qty,
+        Quantity::MAX,
+        QtyStep::default(),
     )
     .unwrap();
     let xau_chf_spec: Specification = Specification::new(
         Price::from_str_unchecked("0.01"),
         (Price::from_str_unchecked("0.01"), Currency::chf().into()),
+        min_qty,
+        Quantity::MAX,
+        QtyStep::default(),
     )
     .unwrap();
     let jpy_6j_spec: Specification = Specification::new(
         Price::from_str_unchecked("0.0000005"),
         (Price::from_str_unchecked("6.25"), Currency::usd().into()),
+        min_qty,
+        Quantity::MAX,
+        QtyStep::default(),
     )
     .unwrap();
     let btc_usd_spec: Specification = Specification::default();
