@@ -1,0 +1,102 @@
+name: Rust
+
+on:
+  push:
+    branches: ["main"]
+  # Re-fires on every push to a PR branch, so branch work is covered as long as
+  # a (draft) PR is open. Without one, a feature branch gets no CI at all.
+  pull_request:
+    branches: ["main"]
+  # Lets you run the whole thing by hand from the Actions tab.
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+# Supersede in-flight runs for the same ref instead of queueing them.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    strategy:
+      # Don't let a Windows-only failure cancel the Linux run, or vice versa.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+
+      # `--all-targets` covers lib/tests/examples/benches but NOT doctests.
+      - name: Test (default features)
+        run: cargo test --workspace --all-targets
+
+      # Doctests run here instead: the README examples need `serde`, and this
+      # skips `lab`, whose `kafka` feature would compile librdkafka from C.
+      - name: Test (all features, incl. doctests)
+        run: cargo test -p instrid -p tradeprim -p futchain --all-features
+
+      # The config where dead code hides — `cl_future` is unreachable here.
+      - name: Test (no default features)
+        run: cargo test -p instrid -p tradeprim --no-default-features --all-targets
+
+      # Lint and format are platform-independent — running them twice would
+      # just burn Windows minutes, which bill at 2x.
+      # TODO: add `-- -D warnings` once the 23 existing lints are cleared.
+      - name: Clippy
+        if: runner.os == 'Linux'
+        run: cargo clippy --workspace --all-targets
+
+      - name: Format
+        if: runner.os == 'Linux'
+        run: cargo fmt --all --check
+
+  # Separate job: the only one that needs cmake + a C toolchain. Without it the
+  # kafka-gated binaries are never compiled by anything and will silently rot.
+  kafka:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Check kafka-gated targets
+        run: cargo check -p lab --features kafka --all-targets
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - uses: Swatinem/rust-cache@v2
+
+      # Collect once with --no-report, then render twice. Rendering a second
+      # time from a run that already reported is not supported.
+      - name: Collect coverage
+        run: cargo llvm-cov --no-report --workspace --all-targets
+
+      # Written to the run summary so the number is visible without opening
+      # logs. No `--fail-under-lines` yet: set one from the first real run
+      # rather than guessing a threshold that turns the build red on day one.
+      - name: Summary
+        run: |
+          echo '## Coverage' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cargo llvm-cov report --summary-only | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      # Browsable line-by-line report, kept for 14 days.
+      - name: HTML report
+        run: cargo llvm-cov report --html --output-dir coverage-html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: coverage-html
+          retention-days: 14

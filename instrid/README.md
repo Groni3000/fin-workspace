@@ -121,12 +121,17 @@ The `Spec` trait exposes them plus `currency_notional(QuoteNotional) -> Currency
 use instrid::spec::{PointValue, Spec, Specification};
 use tradeprim::currency::Currency;
 use tradeprim::price::Price;
+use tradeprim::quantity::{QtyStep, Quantity};
 use tradeprim::quote_notional::QuoteNotional;
 
 // ZB T-bond: quoted in points, tick = 1/32 = 0.03125, and one tick is worth $31.25.
+// Orders are whole contracts, 1 to 1000.
 let zb = Specification::new(
     Price::from_str_unchecked("0.03125"),
     (Price::from_str_unchecked("31.25"), Currency::usd()),
+    Quantity::ONE,                                   // min_quantity
+    Quantity::from_str_unchecked("1000"),            // max_quantity
+    QtyStep::new(Quantity::ONE).unwrap(),            // step
 ).unwrap();
 
 // point_value = 31.25 / 0.03125 = 1000
@@ -135,11 +140,23 @@ assert_eq!(zb.point_value().value(), 1000 * PointValue::SCALE);
 // 552.8125 points of quote notional -> $552,812.5 of settlement money.
 let money = zb.currency_notional(QuoteNotional::from_str_unchecked("552.8125"));
 println!("{money}"); // 552_812.5 (USD)
+
+// Valid order sizes are min + k*step, capped at max.
+assert!(zb.is_qty_valid(Quantity::from_str_unchecked("5")));
+assert!(!zb.is_qty_valid(Quantity::from_str_unchecked("5.5")));
+assert_eq!(
+    zb.round_down_quantity(Quantity::from_str_unchecked("5.5")),
+    Some(Quantity::from_str_unchecked("5"))
+);
+// Nothing valid exists outside the range, in either direction.
+assert_eq!(zb.round_quantity(Quantity::from_str_unchecked("2000")), None);
 ```
 
-`Specification::new` returns `None` if `tick_size_price` is outside `(0, Price::ONE]`
-or the derived point value is out of range. The `Default` spec is a plain US share:
-`0.01` tick, `0.01` per tick, point value `1`.
+`Specification::new` returns `Err(InvalidSpecification)` naming which rule failed:
+`tick_size_price` outside `(0, Price::ONE]`, a tick ratio that isn't representable
+in 9 digits, a point value out of range, a zero `min_quantity`, or a
+`max_quantity` below the minimum. The `Default` spec is a plain US share:
+`0.01` tick, `0.01` per tick, point value `1`, one share minimum and step.
 
 ### The units trap
 
