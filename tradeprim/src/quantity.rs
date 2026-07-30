@@ -10,6 +10,8 @@ use std::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::position::NonZeroQuantity;
+
 /// Has fixed scale and max value.
 ///
 /// Non-zero number that follows such rules:
@@ -19,7 +21,7 @@ use serde::{Deserialize, Serialize};
 /// ✗ Notional<i128> / Quantity<u64> -> Price<i64>
 /// ✗ Quantity<u64> + Quantity<u64> -> Quantity<u64>
 ///
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Hash, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Quantity {
     value: u64,
 }
@@ -105,6 +107,13 @@ impl Quantity {
         let combined = parsed_uint * Self::SCALE + adjusted_fraction;
 
         Self::new_unchecked(combined)
+    }
+
+    pub fn non_zero(self) -> Option<NonZeroQuantity> {
+        if self == Self::ZERO {
+            return None;
+        }
+        NonZeroQuantity::new(self)
     }
 }
 
@@ -284,15 +293,18 @@ impl Add<Quantity> for QtyStep {
 }
 
 impl Sub<Quantity> for Quantity {
-    type Output = Quantity;
+    type Output = Option<Quantity>;
 
     fn sub(self, rhs: Quantity) -> Self::Output {
-        Quantity::new(
-            self.value
-                .checked_sub(rhs.value)
-                .unwrap_or_else(|| panic!("underflow")),
-        )
-        .unwrap_or_else(|| panic!("Quantity underflow"))
+        Quantity::new(self.value.checked_sub(rhs.value)?)
+    }
+}
+
+impl Add<Quantity> for Quantity {
+    type Output = Option<Quantity>;
+
+    fn add(self, rhs: Quantity) -> Self::Output {
+        Quantity::new(self.value.checked_add(rhs.value)?)
     }
 }
 
