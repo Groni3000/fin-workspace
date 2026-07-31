@@ -5,4 +5,10 @@ edition = "2024"
 
 [dependencies]
 instrid = { path = "../instrid" }
-chrono = "0.4.44"
+tradeprim = { path = "../tradeprim" }
+chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = { version = "0.10.4" }
+uuid = { version = "1.24.0", features = ["v7"] }
+
+[dev-dependencies]
+proptest = "1.11.0"
