@@ -1,0 +1,10 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc a29ecc00901a7cd3efeb807deaa813c9bccd4cd9f4fc2c2daf2a20bdf44b20b2 # shrinks to a = Short(NonZeroQuantity { qty: Quantity { value: 366215565668 } }), b = Long(NonZeroQuantity { qty: Quantity { value: 1 } })
+cc d054b2ace4c112754725aabdc053e0dc00d08d4b5e877bdf3ee7ebb5bd235401 # shrinks to fills = [Short(NonZeroQuantity { qty: Quantity { value: 665383372602 } }), Long(NonZeroQuantity { qty: Quantity { value: 1 } })]
+cc 88eab0ef2109f36f4828a7c779d6a81d36318df4101c684d51f2aa330d16bae3 # shrinks to a = Long(NonZeroQuantity { qty: Quantity { value: 1 } }), b = Short(NonZeroQuantity { qty: Quantity { value: 2 } }), c = Flat
+cc 94a198b0502920ad423f895dab61fc8485b1991913590e6c0b08f8769b222a6f # shrinks to fills = [Short(NonZeroQuantity { qty: Quantity { value: 836278321330439 } }), Short(NonZeroQuantity { qty: Quantity { value: 1507300543767429 } }), Short(NonZeroQuantity { qty: Quantity { value: 960210289113455 } }), Short(NonZeroQuantity { qty: Quantity { value: 783026022267754 } }), Short(NonZeroQuantity { qty: Quantity { value: 913185823520923 } })]
