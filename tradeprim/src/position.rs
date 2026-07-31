@@ -1,4 +1,4 @@
-use std::{fmt::Display, ops::Add};
+use std::{cmp::Ordering, fmt::Display, ops::Add};
 
 use crate::quantity::Quantity;
 
@@ -57,20 +57,18 @@ impl Add for Position {
 
     fn add(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
-            (Position::Long(a), Position::Short(b)) => {
-                if a > b {
-                    Ok(Position::Long((a.qty - b.qty).unwrap().non_zero().unwrap()))
-                } else if a == b {
-                    Ok(Position::Flat)
-                } else {
-                    Ok(Position::Short(
+            (Position::Long(a), Position::Short(b)) | (Position::Short(b), Position::Long(a)) => {
+                match a.cmp(&b) {
+                    Ordering::Greater => {
+                        Ok(Position::Long((a.qty - b.qty).unwrap().non_zero().unwrap()))
+                    }
+                    Ordering::Less => Ok(Position::Short(
                         (b.qty - a.qty).unwrap().non_zero().unwrap(),
-                    ))
+                    )),
+                    Ordering::Equal => Ok(Position::Flat),
                 }
             }
-            (Position::Short(_), Position::Long(_)) => rhs.add(self),
-            (Position::Flat, b) => Ok(b),
-            (a, Position::Flat) => Ok(a),
+            (Position::Flat, a) | (a, Position::Flat) => Ok(a),
             // S,S || LL
             (Position::Long(a), Position::Long(b)) => Ok(Position::Long(
                 (a.qty + b.qty)
