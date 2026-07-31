@@ -57,13 +57,3 @@ impl Fill {
         self.order_id
     }
 }
-
-/*
-let ts = Timestamp::from_unix(
-    NoContext,
-    timestamp.timestamp() as u64,
-    timestamp.timestamp_subsec_nanos(),
-);
-
-Uuid::new_v7(ts)
-*/
