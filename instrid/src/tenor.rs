@@ -169,9 +169,9 @@ impl fmt::Display for Tenor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+
     #[cfg(feature = "serde")]
-    use crate::_assert_owned;
+    use crate::{_assert_owned, tenor::Tenor};
 
     #[cfg(feature = "serde")]
     #[test]

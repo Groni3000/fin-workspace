@@ -260,11 +260,12 @@ mod tests {
         assert!(Price::new(Price::MIN_RAW - 1).is_none());
     }
 
+    #[expect(clippy::zero_prefixed_literal, reason = "zeros pad Price")]
     #[test]
     fn test_f64_to_price_conversions() {
         let raw = 65537.273030587;
         let price: Result<Price, FromF64Error> = TryInto::try_into(raw);
-        assert!(price.is_ok_and(|x| x.value == 65537_273_030_587));
+        assert!(price.is_ok_and(|x| x.value == 65_537_273_030_587));
 
         // --- Normal cases
         let raw = 100.0;
@@ -359,6 +360,7 @@ mod tests {
         assert_matches!(price, Err(FromF64Error::OutOfBounds(_)));
     }
 
+    #[expect(clippy::zero_prefixed_literal, reason = "zeros pad Price")]
     #[test]
     fn test_price_to_f64_conversions() {
         let price = Price::new(0_999_999_999_999_999);

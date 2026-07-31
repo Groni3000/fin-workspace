@@ -84,7 +84,7 @@ fn main() {
     let mut by_base: Vec<_> = signed_cashflow_by_base(&fills, &registry)
         .into_iter()
         .collect();
-    by_base.sort_by(|a, b| a.0.to_string().cmp(&b.0.to_string()));
+    by_base.sort_by_key(|a| a.0.to_string());
     for (base, by_quote) in by_base {
         println!("  {base}:");
         print_aligned(
@@ -271,7 +271,7 @@ fn create_specs() -> (
     let aapl_xlon_spec: Specification = Specification::default();
     let es_cme_spec: Specification = Specification::new(
         Price::from_str_unchecked("0.25"),
-        (Price::from_str_unchecked("12.5"), Currency::usd().into()),
+        (Price::from_str_unchecked("12.5"), Currency::usd()),
         min_qty,
         Quantity::MAX,
         QtyStep::default(),
@@ -279,7 +279,7 @@ fn create_specs() -> (
     .unwrap();
     let fdax_eurex_spec: Specification = Specification::new(
         Price::from_str_unchecked("1.0"),
-        (Price::from_str_unchecked("25.0"), Currency::eur().into()),
+        (Price::from_str_unchecked("25.0"), Currency::eur()),
         min_qty,
         Quantity::MAX,
         QtyStep::default(),
@@ -288,7 +288,7 @@ fn create_specs() -> (
     let xau_usd_spec: Specification = Specification::default();
     let xau_eur_spec: Specification = Specification::new(
         Price::from_str_unchecked("0.01"),
-        (Price::from_str_unchecked("0.01"), Currency::eur().into()),
+        (Price::from_str_unchecked("0.01"), Currency::eur()),
         min_qty,
         Quantity::MAX,
         QtyStep::default(),
@@ -296,7 +296,7 @@ fn create_specs() -> (
     .unwrap();
     let xau_chf_spec: Specification = Specification::new(
         Price::from_str_unchecked("0.01"),
-        (Price::from_str_unchecked("0.01"), Currency::chf().into()),
+        (Price::from_str_unchecked("0.01"), Currency::chf()),
         min_qty,
         Quantity::MAX,
         QtyStep::default(),
@@ -304,7 +304,7 @@ fn create_specs() -> (
     .unwrap();
     let jpy_6j_spec: Specification = Specification::new(
         Price::from_str_unchecked("0.0000005"),
-        (Price::from_str_unchecked("6.25"), Currency::usd().into()),
+        (Price::from_str_unchecked("6.25"), Currency::usd()),
         min_qty,
         Quantity::MAX,
         QtyStep::default(),

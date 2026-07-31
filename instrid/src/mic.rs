@@ -461,7 +461,7 @@ impl<'de> Deserialize<'de> for Mic {
     {
         let code: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
         mic_iso_by_code(&code)
-            .and_then(|x| Some(Into::<Mic>::into(x)))
+            .map(Into::<Mic>::into)
             .ok_or_else(|| {
                 serde::de::Error::custom(format!("Couldn't find MIC for code: {}", code))
             })
@@ -768,7 +768,7 @@ mod tests {
     #[test]
     fn deserialize_full_registry_mic() {
         let mic_str = "\"DRSP\"";
-        let mic: MicIso = serde_json::from_str(&mic_str).expect("Mic should be deserializable");
+        let mic: MicIso = serde_json::from_str(mic_str).expect("Mic should be deserializable");
         let expected = mic_iso_by_code("DRSP").expect("Mic not found");
 
         assert_eq!(mic, expected);

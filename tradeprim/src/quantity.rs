@@ -334,11 +334,12 @@ mod tests {
         assert!(Quantity::new(Quantity::MAX_RAW + 1).is_none());
     }
 
+    #[expect(clippy::zero_prefixed_literal, reason = "zeros pad Quantity")]
     #[test]
     fn test_f64_to_quantity_conversions() {
         let raw = 65537.273030587;
         let quantity: Result<Quantity, FromF64Error> = TryInto::try_into(raw);
-        assert!(quantity.is_ok_and(|x| x.value == 65537_273_030_587));
+        assert!(quantity.is_ok_and(|x| x.value == 65_537_273_030_587));
 
         // --- Normal cases
         let raw = 100.0;
@@ -406,6 +407,7 @@ mod tests {
         assert_matches!(quantity, Err(FromF64Error::OutOfBounds(_)));
     }
 
+    #[expect(clippy::zero_prefixed_literal, reason = "zeros pad Quantity")]
     #[test]
     fn test_quantity_to_f64_conversions() {
         let quantity = Quantity::new(0_999_999_999_999_999);
@@ -508,8 +510,8 @@ mod tests {
 
     // Canonical decimal string for a raw value: always 9 fractional digits.
     fn canonical_display(raw: u64) -> String {
-        let int = raw / Quantity::SCALE as u64;
-        let frac = raw % Quantity::SCALE as u64;
+        let int = raw / Quantity::SCALE;
+        let frac = raw % Quantity::SCALE;
         format!("{int}.{frac:09}")
     }
 
@@ -529,12 +531,12 @@ mod tests {
         fn str_scales_fraction_by_position(
             int in 0_u64..Quantity::MAX_INTEGER_PART,
             len in 1_usize..=Quantity::PRECISION as usize,
-            seed in 0_u64..Quantity::SCALE as u64,
+            seed in 0_u64..Quantity::SCALE,
         ) {
             let frac = seed % 10_u64.pow(len as u32); // fits in `len` digits
             let s = format!("{int}.{frac:0len$}"); // zero-pad to `len`
             let expected =
-                int * Quantity::SCALE + frac as u64 * 10_u64.pow(Quantity::PRECISION - len as u32);
+                int * Quantity::SCALE + frac * 10_u64.pow(Quantity::PRECISION - len as u32);
             let got = Quantity::from_str(&s);
             prop_assert!(
                 matches!(got, Ok(p) if p.value() == expected),

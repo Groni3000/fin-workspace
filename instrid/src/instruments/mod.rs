@@ -145,6 +145,7 @@ mod tests {
     use crate::_assert_owned;
     use crate::asset::AssetClass;
     use crate::mic::MicIso;
+    #[cfg(feature = "serde")]
     use crate::tenor::Tenor;
 
     use super::*;
@@ -158,6 +159,7 @@ mod tests {
         )
     }
 
+    #[cfg(feature = "serde")]
     fn cl_future() -> FuturesContract {
         FuturesContract::new_unchecked(
             Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),

@@ -232,7 +232,7 @@ impl<'de> Deserialize<'de> for Currency {
     {
         let s: Cow<'de, str> = Deserialize::deserialize(deserializer)?;
         Currency::from_alphabetic_code(&s)
-            .map_err(|err| serde::de::Error::custom(err))?
+            .map_err(serde::de::Error::custom)?
             .ok_or_else(|| serde::de::Error::custom("Currency is not found in registry"))
     }
 }
