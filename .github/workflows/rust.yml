@@ -48,10 +48,13 @@ jobs:
 
       # Lint and format are platform-independent — running them twice would
       # just burn Windows minutes, which bill at 2x.
-      # TODO: add `-- -D warnings` once the 23 existing lints are cleared.
       - name: Clippy
         if: runner.os == 'Linux'
-        run: cargo clippy --workspace --all-targets
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Clippy (all features)
+        if: runner.os == 'Linux'
+        run: cargo clippy -p instrid -p tradeprim -p futchain --all-targets --all-features -- -D warnings
 
       - name: Format
         if: runner.os == 'Linux'

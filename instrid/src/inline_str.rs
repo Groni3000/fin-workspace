@@ -142,9 +142,12 @@ impl<'de, const N: usize> Deserialize<'de> for InlineStr<N> {
 
 #[cfg(test)]
 mod tests {
-    use crate::inline_str::InlineStr;
+
     #[cfg(feature = "serde")]
     use serde_json::json;
+
+    #[cfg(feature = "serde")]
+    use crate::inline_str::InlineStr;
 
     #[cfg(feature = "serde")]
     #[test]

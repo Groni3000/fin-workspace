@@ -233,7 +233,7 @@ mod tests {
             Asset::new("SPY", AssetClass::Equity).unwrap(),
             Asset::new("USD", AssetClass::Currency).unwrap(),
             Mic::arcx(),
-            Currency::usd().into(),
+            Currency::usd(),
         ))
     }
 
@@ -268,7 +268,9 @@ mod tests {
             TimeInForce::FillOrKill,
             TimeInForce::ImmediateOrCancel,
             TimeInForce::GoodTillDate(NaiveDate::from_yo_opt(2000, 57).expect("invalid date")),
-            TimeInForce::GoodTillDatetime(DateTime::from_timestamp_nanos(1662921288_000_000_000)),
+            TimeInForce::GoodTillDatetime(DateTime::from_timestamp_nanos(
+                1_662_921_288_000_000_000,
+            )),
         ];
 
         all.iter().for_each(|order_type| match order_type {
