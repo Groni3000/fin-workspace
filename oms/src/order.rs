@@ -2,37 +2,80 @@ use std::{fmt::Display, marker::PhantomData};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use instrid::instruments::Instrument;
-use tradeprim::{Side, position::NonZeroQuantity, price::Price};
+use tradeprim::{Side, position::NonZeroQuantity, price::Price, quantity::Quantity};
 use uuid::Uuid;
 
-#[derive(Debug)]
-pub struct Order {
+/// An internal representation of Order.
+///
+/// Have 3 different states:
+///     - **New** - created by strategy, yet not delivered to OrderMS
+///     - **Working** - delivered to OMS, in process of execution: may be not acknowledged yet or just resting or partially filled
+///     - **Terminated** - Rejected/Cancelled/Filled - fully executed or terminated
+///
+/// State `New` is `Copy`, we need to have a copy in both Strategy and OMS/Portfolio scopes.
+/// Can be transformed into both `Working` (delivered to OMS) and `Terminated` (did no survive RiskMS) states.
+///
+/// States `Working` and `Terminated` are **not** `Copy`.
+/// The only transformation allowed is `Working -> Terminated`.
+#[derive(Debug, Clone, Copy)]
+pub struct Order<S> {
     order_id: Uuid,
     instrument: Instrument,
     order_type: OrderType,
     time_in_force: TimeInForce,
     side: Side,
     quantity: NonZeroQuantity,
+    state: S,
 }
 
-impl Order {
-    fn new(
-        instrument: Instrument,
-        order_type: OrderType,
-        time_in_force: TimeInForce,
-        side: Side,
-        quantity: NonZeroQuantity,
-    ) -> Self {
-        Self {
-            order_id: Uuid::now_v7(),
-            instrument,
-            order_type,
-            time_in_force,
-            side,
-            quantity,
-        }
+//--- States ---
+#[derive(Debug, Clone, Copy)]
+pub struct New;
+#[derive(Debug)]
+pub struct Working {
+    leaves: Quantity,
+}
+#[derive(Debug)]
+pub struct Terminated {
+    leaves: Quantity,
+    reason: TerminationReason,
+}
+#[derive(Debug, Clone, Copy)]
+pub enum TerminationReason {
+    Cancel,
+    Filled,
+    Reject,
+    RiskReject,
+}
+
+//--- States imls ---
+impl Working {
+    pub fn new(leaves: Quantity) -> Self {
+        Self { leaves }
     }
 
+    pub fn leaves(&self) -> Quantity {
+        self.leaves
+    }
+}
+
+impl Terminated {
+    pub fn new(leaves: Quantity, reason: TerminationReason) -> Self {
+        Self { leaves, reason }
+    }
+
+    pub fn leaves(&self) -> Quantity {
+        self.leaves
+    }
+
+    pub fn reason(&self) -> TerminationReason {
+        self.reason
+    }
+}
+// --- States end ---
+
+// --- Order generic methods ---
+impl<T> Order<T> {
     pub fn order_id(&self) -> Uuid {
         self.order_id
     }
@@ -56,22 +99,172 @@ impl Order {
     pub fn quantity(&self) -> NonZeroQuantity {
         self.quantity
     }
+
+    pub fn state(&self) -> &T {
+        &self.state
+    }
 }
 
-impl PartialEq for Order {
+impl<T> PartialEq for Order<T> {
     fn eq(&self, other: &Self) -> bool {
         self.order_id == other.order_id
     }
 }
 
-impl Eq for Order {}
+impl<T> Eq for Order<T> {}
+
+// --- Concrete orders
+impl Order<New> {
+    pub fn new(
+        instrument: Instrument,
+        order_type: OrderType,
+        time_in_force: TimeInForce,
+        side: Side,
+        quantity: NonZeroQuantity,
+    ) -> Self {
+        Self {
+            order_id: Uuid::now_v7(),
+            instrument,
+            order_type,
+            time_in_force,
+            side,
+            quantity,
+            state: New,
+        }
+    }
+
+    pub fn into_working(self) -> Order<Working> {
+        Order::<Working>::from_new(self)
+    }
+
+    pub fn terminate(self, reason: TerminationReason) -> Order<Terminated> {
+        match reason {
+            // Ok?
+            TerminationReason::RiskReject => {}
+            // Not ok?
+            TerminationReason::Cancel => {
+                unreachable!("Can't cancel `New` order")
+            }
+            TerminationReason::Filled => {
+                unreachable!("Can't fill `New` order")
+            }
+            TerminationReason::Reject => {
+                unreachable!("Can't reject `New` order")
+            }
+        }
+        Order::<Terminated>::from_new(self, reason)
+    }
+}
+
+impl Order<Working> {
+    fn new(
+        order_id: Uuid,
+        instrument: Instrument,
+        order_type: OrderType,
+        time_in_force: TimeInForce,
+        side: Side,
+        quantity: NonZeroQuantity,
+        leaves: Quantity,
+    ) -> Self {
+        Self {
+            order_id,
+            instrument,
+            order_type,
+            time_in_force,
+            side,
+            quantity,
+            state: Working { leaves },
+        }
+    }
+
+    pub fn from_new(order: Order<New>) -> Self {
+        Self::new(
+            order.order_id,
+            order.instrument,
+            order.order_type,
+            order.time_in_force,
+            order.side,
+            order.quantity,
+            order.quantity.qty(),
+        )
+    }
+
+    pub fn terminate(self, reason: TerminationReason) -> Order<Terminated> {
+        // Exhaustive match to ensure all termination reasons are checked
+        match reason {
+            // Order is filled; leaves should be zero
+            TerminationReason::Filled => {
+                assert_eq!(self.state.leaves, Quantity::ZERO);
+            }
+            // Ok?
+            TerminationReason::Cancel => {}
+            // Ok?
+            TerminationReason::Reject => {}
+            // Ok?
+            TerminationReason::RiskReject => {}
+        }
+
+        Order::<Terminated>::from_working(self, reason)
+    }
+}
+
+impl Order<Terminated> {
+    fn new(
+        order_id: Uuid,
+        instrument: Instrument,
+        order_type: OrderType,
+        time_in_force: TimeInForce,
+        side: Side,
+        quantity: NonZeroQuantity,
+        leaves: Quantity,
+        reason: TerminationReason,
+    ) -> Self {
+        Self {
+            order_id,
+            instrument,
+            order_type,
+            time_in_force,
+            side,
+            quantity,
+            state: Terminated::new(leaves, reason),
+        }
+    }
+
+    pub fn from_working(order: Order<Working>, reason: TerminationReason) -> Self {
+        Self::new(
+            order.order_id,
+            order.instrument,
+            order.order_type,
+            order.time_in_force,
+            order.side,
+            order.quantity,
+            order.state.leaves,
+            reason,
+        )
+    }
+
+    pub fn from_new(order: Order<New>, reason: TerminationReason) -> Self {
+        Self::new(
+            order.order_id,
+            order.instrument,
+            order.order_type,
+            order.time_in_force,
+            order.side,
+            order.quantity,
+            order.quantity.qty(),
+            reason,
+        )
+    }
+}
+
+// ---
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Ready;
 #[derive(Debug, PartialEq, Eq)]
 pub struct NotReady;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct OrderBuilder<T> {
     instrument: Instrument,
     order_type: Option<OrderType>,
@@ -174,8 +367,8 @@ impl OrderBuilder<NotReady> {
 }
 
 impl OrderBuilder<Ready> {
-    pub fn build(self) -> Order {
-        Order::new(
+    pub fn build(self) -> Order<New> {
+        Order::<New>::new(
             self.instrument,
             self.order_type.unwrap_or_default(),
             self.time_in_force.unwrap_or_default(),
