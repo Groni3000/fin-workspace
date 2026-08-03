@@ -1,38 +1,83 @@
-use std::{fmt::Display, marker::PhantomData};
+use std::{fmt::Display, hash::Hash, marker::PhantomData};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use instrid::instruments::Instrument;
-use tradeprim::{Side, position::NonZeroQuantity, price::Price};
+use tradeprim::{Side, position::NonZeroQuantity, price::Price, quantity::Quantity};
 use uuid::Uuid;
 
-#[derive(Debug)]
-pub struct Order {
+use crate::fill::Fill;
+
+/// An internal representation of Order.
+///
+/// Have 3 different states:
+///     - **New** - created by strategy, yet not delivered to OrderMS
+///     - **Working** - delivered to OMS, in process of execution: may be not acknowledged yet or just resting or partially filled
+///     - **Terminated** - Rejected/Cancelled/Filled - fully executed or terminated
+///
+/// State `New` is `Copy`, we need to have a copy in both Strategy and OMS/Portfolio scopes.
+/// Can be transformed into both `Working` (delivered to OMS) and `Terminated` (did no survive RiskMS) states.
+///
+/// States `Working` and `Terminated` are **not** `Copy`.
+/// The only transformations allowed are: `New -> Working|Terminated(RiskReject)`, `Working -> Terminated`.
+#[derive(Debug, Clone, Copy)]
+pub struct Order<S> {
     order_id: Uuid,
     instrument: Instrument,
     order_type: OrderType,
     time_in_force: TimeInForce,
     side: Side,
     quantity: NonZeroQuantity,
+    state: S,
 }
 
-impl Order {
-    fn new(
-        instrument: Instrument,
-        order_type: OrderType,
-        time_in_force: TimeInForce,
-        side: Side,
-        quantity: NonZeroQuantity,
-    ) -> Self {
-        Self {
-            order_id: Uuid::now_v7(),
-            instrument,
-            order_type,
-            time_in_force,
-            side,
-            quantity,
-        }
+//--- States ---
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct New;
+#[derive(Debug, PartialEq, Eq)]
+pub struct Working {
+    leaves: Quantity,
+}
+#[derive(Debug, PartialEq, Eq)]
+pub struct Terminated {
+    leaves: Quantity,
+    reason: TerminationReason,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminationReason {
+    Cancel,
+    Filled,
+    Reject,
+    RiskReject,
+}
+
+//--- States imls ---
+impl Working {
+    fn new(leaves: Quantity) -> Self {
+        Self { leaves }
     }
 
+    pub fn leaves(&self) -> Quantity {
+        self.leaves
+    }
+}
+
+impl Terminated {
+    fn new(leaves: Quantity, reason: TerminationReason) -> Self {
+        Self { leaves, reason }
+    }
+
+    pub fn leaves(&self) -> Quantity {
+        self.leaves
+    }
+
+    pub fn reason(&self) -> TerminationReason {
+        self.reason
+    }
+}
+// --- States end ---
+
+// --- Order generic methods ---
+impl<T> Order<T> {
     pub fn order_id(&self) -> Uuid {
         self.order_id
     }
@@ -56,22 +101,120 @@ impl Order {
     pub fn quantity(&self) -> NonZeroQuantity {
         self.quantity
     }
+
+    pub fn state(&self) -> &T {
+        &self.state
+    }
+
+    fn set_state<S>(self, state: S) -> Order<S> {
+        Order {
+            order_id: self.order_id,
+            instrument: self.instrument,
+            order_type: self.order_type,
+            time_in_force: self.time_in_force,
+            side: self.side,
+            quantity: self.quantity,
+            state,
+        }
+    }
 }
 
-impl PartialEq for Order {
+impl<T> PartialEq for Order<T> {
     fn eq(&self, other: &Self) -> bool {
         self.order_id == other.order_id
     }
 }
 
-impl Eq for Order {}
+impl<T> Eq for Order<T> {}
+
+impl<T> Hash for Order<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.order_id.hash(state);
+    }
+}
+
+// --- Concrete orders
+impl Order<New> {
+    fn new(
+        instrument: Instrument,
+        order_type: OrderType,
+        time_in_force: TimeInForce,
+        side: Side,
+        quantity: NonZeroQuantity,
+    ) -> Self {
+        Self {
+            order_id: Uuid::now_v7(),
+            instrument,
+            order_type,
+            time_in_force,
+            side,
+            quantity,
+            state: New,
+        }
+    }
+
+    pub fn into_working(self) -> Order<Working> {
+        self.set_state(Working::new(self.quantity().qty()))
+    }
+
+    pub fn risk_reject(self) -> Order<Terminated> {
+        self.set_state(Terminated {
+            leaves: self.quantity().qty(),
+            reason: TerminationReason::RiskReject,
+        })
+    }
+}
+
+impl Order<Working> {
+    /// Apply a Fill. Consumes `self`. Emits `FillOutcome` states in which `self` is moved.
+    pub fn apply_fill(mut self, fill: &Fill) -> FillOutcome {
+        // Check for overfill
+        self.state.leaves = match self.state.leaves - fill.quantity() {
+            Some(a) => a,
+            None => return FillOutcome::Overfill(self, fill.quantity()),
+        };
+        // Check if filled
+        match self.state.leaves {
+            Quantity::ZERO => FillOutcome::Filled(
+                self.set_state(Terminated::new(Quantity::ZERO, TerminationReason::Filled)),
+            ),
+            _ => FillOutcome::Partial(self),
+        }
+    }
+
+    pub fn into_cancelled(self) -> Order<Terminated> {
+        let leaves_qty = self.state().leaves;
+        self.set_state(Terminated {
+            leaves: leaves_qty,
+            reason: TerminationReason::Cancel,
+        })
+    }
+
+    pub fn into_rejected(self) -> Order<Terminated> {
+        let leaves_qty = self.state().leaves;
+        self.set_state(Terminated {
+            leaves: leaves_qty,
+            reason: TerminationReason::Reject,
+        })
+    }
+}
+
+// ---
+
+/// Fill outcome report. Overfill should return not modified order paired with Fill.qty
+#[derive(Debug)]
+pub enum FillOutcome {
+    Filled(Order<Terminated>),
+    Partial(Order<Working>),
+    Overfill(Order<Working>, Quantity),
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Ready;
 #[derive(Debug, PartialEq, Eq)]
 pub struct NotReady;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct OrderBuilder<T> {
     instrument: Instrument,
     order_type: Option<OrderType>,
@@ -174,8 +317,8 @@ impl OrderBuilder<NotReady> {
 }
 
 impl OrderBuilder<Ready> {
-    pub fn build(self) -> Order {
-        Order::new(
+    pub fn build(self) -> Order<New> {
+        Order::<New>::new(
             self.instrument,
             self.order_type.unwrap_or_default(),
             self.time_in_force.unwrap_or_default(),
@@ -496,6 +639,201 @@ mod tests {
                 .unwrap()
                 .build();
                 assert_ne!(order_1, order_2);
+            }
+        }
+    }
+
+    mod transitions {
+        use chrono::DateTime;
+        use tradeprim::{Side, price::Price, quantity::Quantity};
+
+        use crate::{
+            fill::Fill,
+            order::{
+                FillOutcome, New, Order, OrderBuilder, Terminated, TerminationReason, Working,
+                tests::spy,
+            },
+        };
+
+        // Strategy emits non-mutable orders
+        fn spy_new_order() -> Order<New> {
+            OrderBuilder::new(spy(), Side::Buy, Quantity::ONE.non_zero().unwrap())
+                .verify()
+                .unwrap()
+                .build()
+        }
+
+        fn spy_new_order_of(quantity: Quantity) -> Order<New> {
+            OrderBuilder::new(spy(), Side::Buy, quantity.non_zero().unwrap())
+                .verify()
+                .unwrap()
+                .build()
+        }
+
+        fn fill_for(order: &Order<Working>, quantity: Quantity) -> Fill {
+            Fill::new(
+                order.order_id(),
+                DateTime::from_timestamp_nanos(1_662_921_288_000_000_000),
+                order.instrument(),
+                order.side(),
+                quantity,
+                Price::from_str_unchecked("753.23"),
+            )
+        }
+
+        /// Test pipeline:
+        ///
+        /// `New -> Working -> Partially filled (x3) -> Overfill -> Filled`
+        #[test]
+        fn working_into_filled() {
+            let total = Quantity::from_str_unchecked("100");
+            let strategy_order = spy_new_order_of(total);
+            // OMS takes them and converts them into mutable orders
+            let mut oms_order = strategy_order.into_working();
+            let mut filled = Quantity::ZERO;
+
+            for step in ["10", "20", "25"] {
+                let step = Quantity::from_str_unchecked(step);
+                let fill = fill_for(&oms_order, step);
+
+                oms_order = match oms_order.apply_fill(&fill) {
+                    FillOutcome::Partial(order) => order,
+                    other => panic!("expected Partial, got {other:?}"),
+                };
+                filled = (filled + step).expect("quantity overflow");
+
+                assert_eq!(
+                    (total - oms_order.state().leaves()).expect("leaves exceeded quantity"),
+                    filled,
+                    "after {filled:?} of {total:?} filled"
+                );
+            }
+
+            // Now check for Overfill
+            let leaves_before = oms_order.state().leaves();
+            let overfill = fill_for(&oms_order, total);
+            let oms_order = match oms_order.apply_fill(&overfill) {
+                FillOutcome::Overfill(order, fill_qty) => {
+                    assert_eq!(order.state(), &Working::new(leaves_before));
+                    assert_eq!(fill_qty, overfill.quantity());
+                    order
+                }
+                other => panic!("expected Overfill, got {other:?}"),
+            };
+
+            let last = fill_for(&oms_order, leaves_before);
+            match oms_order.apply_fill(&last) {
+                FillOutcome::Filled(order) => assert_eq!(
+                    order.state(),
+                    &Terminated::new(Quantity::ZERO, TerminationReason::Filled)
+                ),
+                other => panic!("expected Filled, got {other:?}"),
+            }
+        }
+
+        mod preserve_behaviour {
+            use std::{assert_matches, time::SystemTime};
+
+            use chrono::DateTime;
+            use tradeprim::{price::Price, quantity::Quantity};
+
+            use crate::{
+                fill::Fill,
+                order::{
+                    FillOutcome, Terminated, TerminationReason, Working,
+                    tests::transitions::spy_new_order,
+                },
+            };
+
+            #[test]
+            fn new_into_working() {
+                let strategy_order = spy_new_order();
+                let oms_order = strategy_order.into_working();
+                assert_eq!(strategy_order.order_id(), oms_order.order_id());
+                assert_eq!(
+                    oms_order.state(),
+                    &Working::new(strategy_order.quantity().qty())
+                );
+            }
+
+            #[test]
+            fn new_into_terminated() {
+                let strategy_order = spy_new_order();
+                let terminated_order = strategy_order.risk_reject();
+                assert_eq!(strategy_order.order_id(), terminated_order.order_id());
+                assert_eq!(
+                    terminated_order.state(),
+                    &Terminated {
+                        // New could not be Partially filled
+                        leaves: strategy_order.quantity().qty(),
+                        reason: TerminationReason::RiskReject
+                    }
+                );
+            }
+
+            #[test]
+            fn working_into_non_fill_terminated() {
+                // No partial filled
+                let strategy_order = spy_new_order();
+                let terminated_order = strategy_order.into_working().into_cancelled();
+                assert_eq!(
+                    terminated_order.state(),
+                    &Terminated {
+                        leaves: strategy_order.quantity().qty(),
+                        reason: TerminationReason::Cancel
+                    }
+                );
+                // With partial filled
+                let strategy_order = spy_new_order();
+                let oms_order = strategy_order.into_working();
+                let timestamp = DateTime::from_timestamp_secs(
+                    SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs() as i64,
+                )
+                .unwrap();
+                let fill = Fill::new(
+                    // Partial fill
+                    oms_order.order_id(),
+                    timestamp,
+                    oms_order.instrument(),
+                    oms_order.side(),
+                    // qty = 0.5
+                    Quantity::new(Quantity::SCALE / 2).unwrap(),
+                    Price::from_str_unchecked("753.23"),
+                );
+                let fill_outcome = oms_order.apply_fill(&fill);
+                assert_matches!(fill_outcome, FillOutcome::Partial(_));
+                let (oms_order, leaves_qty) = match fill_outcome {
+                    FillOutcome::Partial(partial) => {
+                        let leaves_qty = partial.state().leaves();
+                        (partial, leaves_qty)
+                    }
+                    _ => unreachable!(),
+                };
+                let terminated_order = oms_order.into_cancelled();
+                assert_eq!(
+                    terminated_order.state(),
+                    &Terminated {
+                        leaves: leaves_qty,
+                        reason: TerminationReason::Cancel
+                    }
+                );
+            }
+
+            #[test]
+            fn working_into_rejected() {
+                let strategy_order = spy_new_order();
+                let terminated_order = strategy_order.into_working().into_rejected();
+                assert_eq!(strategy_order.order_id(), terminated_order.order_id());
+                assert_eq!(
+                    terminated_order.state(),
+                    &Terminated {
+                        leaves: strategy_order.quantity().qty(),
+                        reason: TerminationReason::Reject
+                    }
+                );
             }
         }
     }
