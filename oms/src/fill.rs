@@ -4,7 +4,7 @@ use tradeprim::{Side, price::Price, quantity::Quantity};
 use uuid::Uuid;
 
 /// Fill representation.
-///
+#[derive(Debug)]
 pub struct Fill {
     order_id: Uuid,
     timestamp: DateTime<Utc>,

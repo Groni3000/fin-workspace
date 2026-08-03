@@ -1,3 +1,5 @@
+pub mod event;
+pub mod event_loop;
 pub mod formats;
 pub mod market_data;
 
@@ -8,7 +10,7 @@ use chrono_tz::{Tz, US::Eastern as ExchangeTZ};
 use serde::{Deserialize, Serialize};
 use tradeprim::price::{ParsePriceError, Price};
 
-use crate::market_data::{Candle, MarketData, RelevantPrice};
+use crate::market_data::{Candle, MarketData, RelevantPrice, Timestamped};
 
 /// === PROCESS MARKET DATA
 pub fn process_md<T>(market_data: &mut T) -> Result<(u64, Option<T::Record>), T::Error>
@@ -46,6 +48,12 @@ pub struct FrdCandle {
     open: Price,
     close: Price,
     volume: u64,
+}
+
+impl Timestamped for FrdCandle {
+    fn timestamp(&self) -> DateTime<Utc> {
+        self.timestamp
+    }
 }
 
 impl Candle for FrdCandle {
@@ -229,10 +237,6 @@ impl FrdCandle {
 impl RelevantPrice for FrdCandle {
     fn last_price(&self) -> Price {
         self.close
-    }
-
-    fn timestamp(&self) -> DateTime<Utc> {
-        self.timestamp
     }
 }
 

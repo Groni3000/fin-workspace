@@ -14,11 +14,13 @@ use crate::{FrdCandle, FrdCandleParsingError};
 // ------------------------------
 // --- General purpose traits ---
 // ------------------------------
+pub trait Timestamped {
+    fn timestamp(&self) -> DateTime<Utc>;
+}
 /// A trait for data that have as little useful data
 /// as possible: when and what the price was at that time.
-pub trait RelevantPrice {
+pub trait RelevantPrice: Timestamped {
     fn last_price(&self) -> Price;
-    fn timestamp(&self) -> DateTime<Utc>;
 }
 
 /// Represents an unknown time span aggregated candle.
@@ -33,7 +35,7 @@ pub trait Candle: RelevantPrice + Debug {
 }
 
 pub trait MarketData {
-    type Record: Debug;
+    type Record: Debug + Timestamped;
     type Error;
 
     /// Returns the next record, if one is available.

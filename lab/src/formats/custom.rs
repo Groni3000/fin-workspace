@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc, serde::ts_nanoseconds};
 use serde::{Deserialize, Deserializer};
 use tradeprim::price::Price;
 
-use crate::market_data::{Candle, RelevantPrice};
+use crate::market_data::{Candle, RelevantPrice, Timestamped};
 
 #[cfg(feature = "kafka")]
 use std::{str::Utf8Error, time::Duration};
@@ -57,13 +57,15 @@ fn de_price_f64<'de, D: Deserializer<'de>>(d: D) -> Result<Price, D::Error> {
     Price::try_from(v).map_err(serde::de::Error::custom)
 }
 
+impl Timestamped for CustomDatabentoAggregatedCandle {
+    fn timestamp(&self) -> DateTime<Utc> {
+        self.ts_event
+    }
+}
+
 impl RelevantPrice for CustomDatabentoAggregatedCandle {
     fn last_price(&self) -> Price {
         self.close
-    }
-
-    fn timestamp(&self) -> DateTime<Utc> {
-        self.ts_event
     }
 }
 
