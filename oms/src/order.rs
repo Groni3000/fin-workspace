@@ -644,9 +644,6 @@ mod tests {
     }
 
     mod transitions {
-        use std::assert_matches;
-        use std::time::SystemTime;
-
         use chrono::DateTime;
         use tradeprim::{Side, price::Price, quantity::Quantity};
 
@@ -666,94 +663,72 @@ mod tests {
                 .build()
         }
 
+        fn spy_new_order_of(quantity: Quantity) -> Order<New> {
+            OrderBuilder::new(spy(), Side::Buy, quantity.non_zero().unwrap())
+                .verify()
+                .unwrap()
+                .build()
+        }
+
+        fn fill_for(order: &Order<Working>, quantity: Quantity) -> Fill {
+            Fill::new(
+                order.order_id(),
+                DateTime::from_timestamp_nanos(1_662_921_288_000_000_000),
+                order.instrument(),
+                order.side(),
+                quantity,
+                Price::from_str_unchecked("753.23"),
+            )
+        }
+
         /// Test pipeline:
         ///
-        /// `New -> Wroking -> Partially filled -> Overfill -> Filled`
+        /// `New -> Working -> Partially filled (x3) -> Overfill -> Filled`
         #[test]
         fn working_into_filled() {
-            let strategy_order = spy_new_order();
+            let total = Quantity::from_str_unchecked("100");
+            let strategy_order = spy_new_order_of(total);
             // OMS takes them and converts them into mutable orders
-            let oms_order = strategy_order.into_working();
-            // Fills produced
-            let timestamp = DateTime::from_timestamp_secs(
-                SystemTime::now()
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs() as i64,
-            )
-            .unwrap();
-            let fill_1 = Fill::new(
-                // Partial fill
-                oms_order.order_id(),
-                timestamp,
-                oms_order.instrument(),
-                oms_order.side(),
-                // qty = 0.5
-                Quantity::new(Quantity::SCALE / 2).unwrap(),
-                Price::from_str_unchecked("753.23"),
-            );
-            let fill_2 = Fill::new(
-                // Overfill
-                oms_order.order_id(),
-                timestamp,
-                oms_order.instrument(),
-                oms_order.side(),
-                Quantity::ONE,
-                Price::from_str_unchecked("753.24"),
-            );
-            let fill_3 = Fill::new(
-                // Fill
-                oms_order.order_id(),
-                timestamp,
-                oms_order.instrument(),
-                oms_order.side(),
-                Quantity::new(Quantity::SCALE / 2).unwrap(),
-                Price::from_str_unchecked("753.25"),
-            );
+            let mut oms_order = strategy_order.into_working();
+            let mut filled = Quantity::ZERO;
 
-            // OMS order applies fills
-            let maybe_filled = oms_order.apply_fill(&fill_1);
-            assert_matches!(
-                maybe_filled,
-                FillOutcome::Partial(ref order)
-                    if order.state() == &Working::new(
-                        Quantity::new(Quantity::SCALE / 2).unwrap()
-                    )
-            );
-            let oms_order = match maybe_filled {
-                FillOutcome::Partial(partial) => {
-                    // Expected state
-                    assert_eq!(
-                        partial.state(),
-                        &Working::new(Quantity::new(Quantity::SCALE / 2).unwrap())
-                    );
-                    partial
-                }
-                _ => unreachable!(),
-            };
-            let maybe_filled = oms_order.apply_fill(&fill_2);
-            let oms_order = match maybe_filled {
+            for step in ["10", "20", "25"] {
+                let step = Quantity::from_str_unchecked(step);
+                let fill = fill_for(&oms_order, step);
+
+                oms_order = match oms_order.apply_fill(&fill) {
+                    FillOutcome::Partial(order) => order,
+                    other => panic!("expected Partial, got {other:?}"),
+                };
+                filled = (filled + step).expect("quantity overflow");
+
+                assert_eq!(
+                    (total - oms_order.state().leaves()).expect("leaves exceeded quantity"),
+                    filled,
+                    "after {filled:?} of {total:?} filled"
+                );
+            }
+
+            // Now check for Overfill
+            let leaves_before = oms_order.state().leaves();
+            let overfill = fill_for(&oms_order, total);
+            let oms_order = match oms_order.apply_fill(&overfill) {
                 FillOutcome::Overfill(order, fill_qty) => {
-                    // Expected state
-                    assert_eq!(
-                        order.state(),
-                        &Working::new(Quantity::new(Quantity::SCALE / 2).unwrap())
-                    );
-                    // Expected fill qty
-                    assert_eq!(fill_qty, fill_2.quantity());
+                    assert_eq!(order.state(), &Working::new(leaves_before));
+                    assert_eq!(fill_qty, overfill.quantity());
                     order
                 }
-                _ => unreachable!(),
+                other => panic!("expected Overfill, got {other:?}"),
             };
-            let maybe_filled = oms_order.apply_fill(&fill_3);
-            assert_matches!(
-                maybe_filled,
-                FillOutcome::Filled(order)
-                    // Expected state
-                    if order.state() == &Terminated {
-                        leaves: Quantity::ZERO, reason: TerminationReason::Filled
-                    }
-            );
+
+            let last = fill_for(&oms_order, leaves_before);
+            match oms_order.apply_fill(&last) {
+                FillOutcome::Filled(order) => assert_eq!(
+                    order.state(),
+                    &Terminated::new(Quantity::ZERO, TerminationReason::Filled)
+                ),
+                other => panic!("expected Filled, got {other:?}"),
+            }
         }
 
         mod preserve_behaviour {
@@ -843,6 +818,20 @@ mod tests {
                     &Terminated {
                         leaves: leaves_qty,
                         reason: TerminationReason::Cancel
+                    }
+                );
+            }
+
+            #[test]
+            fn working_into_rejected() {
+                let strategy_order = spy_new_order();
+                let terminated_order = strategy_order.into_working().into_rejected();
+                assert_eq!(strategy_order.order_id(), terminated_order.order_id());
+                assert_eq!(
+                    terminated_order.state(),
+                    &Terminated {
+                        leaves: strategy_order.quantity().qty(),
+                        reason: TerminationReason::Reject
                     }
                 );
             }
