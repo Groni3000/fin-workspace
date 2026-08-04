@@ -2,16 +2,20 @@ use std::{cmp::Reverse, collections::BinaryHeap};
 
 use chrono::{DateTime, Utc};
 
-use crate::event::Scheduled;
+use crate::{
+    event::{Event, Scheduled},
+    market_data::MarketData,
+};
 
 #[derive(Debug)]
-pub struct EventLoop {
+pub struct EventLoop<M: MarketData> {
     now: i64,
     seq_next: u64,
-    heap: BinaryHeap<Reverse<Scheduled>>,
+    heap: BinaryHeap<Reverse<Scheduled<M>>>,
+    md: M,
 }
 
-impl EventLoop {
+impl<M: MarketData> EventLoop<M> {
     /// Returns the current time as a `DateTime<Utc>` (nanos).
     #[inline]
     pub fn now(&self) -> DateTime<Utc> {
@@ -33,7 +37,19 @@ impl EventLoop {
         self.seq_next
     }
 
-    pub fn heap(&self) -> &BinaryHeap<Reverse<Scheduled>> {
+    pub fn heap(&self) -> &BinaryHeap<Reverse<Scheduled<M>>> {
         &self.heap
+    }
+
+    pub fn md(&self) -> &M {
+        &self.md
+    }
+}
+
+impl<M: MarketData> Iterator for EventLoop<M> {
+    type Item = Event<M>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        todo!()
     }
 }

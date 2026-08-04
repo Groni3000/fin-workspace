@@ -1,12 +1,13 @@
 use chrono::{DateTime, Utc};
 use instrid::instruments::Instrument;
 use tradeprim::{Side, price::Price, quantity::Quantity};
-use uuid::Uuid;
+
+use crate::OrderId;
 
 /// Fill representation.
 #[derive(Debug)]
 pub struct Fill {
-    order_id: Uuid,
+    order_id: OrderId,
     timestamp: DateTime<Utc>,
     instrument: Instrument,
     side: Side,
@@ -16,7 +17,7 @@ pub struct Fill {
 
 impl Fill {
     pub fn new(
-        order_id: Uuid,
+        order_id: OrderId,
         timestamp: DateTime<Utc>,
         instrument: Instrument,
         side: Side,
@@ -53,7 +54,7 @@ impl Fill {
         self.price
     }
 
-    pub fn order_id(&self) -> Uuid {
+    pub fn order_id(&self) -> OrderId {
         self.order_id
     }
 }

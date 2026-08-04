@@ -14,7 +14,6 @@ futchain = { path = "../futchain" }
 # `cmake-build` compiles librdkafka from C source, needing cmake + a C toolchain.
 rdkafka = { version = "0.36", features = ["cmake-build"], optional = true }
 oms = { path = "../oms" }
-uuid = { version = "1.24.0", features = ["v7"] }
 
 
 [features]

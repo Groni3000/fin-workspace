@@ -5,7 +5,7 @@ use instrid::instruments::Instrument;
 use tradeprim::{Side, position::NonZeroQuantity, price::Price, quantity::Quantity};
 use uuid::Uuid;
 
-use crate::fill::Fill;
+use crate::{OrderId, fill::Fill};
 
 /// An internal representation of Order.
 ///
@@ -21,7 +21,7 @@ use crate::fill::Fill;
 /// The only transformations allowed are: `New -> Working|Terminated(RiskReject)`, `Working -> Terminated`.
 #[derive(Debug, Clone, Copy)]
 pub struct Order<S> {
-    order_id: Uuid,
+    order_id: OrderId,
     instrument: Instrument,
     order_type: OrderType,
     time_in_force: TimeInForce,
@@ -78,7 +78,7 @@ impl Terminated {
 
 // --- Order generic methods ---
 impl<T> Order<T> {
-    pub fn order_id(&self) -> Uuid {
+    pub fn order_id(&self) -> OrderId {
         self.order_id
     }
 
@@ -143,7 +143,7 @@ impl Order<New> {
         quantity: NonZeroQuantity,
     ) -> Self {
         Self {
-            order_id: Uuid::now_v7(),
+            order_id: OrderId(Uuid::now_v7()),
             instrument,
             order_type,
             time_in_force,

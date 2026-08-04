@@ -1,11 +1,11 @@
 use chrono::{DateTime, Utc};
 use instrid::instruments::Instrument;
-use oms::fill::Fill;
+use oms::{OrderId, fill::Fill};
 use std::fmt::Debug;
-use uuid::Uuid;
 
 #[derive(Debug)]
-pub enum Event {
+pub enum Event<T> {
+    MarketData(T),
     Ack(OrderId),
     Fill(Fill),
     Reject(OrderId),
@@ -15,20 +15,20 @@ pub enum Event {
 }
 
 #[derive(Debug)]
-pub struct Scheduled {
+pub struct Scheduled<T> {
     timestamp: i64,
-    event: Event,
+    event: Event<T>,
     seq: u64,
 }
 
-impl Scheduled {
+impl<T> Scheduled<T> {
     /// Returns the current time as a `DateTime<Utc>` (nanos).
     #[inline]
     pub fn timestamp(&self) -> DateTime<Utc> {
         DateTime::from_timestamp_nanos(self.timestamp)
     }
 
-    pub fn event(&self) -> &Event {
+    pub fn event(&self) -> &Event<T> {
         &self.event
     }
 
@@ -37,32 +37,27 @@ impl Scheduled {
     }
 }
 
-impl PartialEq for Scheduled {
+impl<T> PartialEq for Scheduled<T> {
     fn eq(&self, other: &Self) -> bool {
         self.timestamp == other.timestamp && self.seq == other.seq
     }
 }
 
-impl Eq for Scheduled {}
+impl<T> Eq for Scheduled<T> {}
 
-impl PartialOrd for Scheduled {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match self.timestamp.partial_cmp(&other.timestamp) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        self.seq.partial_cmp(&other.seq)
-    }
-}
-
-impl Ord for Scheduled {
+impl<T> Ord for Scheduled<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap_or(std::cmp::Ordering::Equal)
+        (self.timestamp, self.seq)
+            .partial_cmp(&(other.timestamp, other.seq))
+            .unwrap()
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct OrderId(Uuid);
+impl<T> PartialOrd for Scheduled<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 /// Different kinds of Time based actions based on wall-clock (not driven by market data)
 #[derive(Debug)]
