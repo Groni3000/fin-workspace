@@ -1,5 +1,7 @@
 pub mod event;
 pub mod event_loop;
+pub mod event_traits;
+pub mod events_impls;
 pub mod formats;
 pub mod market_data;
 

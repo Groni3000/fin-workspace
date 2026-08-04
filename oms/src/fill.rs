@@ -5,7 +5,7 @@ use tradeprim::{Side, price::Price, quantity::Quantity};
 use crate::OrderId;
 
 /// Fill representation.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Fill {
     order_id: OrderId,
     timestamp: DateTime<Utc>,
