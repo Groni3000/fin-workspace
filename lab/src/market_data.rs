@@ -93,6 +93,7 @@ pub struct FrdFutChainMdReader<'a> {
     chain: FutChain<'a>,
     dir: PathBuf,
     buffer: String,
+    last_known_ts: Option<DateTime<Utc>>,
 }
 
 impl<'a> FrdFutChainMdReader<'a> {
@@ -106,6 +107,7 @@ impl<'a> FrdFutChainMdReader<'a> {
             chain,
             dir,
             buffer,
+            last_known_ts: None,
         })
     }
 
@@ -165,6 +167,13 @@ impl<'a> Iterator for FrdFutChainMdReader<'a> {
                 Ok(record) => record,
                 Err(e) => return Some(Err(e.into())),
             };
+
+            if let Some(lk_ts) = self.last_known_ts
+                && record.timestamp() <= lk_ts
+            {
+                continue;
+            }
+            self.last_known_ts = Some(record.timestamp());
 
             return Some(Ok(record));
         }
