@@ -12,7 +12,7 @@ pub struct FrdEventQueue<'a> {
     now: i64,
     seq: u64,
     md: Peekable<FrdFutChainMdReader<'a>>,
-    heap: BinaryHeap<Reverse<Event<MdRecord>>>,
+    heap: BinaryHeap<Reverse<Event<FrdCandle>>>,
 }
 
 impl<'a> FrdEventQueue<'a> {
@@ -29,13 +29,17 @@ impl<'a> FrdEventQueue<'a> {
         self.seq
     }
 
-    pub fn heap(&self) -> &BinaryHeap<Reverse<Event<MdRecord>>> {
+    pub fn heap(&self) -> &BinaryHeap<Reverse<Event<FrdCandle>>> {
         &self.heap
     }
 
-    fn unwrap_md_record(&mut self, record: MdRecord) -> Option<Event<MdRecord>> {
+    fn unwrap_md_record(&mut self, record: MdRecord) -> Option<Event<FrdCandle>> {
         if record.is_err() {
-            return Some(Event::new(self.now, self.seq, Kind::MarketData(record)));
+            return Some(Event::new(
+                self.now,
+                self.take_seq(),
+                Kind::FeedError(Box::new(record.unwrap_err())),
+            ));
         }
         let record = record.unwrap();
         let ts = record
@@ -45,11 +49,14 @@ impl<'a> FrdEventQueue<'a> {
         assert!(ts >= self.now, "MD timestamp is before current time.");
         self.now = ts;
 
-        Some(Event::new(self.now, self.seq, Kind::MarketData(Ok(record))))
+        Some(Event::new(
+            self.now,
+            self.take_seq(),
+            Kind::MarketData(record),
+        ))
     }
 
-    fn unwrap_heap_event(&mut self, heap_event: Event<MdRecord>) -> Option<Event<MdRecord>> {
-        self.seq += 1;
+    fn unwrap_heap_event(&mut self, heap_event: Event<FrdCandle>) -> Option<Event<FrdCandle>> {
         let ts = heap_event.ts();
         assert!(
             ts >= self.now,
@@ -58,10 +65,16 @@ impl<'a> FrdEventQueue<'a> {
         self.now = ts;
         Some(heap_event)
     }
+
+    fn take_seq(&mut self) -> u64 {
+        let s = self.seq;
+        self.seq += 1;
+        s
+    }
 }
 
 impl<'a> EventSource for FrdEventQueue<'a> {
-    type Record = Result<FrdCandle, FrdMdError>;
+    type Record = FrdCandle;
 
     fn next_event(&mut self) -> Option<Event<Self::Record>> {
         let md_peek = self.md.peek();
@@ -78,14 +91,10 @@ impl<'a> EventSource for FrdEventQueue<'a> {
                 self.unwrap_heap_event(a)
             }
             (Some(event), Some(md_record)) => {
-                self.seq += 1;
                 match md_record {
                     Err(_err) => {
-                        return Some(Event::new(
-                            self.now,
-                            self.seq,
-                            Kind::MarketData(self.md.next().unwrap()),
-                        ));
+                        let a = self.md.next().unwrap();
+                        self.unwrap_md_record(a)
                     }
                     Ok(candle) => {
                         let md_ts = candle
@@ -93,6 +102,7 @@ impl<'a> EventSource for FrdEventQueue<'a> {
                             .timestamp_nanos_opt()
                             .expect("Malformed timestamp DateTime<Utc> from MD.");
 
+                        // Unwrap what's first
                         match md_ts.cmp(&event.0.ts()) {
                             // unwrap md
                             std::cmp::Ordering::Less => {

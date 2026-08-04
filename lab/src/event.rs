@@ -53,9 +53,10 @@ pub trait EventSource {
     fn submit(&mut self, req: Request);
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum Kind<R> {
     MarketData(R),
+    FeedError(Box<dyn std::error::Error + Send>),
     Ack(OrderId),
     Fill(Fill),
     Reject(OrderId),
