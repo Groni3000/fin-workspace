@@ -5,17 +5,17 @@ use tradeprim::price::Price;
 use crate::market_data::{Candle, RelevantPrice, Timestamped};
 
 #[cfg(feature = "kafka")]
-use std::{str::Utf8Error, time::Duration};
+use std::str::Utf8Error;
 
 #[cfg(feature = "kafka")]
 use rdkafka::{
-    ClientConfig, Message,
+    ClientConfig,
     consumer::{BaseConsumer, Consumer},
     error::KafkaError,
 };
 
-#[cfg(feature = "kafka")]
-use crate::market_data::MarketData;
+// #[cfg(feature = "kafka")]
+// use crate::market_data::MarketData;
 
 // --------------
 // --- Record ---
@@ -151,27 +151,27 @@ impl From<KafkaError> for KafkaMdError {
     }
 }
 
-#[cfg(feature = "kafka")]
-impl MarketData for CustomDatabentoConsumerMd {
-    type Record = CustomDatabentoAggregatedCandle;
-    type Error = KafkaMdError;
+// #[cfg(feature = "kafka")]
+// impl MarketData for CustomDatabentoConsumerMd {
+//     type Record = CustomDatabentoAggregatedCandle;
+//     type Error = KafkaMdError;
 
-    fn next_record(&mut self) -> Result<Option<Self::Record>, Self::Error> {
-        loop {
-            match self.consumer.poll(Duration::from_millis(500)) {
-                Some(Ok(msg)) => {
-                    let record = msg
-                        .payload_view::<str>()
-                        .ok_or(KafkaMdError::EmptyPayload)?
-                        .map_err(KafkaMdError::Utf8Error)?;
+//     fn next_record(&mut self) -> Result<Option<Self::Record>, Self::Error> {
+//         loop {
+//             match self.consumer.poll(Duration::from_millis(500)) {
+//                 Some(Ok(msg)) => {
+//                     let record = msg
+//                         .payload_view::<str>()
+//                         .ok_or(KafkaMdError::EmptyPayload)?
+//                         .map_err(KafkaMdError::Utf8Error)?;
 
-                    return Ok(Some(serde_json::from_str(record)?));
-                }
-                Some(Err(e)) => return Err(KafkaMdError::Kafka(e)),
-                None => {
-                    continue;
-                }
-            };
-        }
-    }
-}
+//                     return Ok(Some(serde_json::from_str(record)?));
+//                 }
+//                 Some(Err(e)) => return Err(KafkaMdError::Kafka(e)),
+//                 None => {
+//                     continue;
+//                 }
+//             };
+//         }
+//     }
+// }

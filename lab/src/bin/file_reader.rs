@@ -46,7 +46,7 @@ where
     let mut lines: u64 = 0;
     let mut last: Option<T::Record> = None;
 
-    while let Some(record) = market_data.next_record()? {
+    while let Some(Ok(record)) = market_data.next() {
         lines += 1;
         last = Some(record);
     }

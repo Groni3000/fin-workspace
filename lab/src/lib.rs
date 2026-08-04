@@ -21,7 +21,7 @@ where
     let mut lines: u64 = 0;
     let mut last: Option<T::Record> = None;
 
-    while let Some(record) = market_data.next_record()? {
+    while let Some(Ok(record)) = market_data.next() {
         lines += 1;
         last = Some(record);
     }
@@ -39,7 +39,7 @@ pub struct RawFrdCandle<'a> {
     volume: &'a str,
 }
 
-#[derive(Deserialize, Debug, Copy, Clone)]
+#[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
 #[serde(try_from = "RawFrdCandle")]
 pub struct FrdCandle {
     timestamp: DateTime<Utc>,
@@ -48,6 +48,18 @@ pub struct FrdCandle {
     open: Price,
     close: Price,
     volume: u64,
+}
+
+impl PartialOrd for FrdCandle {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.timestamp.partial_cmp(&other.timestamp)
+    }
+}
+
+impl Ord for FrdCandle {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.timestamp.cmp(&other.timestamp)
+    }
 }
 
 impl Timestamped for FrdCandle {
