@@ -1,23 +1,24 @@
 use std::{cmp::Reverse, collections::BinaryHeap, iter::Peekable};
 
+use chrono::{DateTime, TimeDelta, Utc};
 use instrid::instruments::Instrument;
 use oms::order::{OrderBuilder, OrderBuilderError};
 use tradeprim::{Side, quantity::Quantity};
 
 use crate::{
     FrdCandle,
-    event::{Event, EventSource, Kind, Request},
-    market_data::{FrdFutChainMdReader, FrdMdError},
+    event::{Event, EventSource, Kind, Request, Scheduled},
+    market_data::FrdFutChainMdReader,
 };
-
-type MdRecord = Result<FrdCandle, FrdMdError>;
 
 pub struct FrdEventQueue<'a> {
     now: i64,
     seq: u64,
     md: Peekable<FrdFutChainMdReader<'a>>,
-    heap: BinaryHeap<Reverse<Event<FrdCandle>>>,
+    heap: BinaryHeap<Reverse<Scheduled<FrdCandle>>>,
     instrument: Instrument,
+    entry_triggers: Vec<DateTimeTrigger>,
+    out_of_trade_triggers: Vec<DateTimeTrigger>,
 }
 
 impl<'a> FrdEventQueue<'a> {
@@ -34,6 +35,22 @@ impl<'a> FrdEventQueue<'a> {
             md,
             heap,
             instrument,
+            entry_triggers: vec![DateTimeTrigger::new(
+                chrono::NaiveDateTime::new(
+                    chrono::NaiveDate::from_ymd_opt(2026, 6, 3).unwrap(),
+                    chrono::NaiveTime::from_hms_opt(15, 0, 0).unwrap(),
+                )
+                .and_utc(),
+                TimeDelta::new(30, 0).unwrap(),
+            )],
+            out_of_trade_triggers: vec![DateTimeTrigger::new(
+                chrono::NaiveDateTime::new(
+                    chrono::NaiveDate::from_ymd_opt(2026, 6, 10).unwrap(),
+                    chrono::NaiveTime::from_hms_opt(15, 0, 0).unwrap(),
+                )
+                .and_utc(),
+                TimeDelta::new(30, 0).unwrap(),
+            )],
         }
     }
 
@@ -45,41 +62,8 @@ impl<'a> FrdEventQueue<'a> {
         self.seq
     }
 
-    pub fn heap(&self) -> &BinaryHeap<Reverse<Event<FrdCandle>>> {
+    pub fn heap(&self) -> &BinaryHeap<Reverse<Scheduled<FrdCandle>>> {
         &self.heap
-    }
-
-    fn unwrap_md_record(&mut self, record: MdRecord) -> Option<Event<FrdCandle>> {
-        if record.is_err() {
-            return Some(Event::new(
-                self.now,
-                self.take_seq(),
-                Kind::FeedError(Box::new(record.unwrap_err())),
-            ));
-        }
-        let record = record.unwrap();
-        let ts = record
-            .timestamp
-            .timestamp_nanos_opt()
-            .expect("Malformed timestmap DateTime<Utc> from MD.");
-        assert!(ts >= self.now, "MD timestamp is before current time.");
-        self.now = ts;
-
-        Some(Event::new(
-            self.now,
-            self.take_seq(),
-            Kind::MarketData(record),
-        ))
-    }
-
-    fn unwrap_heap_event(&mut self, heap_event: Event<FrdCandle>) -> Option<Event<FrdCandle>> {
-        let ts = heap_event.ts();
-        assert!(
-            ts >= self.now,
-            "Heap event timestamp is before current time."
-        );
-        self.now = ts;
-        Some(heap_event)
     }
 
     fn take_seq(&mut self) -> u64 {
@@ -89,7 +73,12 @@ impl<'a> FrdEventQueue<'a> {
     }
 
     pub fn strategy_decision(&mut self) {
-        if self.seq == 300 {
+        let now = self.now();
+        if self
+            .entry_triggers
+            .last_mut()
+            .is_some_and(|trigger| trigger.check_nanos(now))
+        {
             let maybe_order = OrderBuilder::new(
                 self.instrument,
                 Side::Buy,
@@ -108,9 +97,14 @@ impl<'a> FrdEventQueue<'a> {
             };
 
             self.submit(Request::SendOrder(order));
+            self.entry_triggers.pop();
         }
 
-        if self.seq == 679 {
+        if self
+            .out_of_trade_triggers
+            .last_mut()
+            .is_some_and(|trigger| trigger.check_nanos(now))
+        {
             let maybe_order = OrderBuilder::new(
                 self.instrument,
                 Side::Sell,
@@ -129,6 +123,7 @@ impl<'a> FrdEventQueue<'a> {
             };
 
             self.submit(Request::SendOrder(order));
+            self.out_of_trade_triggers.pop();
         }
     }
 
@@ -143,45 +138,44 @@ impl<'a> EventSource for FrdEventQueue<'a> {
     fn next_event(&mut self) -> Option<Event<Self::Record>> {
         let md_peek = self.md.peek();
         let heap_peek = self.heap.peek();
+        let md_ts = match md_peek {
+            Some(Ok(record)) => record
+                .timestamp
+                .timestamp_nanos_opt()
+                .expect("MD timestamp is before current time."),
+            Some(Err(_e)) => self.now(),
+            None => i64::MAX,
+        };
+        let heap_ts = match heap_peek {
+            Some(event) => event.0.event().ts(),
+            None => i64::MAX,
+        };
 
-        match (heap_peek, md_peek) {
-            (None, None) => None,
-            (None, Some(_md_record)) => {
-                let a = self.md.next().unwrap();
-                self.unwrap_md_record(a)
-            }
-            (Some(_event), None) => {
-                let a = self.heap.pop().unwrap().0;
-                self.unwrap_heap_event(a)
-            }
-            (Some(event), Some(md_record)) => {
-                match md_record {
-                    Err(_err) => {
-                        let a = self.md.next().unwrap();
-                        self.unwrap_md_record(a)
-                    }
-                    Ok(candle) => {
-                        let md_ts = candle
-                            .timestamp
-                            .timestamp_nanos_opt()
-                            .expect("Malformed timestamp DateTime<Utc> from MD.");
+        if self.heap.is_empty() && self.md.peek().is_none() {
+            return None;
+        }
 
-                        // Unwrap what's first
-                        match md_ts.cmp(&event.0.ts()) {
-                            // unwrap md
-                            std::cmp::Ordering::Less => {
-                                let a = self.md.next().unwrap();
-                                self.unwrap_md_record(a)
-                            }
-                            // unwrap heap
-                            std::cmp::Ordering::Greater | std::cmp::Ordering::Equal => {
-                                let a = self.heap.pop().unwrap().0;
-                                self.unwrap_heap_event(a)
-                            }
-                        }
-                    }
+        match heap_ts.cmp(&md_ts) {
+            std::cmp::Ordering::Less | std::cmp::Ordering::Equal => {
+                let event = self.heap.pop().unwrap().0.as_event();
+                assert!(heap_ts >= self.now);
+                self.now = heap_ts;
+                Some(event)
+            }
+            std::cmp::Ordering::Greater => match self.md.next() {
+                Some(Ok(record)) => {
+                    let event = Event::new(self.now, Kind::MarketData(record));
+                    assert!(md_ts >= self.now);
+                    self.now = md_ts;
+                    Some(event)
                 }
-            }
+                Some(Err(err)) => {
+                    let event = Event::new(self.now, Kind::FeedError(Box::new(err)));
+                    self.now = md_ts;
+                    Some(event)
+                }
+                None => None,
+            },
         }
     }
 
@@ -189,10 +183,12 @@ impl<'a> EventSource for FrdEventQueue<'a> {
         match req {
             Request::SendOrder(order) => {
                 let latency = 5000_000_000_i64; // 5 sec
-                let event = Event::new(
-                    self.now() + latency,
+                let event = Scheduled::new(
                     self.take_seq(),
-                    Kind::<Self::Record>::Ack(order.order_id()),
+                    Event::new(
+                        self.now() + latency,
+                        Kind::<Self::Record>::Ack(order.order_id()),
+                    ),
                 );
                 println!(
                     "pushing at {}, expected to fire at {}",
@@ -203,6 +199,48 @@ impl<'a> EventSource for FrdEventQueue<'a> {
             }
             Request::CancelOrder(_order_id) => {}
             Request::Snapshot => {}
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct DateTimeTrigger {
+    fired: bool,
+    start_datetime: DateTime<Utc>,
+    end_datetime: DateTime<Utc>,
+}
+
+impl DateTimeTrigger {
+    pub fn new(start_datetime: DateTime<Utc>, tolerance: TimeDelta) -> Self {
+        debug_assert!(tolerance.num_nanoseconds() > Some(0));
+        Self {
+            fired: false,
+            start_datetime,
+            end_datetime: start_datetime + tolerance,
+        }
+    }
+
+    pub fn check_nanos(&mut self, ts: i64) -> bool {
+        if self.fired {
+            return false;
+        }
+        let ts = DateTime::from_timestamp_nanos(ts);
+        if ts >= self.start_datetime && ts <= self.end_datetime {
+            self.fired = true;
+            true
+        } else {
+            false
+        }
+    }
+    pub fn check_dt(&mut self, ts: DateTime<Utc>) -> bool {
+        if self.fired {
+            return false;
+        }
+        if ts >= self.start_datetime && ts <= self.end_datetime {
+            self.fired = true;
+            true
+        } else {
+            false
         }
     }
 }
