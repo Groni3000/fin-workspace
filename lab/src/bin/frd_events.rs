@@ -33,11 +33,12 @@ fn main() -> Result<(), FrdMdError> {
 
     // Event loop
     while let Some(event) = event_queue.next_event() {
-        // hot path, minimum actions
-        event_queue.strategy_decision();
-
         // if you want to make something extra, especially I/O bound - dispatch
         match event.kind() {
+            Kind::MarketData(md_record) => {
+                // hot path, minimum actions
+                event_queue.strategy_decision(*md_record);
+            }
             Kind::Ack(order_id) => {
                 println!(
                     "Ack: {:?} at {}",
@@ -47,9 +48,9 @@ fn main() -> Result<(), FrdMdError> {
             }
             Kind::Fill(fill) => {
                 println!(
-                    "Fill: {:?} at {}",
-                    fill,
-                    chrono::DateTime::from_timestamp_nanos(event_queue.now())
+                    "Fill@{}: {:#?}",
+                    chrono::DateTime::from_timestamp_nanos(event_queue.now()),
+                    fill
                 );
             }
             _ => {}

@@ -8,15 +8,23 @@ use std::{
 
 use chrono::{DateTime, Utc};
 use futchain::FutChain;
+use instrid::instruments::Instrument;
 use tradeprim::price::Price;
 
-use crate::formats::frd::{FrdCandle, FrdCandleParsingError};
+use crate::formats::{
+    Tagged,
+    frd::{FrdCandle, FrdCandleParsingError},
+};
 
 // ------------------------------
 // --- General purpose traits ---
 // ------------------------------
 pub trait Timestamped {
     fn timestamp(&self) -> DateTime<Utc>;
+}
+
+pub trait Instrumented {
+    fn instrument(&self) -> Instrument;
 }
 /// A trait for data that have as little useful data
 /// as possible: when and what the price was at that time.
@@ -27,7 +35,7 @@ pub trait RelevantPrice: Timestamped {
 /// Represents an unknown time span aggregated candle.
 ///
 /// Naturally extends RelevantPrice.
-pub trait Candle: RelevantPrice + Debug {
+pub trait Candle: RelevantPrice {
     fn open(&self) -> Price;
     fn high(&self) -> Price;
     fn low(&self) -> Price;
@@ -36,14 +44,14 @@ pub trait Candle: RelevantPrice + Debug {
 }
 
 pub trait MarketData: Iterator<Item = Result<Self::Record, Self::Error>> {
-    type Record: Debug + RelevantPrice + Ord + Eq;
+    type Record: Debug + RelevantPrice;
     type Error;
 }
 
 impl<T, R, E> MarketData for T
 where
     T: Iterator<Item = Result<R, E>>,
-    R: Debug + RelevantPrice + Ord + Eq,
+    R: Debug + RelevantPrice,
     E: Error,
 {
     type Record = R;
@@ -143,7 +151,7 @@ impl<'a> FrdFutChainMdReader<'a> {
 }
 
 impl<'a> Iterator for FrdFutChainMdReader<'a> {
-    type Item = Result<FrdCandle, FrdMdError>;
+    type Item = Result<Tagged<FrdCandle>, FrdMdError>;
 
     /// Returns None when files exhausted.
     fn next(&mut self) -> Option<Self::Item> {
@@ -175,7 +183,10 @@ impl<'a> Iterator for FrdFutChainMdReader<'a> {
             }
             self.last_known_ts = Some(record.timestamp());
 
-            return Some(Ok(record));
+            return Some(Ok(Tagged::new(
+                Instrument::Futures(*self.chain.contract()),
+                record,
+            )));
         }
     }
 }

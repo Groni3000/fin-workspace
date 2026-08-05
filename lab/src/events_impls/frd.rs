@@ -8,15 +8,15 @@ use tradeprim::{Side, quantity::Quantity};
 use crate::{
     event::{Event, EventSource, Kind, Request, Scheduled, Scheduler},
     executor::SingleInstrumentOnlyMarketExecutor,
-    formats::frd::FrdCandle,
-    market_data::FrdFutChainMdReader,
+    formats::{Tagged, frd::FrdCandle},
+    market_data::{FrdFutChainMdReader, Instrumented, Timestamped},
 };
 
 pub struct FrdEventQueue<'a> {
     now: i64,
     seq: u64,
     md: Peekable<FrdFutChainMdReader<'a>>,
-    heap: BinaryHeap<Reverse<Scheduled<FrdCandle>>>,
+    heap: BinaryHeap<Reverse<Scheduled<Tagged<FrdCandle>>>>,
     exec: SingleInstrumentOnlyMarketExecutor,
     instrument: Instrument,
     entry_triggers: Vec<DateTimeTrigger>,
@@ -65,11 +65,11 @@ impl<'a> FrdEventQueue<'a> {
         self.seq
     }
 
-    pub fn heap(&self) -> &BinaryHeap<Reverse<Scheduled<FrdCandle>>> {
+    pub fn heap(&self) -> &BinaryHeap<Reverse<Scheduled<Tagged<FrdCandle>>>> {
         &self.heap
     }
 
-    pub fn strategy_decision(&mut self) {
+    pub fn strategy_decision(&mut self, md_record: Tagged<FrdCandle>) {
         let now = self.now();
         if self
             .entry_triggers
@@ -77,7 +77,7 @@ impl<'a> FrdEventQueue<'a> {
             .is_some_and(|trigger| trigger.check_nanos(now))
         {
             let maybe_order = OrderBuilder::new(
-                self.instrument,
+                md_record.instrument(),
                 Side::Buy,
                 Quantity::from_str_unchecked("3").non_zero().unwrap(),
             )
@@ -103,7 +103,7 @@ impl<'a> FrdEventQueue<'a> {
             .is_some_and(|trigger| trigger.check_nanos(now))
         {
             let maybe_order = OrderBuilder::new(
-                self.instrument,
+                md_record.instrument(),
                 Side::Sell,
                 Quantity::from_str_unchecked("3").non_zero().unwrap(),
             )
@@ -130,7 +130,7 @@ impl<'a> FrdEventQueue<'a> {
 }
 
 impl<'a> EventSource for FrdEventQueue<'a> {
-    type Record = FrdCandle;
+    type Record = Tagged<FrdCandle>;
 
     fn next_event(&mut self) -> Option<Event<Self::Record>> {
         let md_peek = self.md.peek();

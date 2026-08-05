@@ -57,7 +57,10 @@ fn main() {
     };
 
     println!("Total lines: {}", total_records);
-    println!("Last record: {:?}", last_record);
+    println!(
+        "Last record: {:?}",
+        last_record.map(|c| (c.timestamp(), c.close()))
+    );
 }
 
 fn source_from_args() -> Source {
