@@ -1,8 +1,12 @@
 use std::{cmp::Reverse, collections::BinaryHeap, iter::Peekable};
 
+use instrid::instruments::Instrument;
+use oms::order::{OrderBuilder, OrderBuilderError};
+use tradeprim::{Side, quantity::Quantity};
+
 use crate::{
     FrdCandle,
-    event::{Event, EventSource, Kind},
+    event::{Event, EventSource, Kind, Request},
     market_data::{FrdFutChainMdReader, FrdMdError},
 };
 
@@ -13,12 +17,24 @@ pub struct FrdEventQueue<'a> {
     seq: u64,
     md: Peekable<FrdFutChainMdReader<'a>>,
     heap: BinaryHeap<Reverse<Event<FrdCandle>>>,
+    instrument: Instrument,
 }
 
 impl<'a> FrdEventQueue<'a> {
-    pub fn new(now: i64, seq: u64, md: Peekable<FrdFutChainMdReader<'a>>) -> Self {
+    pub fn new(
+        now: i64,
+        seq: u64,
+        md: Peekable<FrdFutChainMdReader<'a>>,
+        instrument: Instrument,
+    ) -> Self {
         let heap = BinaryHeap::new();
-        Self { now, seq, md, heap }
+        Self {
+            now,
+            seq,
+            md,
+            heap,
+            instrument,
+        }
     }
 
     pub fn now(&self) -> i64 {
@@ -71,6 +87,54 @@ impl<'a> FrdEventQueue<'a> {
         self.seq += 1;
         s
     }
+
+    pub fn strategy_decision(&mut self) {
+        if self.seq == 300 {
+            let maybe_order = OrderBuilder::new(
+                self.instrument,
+                Side::Buy,
+                Quantity::from_str_unchecked("3").non_zero().unwrap(),
+            )
+            // .with_time_in_force(TimeInForce::GoodTillCancel) // uncomment to see error handling
+            .verify();
+            let order = match maybe_order {
+                Ok(order_ready) => order_ready.build(),
+                Err(err) => match err {
+                    OrderBuilderError::IncompatibleOrderTypeAndTif(_, _) => {
+                        println!("{}", err);
+                        return;
+                    }
+                },
+            };
+
+            self.submit(Request::SendOrder(order));
+        }
+
+        if self.seq == 679 {
+            let maybe_order = OrderBuilder::new(
+                self.instrument,
+                Side::Sell,
+                Quantity::from_str_unchecked("3").non_zero().unwrap(),
+            )
+            // .with_time_in_force(TimeInForce::GoodTillCancel) // uncomment to see error handling
+            .verify();
+            let order = match maybe_order {
+                Ok(order_ready) => order_ready.build(),
+                Err(err) => match err {
+                    OrderBuilderError::IncompatibleOrderTypeAndTif(_, _) => {
+                        println!("{}", err);
+                        return;
+                    }
+                },
+            };
+
+            self.submit(Request::SendOrder(order));
+        }
+    }
+
+    pub fn instrument(&self) -> Instrument {
+        self.instrument
+    }
 }
 
 impl<'a> EventSource for FrdEventQueue<'a> {
@@ -121,7 +185,24 @@ impl<'a> EventSource for FrdEventQueue<'a> {
         }
     }
 
-    fn submit(&mut self, req: crate::event::Request) {
-        todo!()
+    fn submit(&mut self, req: Request) {
+        match req {
+            Request::SendOrder(order) => {
+                let latency = 5000_000_000_i64; // 5 sec
+                let event = Event::new(
+                    self.now() + latency,
+                    self.take_seq(),
+                    Kind::<Self::Record>::Ack(order.order_id()),
+                );
+                println!(
+                    "pushing at {}, expected to fire at {}",
+                    chrono::DateTime::from_timestamp_nanos(self.now()),
+                    chrono::DateTime::from_timestamp_nanos(self.now() + latency)
+                );
+                self.heap.push(Reverse(event));
+            }
+            Request::CancelOrder(_order_id) => {}
+            Request::Snapshot => {}
+        }
     }
 }

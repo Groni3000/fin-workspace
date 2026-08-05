@@ -1,9 +1,14 @@
-use std::{iter::Peekable, path::Path};
+use std::path::Path;
 
 use futchain::{FutChain, ListedTenors};
-use instrid::{asset::Asset, instruments::FuturesContract, mic::MicIso, tenor::Tenor};
+use instrid::{
+    asset::Asset,
+    instruments::{FuturesContract, Instrument},
+    mic::MicIso,
+    tenor::Tenor,
+};
 use lab::{
-    event::EventSource,
+    event::{EventSource, Kind},
     events_impls::frd::FrdEventQueue,
     market_data::{FrdFutChainMdReader, FrdMdError},
 };
@@ -24,10 +29,24 @@ fn main() -> Result<(), FrdMdError> {
     let chain = FutChain::new(instrument, &listing).expect("Failed to create FutChain");
     let market_data = FrdFutChainMdReader::new(chain, dir.to_path_buf(), String::new())?.peekable();
 
-    let mut event_queue = FrdEventQueue::new(0, 0, market_data);
+    let mut event_queue = FrdEventQueue::new(0, 0, market_data, Instrument::Futures(instrument));
 
+    // Event loop
     while let Some(event) = event_queue.next_event() {
-        println!("{:?}", event);
+        // hot path, minimum actions
+        event_queue.strategy_decision();
+
+        // if you want to make something extra, especially I/O bound - dispatch
+        match event.kind() {
+            Kind::Ack(order_id) => {
+                println!(
+                    "Ack: {:?} at {}",
+                    order_id,
+                    chrono::DateTime::from_timestamp_nanos(event_queue.now())
+                );
+            }
+            _ => {}
+        }
     }
 
     Ok(())
