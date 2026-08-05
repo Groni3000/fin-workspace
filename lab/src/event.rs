@@ -1,3 +1,5 @@
+use std::{cmp::Reverse, collections::BinaryHeap};
+
 use oms::{
     OrderId,
     fill::Fill,
@@ -82,6 +84,25 @@ impl<R> PartialOrd for Scheduled<R> {
 impl<R> Ord for Scheduled<R> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         (self.event.ts, self.seq).cmp(&(other.event.ts, other.seq))
+    }
+}
+
+/// Sink for Scheduled Events
+pub struct Scheduler<'q, R> {
+    heap: &'q mut BinaryHeap<Reverse<Scheduled<R>>>,
+    seq: &'q mut u64,
+}
+
+impl<'q, R> Scheduler<'q, R> {
+    pub fn new(heap: &'q mut BinaryHeap<Reverse<Scheduled<R>>>, seq: &'q mut u64) -> Self {
+        Self { heap, seq }
+    }
+
+    pub fn push(&mut self, ts: i64, kind: Kind<R>) {
+        let seq = *self.seq;
+        *self.seq += 1;
+        self.heap
+            .push(Reverse(Scheduled::new(seq, Event::new(ts, kind))));
     }
 }
 

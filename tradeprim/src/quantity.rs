@@ -141,6 +141,14 @@ impl From<Quantity> for u64 {
     }
 }
 
+impl Sub<NonZeroQuantity> for Quantity {
+    type Output = Option<Quantity>;
+
+    fn sub(self, rhs: NonZeroQuantity) -> Self::Output {
+        Quantity::new(self.value.checked_sub(rhs.qty().value)?)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParseQuantityError {
     InvalidFormat,

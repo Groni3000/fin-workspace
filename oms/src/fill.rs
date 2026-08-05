@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use instrid::instruments::Instrument;
-use tradeprim::{Side, price::Price, quantity::Quantity};
+use tradeprim::{Side, position::NonZeroQuantity, price::Price};
 
 use crate::OrderId;
 
@@ -11,7 +11,7 @@ pub struct Fill {
     timestamp: DateTime<Utc>,
     instrument: Instrument,
     side: Side,
-    quantity: Quantity,
+    quantity: NonZeroQuantity,
     price: Price,
 }
 
@@ -21,7 +21,7 @@ impl Fill {
         timestamp: DateTime<Utc>,
         instrument: Instrument,
         side: Side,
-        quantity: Quantity,
+        quantity: NonZeroQuantity,
         price: Price,
     ) -> Self {
         Self {
@@ -46,7 +46,7 @@ impl Fill {
         self.side
     }
 
-    pub fn quantity(&self) -> Quantity {
+    pub fn quantity(&self) -> NonZeroQuantity {
         self.quantity
     }
 

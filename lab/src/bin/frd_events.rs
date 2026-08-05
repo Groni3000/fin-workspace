@@ -45,6 +45,13 @@ fn main() -> Result<(), FrdMdError> {
                     chrono::DateTime::from_timestamp_nanos(event_queue.now())
                 );
             }
+            Kind::Fill(fill) => {
+                println!(
+                    "Fill: {:?} at {}",
+                    fill,
+                    chrono::DateTime::from_timestamp_nanos(event_queue.now())
+                );
+            }
             _ => {}
         }
     }

@@ -173,12 +173,14 @@ pub enum KafkaMdError {
     Json(serde_json::Error),
 }
 
+#[cfg(feature = "kafka")]
 impl Display for KafkaMdError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
+#[cfg(feature = "kafka")]
 impl std::error::Error for KafkaMdError {}
 
 #[cfg(feature = "kafka")]

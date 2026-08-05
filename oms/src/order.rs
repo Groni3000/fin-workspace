@@ -206,7 +206,7 @@ impl Order<Working> {
 pub enum FillOutcome {
     Filled(Order<Terminated>),
     Partial(Order<Working>),
-    Overfill(Order<Working>, Quantity),
+    Overfill(Order<Working>, NonZeroQuantity),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -676,7 +676,7 @@ mod tests {
                 DateTime::from_timestamp_nanos(1_662_921_288_000_000_000),
                 order.instrument(),
                 order.side(),
-                quantity,
+                quantity.non_zero().unwrap(),
                 Price::from_str_unchecked("753.23"),
             )
         }
@@ -800,7 +800,10 @@ mod tests {
                     oms_order.instrument(),
                     oms_order.side(),
                     // qty = 0.5
-                    Quantity::new(Quantity::SCALE / 2).unwrap(),
+                    Quantity::new(Quantity::SCALE / 2)
+                        .unwrap()
+                        .non_zero()
+                        .unwrap(),
                     Price::from_str_unchecked("753.23"),
                 );
                 let fill_outcome = oms_order.apply_fill(&fill);

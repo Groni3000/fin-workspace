@@ -9,6 +9,7 @@ use std::{
 
 use futchain::{FutChain, ListedTenors};
 use instrid::{asset::Asset, instruments::FuturesContract, mic::Mic, tenor::Tenor};
+
 use lab::{
     formats::custom::CustomDatabentoConsumerMd,
     market_data::{Candle, FrdFutChainMdReader, FrdMdError},

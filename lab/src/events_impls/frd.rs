@@ -6,7 +6,8 @@ use oms::order::{OrderBuilder, OrderBuilderError};
 use tradeprim::{Side, quantity::Quantity};
 
 use crate::{
-    event::{Event, EventSource, Kind, Request, Scheduled},
+    event::{Event, EventSource, Kind, Request, Scheduled, Scheduler},
+    executor::SingleInstrumentOnlyMarketExecutor,
     formats::frd::FrdCandle,
     market_data::FrdFutChainMdReader,
 };
@@ -16,6 +17,7 @@ pub struct FrdEventQueue<'a> {
     seq: u64,
     md: Peekable<FrdFutChainMdReader<'a>>,
     heap: BinaryHeap<Reverse<Scheduled<FrdCandle>>>,
+    exec: SingleInstrumentOnlyMarketExecutor,
     instrument: Instrument,
     entry_triggers: Vec<DateTimeTrigger>,
     out_of_trade_triggers: Vec<DateTimeTrigger>,
@@ -34,6 +36,7 @@ impl<'a> FrdEventQueue<'a> {
             seq,
             md,
             heap,
+            exec: SingleInstrumentOnlyMarketExecutor::new(250_000_000, 3_000_000_000),
             instrument,
             entry_triggers: vec![DateTimeTrigger::new(
                 chrono::NaiveDateTime::new(
@@ -64,12 +67,6 @@ impl<'a> FrdEventQueue<'a> {
 
     pub fn heap(&self) -> &BinaryHeap<Reverse<Scheduled<FrdCandle>>> {
         &self.heap
-    }
-
-    fn take_seq(&mut self) -> u64 {
-        let s = self.seq;
-        self.seq += 1;
-        s
     }
 
     pub fn strategy_decision(&mut self) {
@@ -155,18 +152,29 @@ impl<'a> EventSource for FrdEventQueue<'a> {
             return None;
         }
 
-        match heap_ts.cmp(&md_ts) {
+        let event = match heap_ts.cmp(&md_ts) {
             std::cmp::Ordering::Less | std::cmp::Ordering::Equal => {
                 let event = self.heap.pop().unwrap().0.as_event();
-                assert!(heap_ts >= self.now);
+                assert!(
+                    heap_ts >= self.now,
+                    "heap_ts: {} is less than self.now: {}, event: {:?}",
+                    heap_ts,
+                    self.now,
+                    event
+                );
                 self.now = heap_ts;
                 Some(event)
             }
             std::cmp::Ordering::Greater => match self.md.next() {
                 Some(Ok(record)) => {
-                    let event = Event::new(self.now, Kind::MarketData(record));
-                    assert!(md_ts >= self.now);
+                    assert!(
+                        md_ts >= self.now,
+                        "md_ts: {} is less than self.now: {}",
+                        md_ts,
+                        self.now
+                    );
                     self.now = md_ts;
+                    let event = Event::new(self.now, Kind::MarketData(record));
                     Some(event)
                 }
                 Some(Err(err)) => {
@@ -176,26 +184,23 @@ impl<'a> EventSource for FrdEventQueue<'a> {
                 }
                 None => None,
             },
+        };
+
+        match event {
+            Some(event) => {
+                let mut scheduler = Scheduler::new(&mut self.heap, &mut self.seq);
+                self.exec.on_event(&event, &mut scheduler);
+                return Some(event);
+            }
+            None => None,
         }
     }
 
     fn submit(&mut self, req: Request) {
         match req {
             Request::SendOrder(order) => {
-                let latency = 5000_000_000_i64; // 5 sec
-                let event = Scheduled::new(
-                    self.take_seq(),
-                    Event::new(
-                        self.now() + latency,
-                        Kind::<Self::Record>::Ack(order.order_id()),
-                    ),
-                );
-                println!(
-                    "pushing at {}, expected to fire at {}",
-                    chrono::DateTime::from_timestamp_nanos(self.now()),
-                    chrono::DateTime::from_timestamp_nanos(self.now() + latency)
-                );
-                self.heap.push(Reverse(event));
+                let mut scheduler = Scheduler::new(&mut self.heap, &mut self.seq);
+                self.exec.push(order, self.now, &mut scheduler);
             }
             Request::CancelOrder(_order_id) => {}
             Request::Snapshot => {}
