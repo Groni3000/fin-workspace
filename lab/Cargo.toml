@@ -13,12 +13,13 @@ instrid = { path = "../instrid", features = ["mic-full"] }
 futchain = { path = "../futchain" }
 # `cmake-build` compiles librdkafka from C source, needing cmake + a C toolchain.
 rdkafka = { version = "0.36", features = ["cmake-build"], optional = true }
+ctrlc = { version = "3", optional = true }
 oms = { path = "../oms" }
 
 
 [features]
 default = []
-kafka = ["dep:rdkafka"]
+kafka = ["dep:rdkafka", "dep:ctrlc"]
 
 [[bin]]
 name = "kafka_check"

@@ -6,7 +6,14 @@ use crate::market_data::{Candle, RelevantPrice, Timestamped};
 
 use std::fmt::Display;
 #[cfg(feature = "kafka")]
-use std::{str::Utf8Error, time::Duration};
+use std::{
+    str::Utf8Error,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 
 #[cfg(feature = "kafka")]
 use rdkafka::{
@@ -122,6 +129,9 @@ impl Candle for CustomDatabentoAggregatedCandle {
 #[cfg(feature = "kafka")]
 pub struct CustomDatabentoConsumerMd {
     consumer: BaseConsumer,
+    /// Set from a Ctrl-C handler; ends iteration so the consumer drops
+    /// (and librdkafka leaves the group cleanly).
+    shutdown: Arc<AtomicBool>,
 }
 
 #[cfg(feature = "kafka")]
@@ -132,6 +142,7 @@ impl CustomDatabentoConsumerMd {
         auto_offset_reset: &str,
         enable_auto_commit: bool,
         topic: &str,
+        shutdown: Arc<AtomicBool>,
     ) -> Self {
         let consumer: BaseConsumer = ClientConfig::new()
             .set("bootstrap.servers", bootstrap_servers)
@@ -145,7 +156,7 @@ impl CustomDatabentoConsumerMd {
             .subscribe(&[topic])
             .expect("failed to subscribe to topic");
 
-        Self { consumer }
+        Self { consumer, shutdown }
     }
 
     pub fn consumer(&self) -> &BaseConsumer {
@@ -190,6 +201,9 @@ impl Iterator for CustomDatabentoConsumerMd {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
+            if self.shutdown.load(Ordering::Relaxed) {
+                return None;
+            }
             match self.consumer.poll(Duration::from_millis(500)) {
                 Some(Ok(msg)) => {
                     let record = match msg.payload_view::<str>()? {
@@ -197,16 +211,14 @@ impl Iterator for CustomDatabentoConsumerMd {
                         Err(e) => return Some(Err(KafkaMdError::Utf8Error(e))),
                     };
 
-                    match serde_json::from_str::<CustomDatabentoAggregatedCandle>(record) {
+                    return match serde_json::from_str::<CustomDatabentoAggregatedCandle>(record) {
                         Ok(candle) => Some(Ok(candle)),
                         Err(e) => Some(Err(KafkaMdError::Json(e))),
-                    }
+                    };
                 }
                 Some(Err(e)) => return Some(Err(KafkaMdError::Kafka(e))),
-                None => {
-                    continue;
-                }
-            };
+                None => continue,
+            }
         }
     }
 }

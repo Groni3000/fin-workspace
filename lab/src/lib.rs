@@ -1,12 +1,14 @@
 pub mod event;
 pub mod event_loop;
 pub mod events_impls;
+pub mod executor;
 pub mod formats;
 pub mod market_data;
 pub mod oms;
 pub mod portfolio;
 pub mod rms;
 pub mod strategy;
+pub mod strats_impl;
 
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, Offset, TimeZone, Utc};
 use chrono_tz::Tz;
@@ -25,8 +27,8 @@ where
     while let Some(Ok(record)) = market_data.next() {
         lines += 1;
         last = Some(record);
-        if lines % 1000 == 0 {
-            println!("Processed {lines} lines");
+        if lines % 1_000 == 0 {
+            println!("Processed {lines} lines\nLast processed line {last:?}");
         }
     }
 

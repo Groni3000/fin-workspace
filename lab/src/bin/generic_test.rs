@@ -1,4 +1,11 @@
-use std::{path::Path, str::FromStr};
+use std::{
+    path::Path,
+    str::FromStr,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use futchain::{FutChain, ListedTenors};
 use instrid::{asset::Asset, instruments::FuturesContract, mic::Mic, tenor::Tenor};
@@ -35,8 +42,16 @@ fn main() {
             (total_records, Some(Box::new(last_record.unwrap())))
         }
         Source::KafkaLive => {
-            let (total_records, last_record) = process_md(&mut init_kafka_md()).unwrap();
-            (total_records, Some(Box::new(last_record.unwrap())))
+            let shutdown = Arc::new(AtomicBool::new(false));
+            let handler_flag = shutdown.clone();
+            ctrlc::set_handler(move || handler_flag.store(true, Ordering::Relaxed))
+                .expect("failed to set Ctrl-C handler");
+
+            let (total_records, last_record) = process_md(&mut init_kafka_md(shutdown)).unwrap();
+            (
+                total_records,
+                last_record.map(|r| Box::new(r) as Box<dyn Candle>),
+            )
         }
     };
 
@@ -52,7 +67,7 @@ fn source_from_args() -> Source {
         .unwrap()
 }
 
-fn init_kafka_md() -> CustomDatabentoConsumerMd {
+fn init_kafka_md(shutdown: Arc<AtomicBool>) -> CustomDatabentoConsumerMd {
     // --- Connection
     const BOOTSTRAP_SERVERS: &str = "192.168.217.126:9092";
     // const TOPIC: &str = "md.db.GLBX.MDP3.RB.FUT.merged.ohlcv-1s";
@@ -60,10 +75,17 @@ fn init_kafka_md() -> CustomDatabentoConsumerMd {
     const TOPIC: &str = "md.databento.GLBX.MDP3.ohlcv-1s";
     // const TOPIC: &str = "md.databento.GLBX.MDP3.trades";
     const GROUP_ID: &str = "dirty-check";
-    const AUTO_OFFSET_RESET: &str = "latest";
+    const AUTO_OFFSET_RESET: &str = "earliest";
     // ---
     println!("Consuming '{TOPIC}' from {BOOTSTRAP_SERVERS} (offset reset: {AUTO_OFFSET_RESET})");
-    CustomDatabentoConsumerMd::new(BOOTSTRAP_SERVERS, GROUP_ID, AUTO_OFFSET_RESET, false, TOPIC)
+    CustomDatabentoConsumerMd::new(
+        BOOTSTRAP_SERVERS,
+        GROUP_ID,
+        AUTO_OFFSET_RESET,
+        false,
+        TOPIC,
+        shutdown,
+    )
 }
 
 fn init_files_md<'a>(listing: &'a ListedTenors) -> Result<FrdFutChainMdReader<'a>, FrdMdError> {
