@@ -6,8 +6,8 @@ use oms::order::{OrderBuilder, OrderBuilderError};
 use tradeprim::{Side, quantity::Quantity};
 
 use crate::{
-    FrdCandle,
     event::{Event, EventSource, Kind, Request, Scheduled},
+    formats::frd::FrdCandle,
     market_data::FrdFutChainMdReader,
 };
 
@@ -140,7 +140,7 @@ impl<'a> EventSource for FrdEventQueue<'a> {
         let heap_peek = self.heap.peek();
         let md_ts = match md_peek {
             Some(Ok(record)) => record
-                .timestamp
+                .timestamp()
                 .timestamp_nanos_opt()
                 .expect("MD timestamp is before current time."),
             Some(Err(_e)) => self.now(),

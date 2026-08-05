@@ -10,7 +10,7 @@ use chrono::{DateTime, Utc};
 use futchain::FutChain;
 use tradeprim::price::Price;
 
-use crate::{FrdCandle, FrdCandleParsingError};
+use crate::formats::frd::{FrdCandle, FrdCandleParsingError};
 
 // ------------------------------
 // --- General purpose traits ---
