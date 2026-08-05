@@ -25,6 +25,9 @@ where
     while let Some(Ok(record)) = market_data.next() {
         lines += 1;
         last = Some(record);
+        if lines % 1000 == 0 {
+            println!("Processed {lines} lines");
+        }
     }
 
     Ok((lines, last))

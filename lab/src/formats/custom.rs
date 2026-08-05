@@ -4,12 +4,13 @@ use tradeprim::price::Price;
 
 use crate::market_data::{Candle, RelevantPrice, Timestamped};
 
+use std::fmt::Display;
 #[cfg(feature = "kafka")]
-use std::str::Utf8Error;
+use std::{str::Utf8Error, time::Duration};
 
 #[cfg(feature = "kafka")]
 use rdkafka::{
-    ClientConfig,
+    ClientConfig, Message,
     consumer::{BaseConsumer, Consumer},
     error::KafkaError,
 };
@@ -50,6 +51,30 @@ pub struct CustomDatabentoAggregatedCandle {
     #[serde(deserialize_with = "de_price_f64")]
     pub close: Price,
     pub volume: u64,
+}
+
+impl PartialEq for CustomDatabentoAggregatedCandle {
+    fn eq(&self, other: &Self) -> bool {
+        self.symbol == other.symbol
+            && self.instrument_id == other.instrument_id
+            && self.publisher_id == other.publisher_id
+            && self.ts_event == other.ts_event
+            && self.src == other.src
+    }
+}
+
+impl Eq for CustomDatabentoAggregatedCandle {}
+
+impl PartialOrd for CustomDatabentoAggregatedCandle {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.ts_event.partial_cmp(&other.ts_event)
+    }
+}
+
+impl Ord for CustomDatabentoAggregatedCandle {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.ts_event.cmp(&other.ts_event)
+    }
 }
 
 fn de_price_f64<'de, D: Deserializer<'de>>(d: D) -> Result<Price, D::Error> {
@@ -137,6 +162,14 @@ pub enum KafkaMdError {
     Json(serde_json::Error),
 }
 
+impl Display for KafkaMdError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for KafkaMdError {}
+
 #[cfg(feature = "kafka")]
 impl From<serde_json::Error> for KafkaMdError {
     fn from(value: serde_json::Error) -> Self {
@@ -151,27 +184,29 @@ impl From<KafkaError> for KafkaMdError {
     }
 }
 
-// #[cfg(feature = "kafka")]
-// impl MarketData for CustomDatabentoConsumerMd {
-//     type Record = CustomDatabentoAggregatedCandle;
-//     type Error = KafkaMdError;
+#[cfg(feature = "kafka")]
+impl Iterator for CustomDatabentoConsumerMd {
+    type Item = Result<CustomDatabentoAggregatedCandle, KafkaMdError>;
 
-//     fn next_record(&mut self) -> Result<Option<Self::Record>, Self::Error> {
-//         loop {
-//             match self.consumer.poll(Duration::from_millis(500)) {
-//                 Some(Ok(msg)) => {
-//                     let record = msg
-//                         .payload_view::<str>()
-//                         .ok_or(KafkaMdError::EmptyPayload)?
-//                         .map_err(KafkaMdError::Utf8Error)?;
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            match self.consumer.poll(Duration::from_millis(500)) {
+                Some(Ok(msg)) => {
+                    let record = match msg.payload_view::<str>()? {
+                        Ok(payload) => payload,
+                        Err(e) => return Some(Err(KafkaMdError::Utf8Error(e))),
+                    };
 
-//                     return Ok(Some(serde_json::from_str(record)?));
-//                 }
-//                 Some(Err(e)) => return Err(KafkaMdError::Kafka(e)),
-//                 None => {
-//                     continue;
-//                 }
-//             };
-//         }
-//     }
-// }
+                    match serde_json::from_str::<CustomDatabentoAggregatedCandle>(record) {
+                        Ok(candle) => Some(Ok(candle)),
+                        Err(e) => Some(Err(KafkaMdError::Json(e))),
+                    }
+                }
+                Some(Err(e)) => return Some(Err(KafkaMdError::Kafka(e))),
+                None => {
+                    continue;
+                }
+            };
+        }
+    }
+}
