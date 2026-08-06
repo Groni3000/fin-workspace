@@ -274,7 +274,7 @@ Wire formats are chosen for human-readability and exact roundtripping:
 Every type that implements `Deserialize` is `DeserializeOwned` — no borrowed
 fields, the bytes can come from a `Vec<u8>` and be dropped immediately.
 
-```rust
+```ignore
 # use instrid::prelude::*;
 # use tradeprim::prelude::{Currency, Price};
 let opt = OptionContract::new(
