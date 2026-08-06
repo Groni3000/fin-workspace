@@ -11,6 +11,7 @@ use tradeprim::{Side, quantity::Quantity};
 use crate::{
     event::{Event, EventSource, Kind, Request},
     portfolio::Portfolio,
+    rms::Rms,
     strategy::Desired,
 };
 
@@ -36,6 +37,7 @@ impl Oms {
                 self.on_fill(f, pf);
             }
             Kind::Reject(id) => {
+                tracing::warn!(order_id = ?id, "reject");
                 self.unacked.remove(id);
             }
             _ => {}
@@ -45,6 +47,7 @@ impl Oms {
     /// remove from unacked and insert into working, converting state to `Working`
     fn on_ack(&mut self, order_id: &OrderId) {
         if let Some(order) = self.unacked.remove(order_id) {
+            tracing::debug!(order_id = ?order_id, side = ?order.side(), qty = %order.quantity().qty(), "ack");
             self.working.insert(*order_id, order.into_working());
         }
     }
@@ -52,6 +55,15 @@ impl Oms {
     fn on_fill(&mut self, fill: &Fill, pf: &mut Portfolio) {
         // regardless - push fill - it's reported by executor => it's real
         pf.push_fill(*fill);
+        tracing::info!(
+            order_id = ?fill.order_id(),
+            instrument = %fill.instrument(),
+            side = ?fill.side(),
+            qty = %fill.quantity().qty(),
+            price = %fill.price(),
+            position = %pf.position(&fill.instrument()),
+            "fill"
+        );
 
         match self.working.remove(&fill.order_id()) {
             Some(working_order) => match working_order.apply_fill(fill) {
@@ -63,13 +75,14 @@ impl Oms {
                     // return order to working
                     self.working.insert(fill.order_id(), working);
                 }
-                FillOutcome::Overfill(working, _qty) => {
-                    // return order to working, notify about overfill
-                    self.working.insert(fill.order_id(), working);
-                    // TODO: notify about overfill
+                FillOutcome::Overfill(terminated, excess) => {
+                    // Order is terminated: it can never fill again. The excess is already in `pf`.
+                    tracing::error!(order_id = ?fill.order_id(), excess = %excess.qty(), "overfill");
+                    pf.push_order(terminated);
                 }
             },
-            None => {} // TODO: notify about fill for an order we don't know (but real position still moved)
+            // Position still moved, we just have no order to attribute it to.
+            None => tracing::warn!(order_id = ?fill.order_id(), "fill for unknown order"),
         }
     }
 
@@ -95,9 +108,11 @@ impl Oms {
     }
 
     /// Sends desired not-market orders to the OMS and Executor.
-    fn send_desired_orders<S: EventSource>(
+    fn send_desired_orders<S: EventSource, R: Rms>(
         &mut self,
         desired: &HashMap<Instrument, Desired>,
+        pf: &Portfolio,
+        rms: &R,
         sink: &mut S,
     ) {
         for instrument_desired in desired.values() {
@@ -106,7 +121,11 @@ impl Oms {
                 if self.unacked.contains_key(id) || self.working.contains_key(id) {
                     continue;
                 }
+                if !rms.approve_order(&order, pf) {
+                    continue;
+                }
 
+                tracing::debug!(order_id = ?id, side = ?order.side(), qty = %order.quantity().qty(), "send desired order");
                 self.unacked.insert(*id, order); // Add to OMS state
                 sink.submit(Request::SendOrder(order)); // OMS -> Executor
             }
@@ -117,17 +136,20 @@ impl Oms {
     ///
     /// Must be called the last:
     ///     **all manipulations with desired state and OMS state must be done before this.**
-    fn send_market_orders<S: EventSource>(
+    fn send_market_orders<S: EventSource, R: Rms>(
         &mut self,
         desired: &HashMap<Instrument, Desired>,
         pf: &Portfolio,
+        rms: &R,
         sink: &mut S,
     ) {
         for (instr, want) in desired {
-            let m = &want.position().as_i64()      // DP
-                  + self.desired_orders_qty(want.orders())  // + sum(DO_q)
-                  - self.leaves_qty(instr)//                // - sum(WO_lq)
-                  - &pf.position(instr).as_i64(); //    // - RP
+            // Clamp the level, not the delta: clamping `m` would creep past the limit each pass.
+            let dp = rms.clamp_position(instr, want.position(), pf).as_i64();
+            let do_q = self.desired_orders_qty(want.orders());
+            let wo = self.leaves_qty(instr);
+            let rp = pf.position(instr).as_i64();
+            let m = dp + do_q - wo - rp;
             // skip case
             if m == 0 {
                 continue;
@@ -145,21 +167,37 @@ impl Oms {
             .verify()
             .unwrap()
             .build();
+            tracing::info!(
+                order_id = ?order.order_id(),
+                instrument = %instr,
+                side = ?side,
+                qty = %order.quantity().qty(),
+                dp = %Quantity::display_raw(dp),
+                do_q = %Quantity::display_raw(do_q),
+                wo = %Quantity::display_raw(wo),
+                rp = %Quantity::display_raw(rp),
+                m = %Quantity::display_raw(m),
+                "send market order"
+            );
             self.unacked.insert(order.order_id(), order);
             sink.submit(Request::SendOrder(order)); // OMS -> Executor
         }
     }
 
     /// Compare desired state to actual state and send orders to close the gap.
-    pub fn reconcile<S: EventSource>(
+    pub fn reconcile<S: EventSource, R: Rms>(
         &mut self,
         desired: &HashMap<Instrument, Desired>,
         pf: &Portfolio,
+        rms: &R,
         sink: &mut S,
     ) {
-        self.send_desired_orders(desired, sink);
+        if !rms.trading_allowed(pf) {
+            return;
+        }
+        self.send_desired_orders(desired, pf, rms, sink);
 
         // MUST BE CALLED LAST
-        self.send_market_orders(desired, pf, sink);
+        self.send_market_orders(desired, pf, rms, sink);
     }
 }

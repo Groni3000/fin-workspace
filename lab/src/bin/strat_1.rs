@@ -17,26 +17,19 @@ use lab::{
     market_data::{FrdFutChainMdReader, FrdMdError},
     oms::Oms,
     portfolio::Portfolio,
+    rms::{HaltedRms, MaxPositionRms, NaiveRms, Rms},
     strats_impl::strat_1::{config::Config, strategy::Strategy},
+    telemetry::{self, SimClock},
+};
+use tradeprim::{
+    position::{NonZeroQuantity, Position},
+    quantity::Quantity,
 };
 
-/// The main idea is to have something like this:
-///
-/// ```
-/// while let Some(event) = event_queue.next_event() {
-///     // return path: Executor -> OMS -> Portfolio
-///     portfolio.on_event(&event);   // Fill -> real positions. THE TRUTH.
-///     oms.on_event(&event);         // Ack/Fill/Reject/Cancel -> order lifecycle
-///     strategy.on_event(&event);    // MD -> desired_positions
-///
-///     // forward path: Strategy -> RMS -> OMS -> Executor
-///     let approved = rms.clamp(strategy.desired_positions(), &portfolio);
-///     for req in oms.reconcile(&approved, &portfolio) {
-///         event_queue.submit(req);
-///     }
-/// }
-/// ```
 fn main() {
+    let clock = SimClock::new();
+    telemetry::init(clock.clone());
+
     let config = Config::default();
     let mut strategy = Strategy::new("Frd RB backtest".into(), config);
     match source_from_args() {
@@ -52,13 +45,27 @@ fn main() {
             let mut pf = Portfolio::new();
             let mut oms = Oms::new(HashMap::default(), HashMap::default());
             let mut event_queue = FrdEventQueue::new(0, 0, md);
+            let rms = rms_from_args();
 
+            tracing::info!(strategy = strategy.id(), "backtest start");
             while let Some(event) = event_queue.next_event() {
+                clock.set(event.ts());
+
                 oms.on_event(&event, &mut pf);
                 strategy.on_event(&event);
 
-                oms.reconcile(strategy.desired(), &pf, &mut event_queue);
+                oms.reconcile(strategy.desired(), &pf, &rms, &mut event_queue);
             }
+            let final_positions = pf
+                .positions()
+                .iter()
+                .filter(|(_i, p)| *p != &Position::Flat)
+                .collect::<HashMap<&Instrument, &Position>>();
+            tracing::info!(
+                fills = pf.fills().len(),
+                positions = ?final_positions,
+                "backtest done"
+            );
         }
         Source::KafkaReplay => {
             let shutdown = Arc::new(AtomicBool::new(false));
@@ -86,6 +93,17 @@ impl FromStr for Source {
             "kafka" => Ok(Source::KafkaReplay),
             _ => Err(format!("Invalid source: {}", s)),
         }
+    }
+}
+
+/// `cargo run --bin strat_1 -- frd naive|max|halted`
+fn rms_from_args() -> Box<dyn Rms> {
+    match std::env::args().nth(2).unwrap_or_default().as_str() {
+        "naive" => Box::new(NaiveRms),
+        "halted" => Box::new(HaltedRms),
+        _ => Box::new(MaxPositionRms::new(
+            NonZeroQuantity::new(Quantity::from_str_unchecked("2")).unwrap(),
+        )),
     }
 }
 

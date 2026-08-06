@@ -8,7 +8,7 @@ use tradeprim::{position::Position, price::Price, quantity::Quantity};
 use crate::{
     event::{Event, Kind},
     formats::{Tagged, frd::FrdCandle},
-    market_data::{RelevantPrice, Timestamped},
+    market_data::{Instrumented, RelevantPrice, Timestamped},
     strategy::Desired,
     strats_impl::strat_1::config::Config,
 };
@@ -30,6 +30,8 @@ pub struct State {
     last_known_date: NaiveDate,
     n_trades: u64,
     stop_loss_price: Option<Price>,
+    /// Contract the feed is currently on. `config.instrument()` is only the chain root.
+    traded_instrument: Option<Instrument>,
 }
 
 impl Default for State {
@@ -39,6 +41,7 @@ impl Default for State {
             last_known_date: NaiveDate::default(),
             n_trades: 0,
             stop_loss_price: None,
+            traded_instrument: None,
         }
     }
 }
@@ -50,6 +53,10 @@ impl State {
 
     pub fn last_known_date(&self) -> NaiveDate {
         self.last_known_date
+    }
+
+    pub fn traded_instrument(&self) -> Option<Instrument> {
+        self.traded_instrument
     }
 }
 
@@ -109,7 +116,7 @@ impl Strategy {
             self.state.fired_today = true;
             *self
                 .desired
-                .entry(self.config.instrument())
+                .entry(md_record.instrument())
                 .or_default()
                 .mut_position() =
                 Position::Long(Quantity::from_str_unchecked("1").non_zero().unwrap());
@@ -133,7 +140,7 @@ impl Strategy {
         if exchange_time > self.config.out_time() || stop_loss_fired {
             *self
                 .desired
-                .entry(self.config.instrument())
+                .entry(md_record.instrument())
                 .or_default()
                 .mut_position() = Position::Flat;
             self.state.n_trades += 1;
@@ -141,9 +148,27 @@ impl Strategy {
         }
     }
 
+    /// All desired positions are flatten if we roll.
+    ///
+    /// For now it changes nothing:
+    /// we roll instrument and .entry/out_condition simply don't touch it.
+    fn roll_condition(&mut self, md_record: &MdRecord) {
+        let current = md_record.instrument();
+        match self.state.traded_instrument {
+            Some(previous) if previous != current => {
+                *self.desired.entry(previous).or_default().mut_position() = Position::Flat;
+                self.state.stop_loss_price = None;
+                tracing::info!(from = %previous, to = %current, "roll");
+            }
+            _ => {}
+        }
+        self.state.traded_instrument = Some(current);
+    }
+
     fn process_md(&mut self, md_record: &MdRecord) {
-        self.entry_condition(&md_record);
-        self.out_condition(&md_record);
+        self.roll_condition(md_record);
+        self.entry_condition(md_record);
+        self.out_condition(md_record);
     }
 
     pub fn config(&self) -> &Config {
