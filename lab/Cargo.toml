@@ -15,6 +15,9 @@ futchain = { path = "../futchain" }
 rdkafka = { version = "0.36", features = ["cmake-build"], optional = true }
 ctrlc = { version = "3", optional = true }
 oms = { path = "../oms" }
+# `release_max_level_info` compiles trace!/debug! out entirely in release builds.
+tracing = { version = "0.1", features = ["release_max_level_info"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 
 [features]
@@ -27,4 +30,8 @@ required-features = ["kafka"]
 
 [[bin]]
 name = "generic_test"
+required-features = ["kafka"]
+
+[[bin]]
+name = "strat_1"
 required-features = ["kafka"]
