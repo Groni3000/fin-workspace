@@ -1,11 +1,15 @@
 use chrono::{DateTime, Utc};
 use instrid::instruments::Instrument;
-use tradeprim::{Side, position::NonZeroQuantity, price::Price};
+use tradeprim::{
+    Side,
+    position::{NonZeroQuantity, Position},
+    price::Price,
+};
 
 use crate::OrderId;
 
 /// Fill representation.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Fill {
     order_id: OrderId,
     timestamp: DateTime<Utc>,
@@ -56,5 +60,12 @@ impl Fill {
 
     pub fn order_id(&self) -> OrderId {
         self.order_id
+    }
+
+    pub fn as_position(&self) -> Position {
+        match self.side {
+            Side::Buy => Position::Long(self.quantity),
+            Side::Sell => Position::Short(self.quantity),
+        }
     }
 }

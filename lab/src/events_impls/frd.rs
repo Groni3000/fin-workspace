@@ -1,15 +1,12 @@
 use std::{cmp::Reverse, collections::BinaryHeap, iter::Peekable};
 
 use chrono::{DateTime, TimeDelta, Utc};
-use instrid::instruments::Instrument;
-use oms::order::{OrderBuilder, OrderBuilderError};
-use tradeprim::{Side, quantity::Quantity};
 
 use crate::{
     event::{Event, EventSource, Kind, Request, Scheduled, Scheduler},
     executor::SingleInstrumentOnlyMarketExecutor,
     formats::{Tagged, frd::FrdCandle},
-    market_data::{FrdFutChainMdReader, Instrumented, Timestamped},
+    market_data::{FrdFutChainMdReader, Timestamped},
 };
 
 pub struct FrdEventQueue<'a> {
@@ -18,18 +15,10 @@ pub struct FrdEventQueue<'a> {
     md: Peekable<FrdFutChainMdReader<'a>>,
     heap: BinaryHeap<Reverse<Scheduled<Tagged<FrdCandle>>>>,
     exec: SingleInstrumentOnlyMarketExecutor,
-    instrument: Instrument,
-    entry_triggers: Vec<DateTimeTrigger>,
-    out_of_trade_triggers: Vec<DateTimeTrigger>,
 }
 
 impl<'a> FrdEventQueue<'a> {
-    pub fn new(
-        now: i64,
-        seq: u64,
-        md: Peekable<FrdFutChainMdReader<'a>>,
-        instrument: Instrument,
-    ) -> Self {
+    pub fn new(now: i64, seq: u64, md: Peekable<FrdFutChainMdReader<'a>>) -> Self {
         let heap = BinaryHeap::new();
         Self {
             now,
@@ -37,23 +26,6 @@ impl<'a> FrdEventQueue<'a> {
             md,
             heap,
             exec: SingleInstrumentOnlyMarketExecutor::new(250_000_000, 3_000_000_000),
-            instrument,
-            entry_triggers: vec![DateTimeTrigger::new(
-                chrono::NaiveDateTime::new(
-                    chrono::NaiveDate::from_ymd_opt(2026, 6, 3).unwrap(),
-                    chrono::NaiveTime::from_hms_opt(15, 0, 0).unwrap(),
-                )
-                .and_utc(),
-                TimeDelta::new(30, 0).unwrap(),
-            )],
-            out_of_trade_triggers: vec![DateTimeTrigger::new(
-                chrono::NaiveDateTime::new(
-                    chrono::NaiveDate::from_ymd_opt(2026, 6, 10).unwrap(),
-                    chrono::NaiveTime::from_hms_opt(15, 0, 0).unwrap(),
-                )
-                .and_utc(),
-                TimeDelta::new(30, 0).unwrap(),
-            )],
         }
     }
 
@@ -67,65 +39,6 @@ impl<'a> FrdEventQueue<'a> {
 
     pub fn heap(&self) -> &BinaryHeap<Reverse<Scheduled<Tagged<FrdCandle>>>> {
         &self.heap
-    }
-
-    pub fn strategy_decision(&mut self, md_record: Tagged<FrdCandle>) {
-        let now = self.now();
-        if self
-            .entry_triggers
-            .last_mut()
-            .is_some_and(|trigger| trigger.check_nanos(now))
-        {
-            let maybe_order = OrderBuilder::new(
-                md_record.instrument(),
-                Side::Buy,
-                Quantity::from_str_unchecked("3").non_zero().unwrap(),
-            )
-            // .with_time_in_force(TimeInForce::GoodTillCancel) // uncomment to see error handling
-            .verify();
-            let order = match maybe_order {
-                Ok(order_ready) => order_ready.build(),
-                Err(err) => match err {
-                    OrderBuilderError::IncompatibleOrderTypeAndTif(_, _) => {
-                        println!("{}", err);
-                        return;
-                    }
-                },
-            };
-
-            self.submit(Request::SendOrder(order));
-            self.entry_triggers.pop();
-        }
-
-        if self
-            .out_of_trade_triggers
-            .last_mut()
-            .is_some_and(|trigger| trigger.check_nanos(now))
-        {
-            let maybe_order = OrderBuilder::new(
-                md_record.instrument(),
-                Side::Sell,
-                Quantity::from_str_unchecked("3").non_zero().unwrap(),
-            )
-            // .with_time_in_force(TimeInForce::GoodTillCancel) // uncomment to see error handling
-            .verify();
-            let order = match maybe_order {
-                Ok(order_ready) => order_ready.build(),
-                Err(err) => match err {
-                    OrderBuilderError::IncompatibleOrderTypeAndTif(_, _) => {
-                        println!("{}", err);
-                        return;
-                    }
-                },
-            };
-
-            self.submit(Request::SendOrder(order));
-            self.out_of_trade_triggers.pop();
-        }
-    }
-
-    pub fn instrument(&self) -> Instrument {
-        self.instrument
     }
 }
 

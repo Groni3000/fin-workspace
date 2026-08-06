@@ -1,4 +1,8 @@
-use std::{cmp::Ordering, fmt::Display, ops::Add};
+use std::{
+    cmp::Ordering,
+    fmt::Display,
+    ops::{Add, AddAssign},
+};
 
 use crate::quantity::Quantity;
 
@@ -8,6 +12,16 @@ pub enum Position {
     Flat,
     Long(NonZeroQuantity),
     Short(NonZeroQuantity),
+}
+
+impl Position {
+    pub fn as_i64(self) -> i64 {
+        match self {
+            Position::Flat => 0,
+            Position::Long(quantity) => quantity.value() as i64,
+            Position::Short(quantity) => -(quantity.value() as i64),
+        }
+    }
 }
 
 impl Display for Position {
@@ -92,6 +106,12 @@ impl Add for Position {
     }
 }
 
+impl AddAssign<Position> for Position {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = (*self + rhs).expect("Position overflow");
+    }
+}
+
 // Backs up `Position`
 #[derive(Hash, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct NonZeroQuantity {
@@ -108,6 +128,10 @@ impl NonZeroQuantity {
 
     pub fn qty(&self) -> Quantity {
         self.qty
+    }
+
+    pub fn value(&self) -> u64 {
+        self.qty.value()
     }
 }
 

@@ -9,7 +9,7 @@ use tradeprim::price::Price;
 
 use crate::{
     event::{Event, Kind, Scheduler},
-    market_data::RelevantPrice,
+    market_data::{Instrumented, RelevantPrice},
 };
 
 /// Fills everything at last known price at once.
@@ -59,7 +59,7 @@ impl SingleInstrumentOnlyMarketExecutor {
         &self.working_orders
     }
 
-    pub fn on_event<M: RelevantPrice>(
+    pub fn on_event<M: RelevantPrice + Instrumented>(
         &mut self,
         event: &Event<M>,
         scheduler: &mut Scheduler<'_, M>,
@@ -83,7 +83,7 @@ impl SingleInstrumentOnlyMarketExecutor {
             .retain(|order| order.order_id() != order_id);
     }
 
-    pub fn on_record<M: RelevantPrice>(
+    pub fn on_record<M: RelevantPrice + Instrumented>(
         &mut self,
         md_record: &M,
         timestamp: i64,
@@ -91,6 +91,9 @@ impl SingleInstrumentOnlyMarketExecutor {
     ) {
         self.last_known_price = Some(md_record.last_price());
         self.working_orders.retain(|order| {
+            if order.instrument() != md_record.instrument() {
+                return true;
+            }
             let fill = Fill::new(
                 order.order_id(),
                 md_record.timestamp(),

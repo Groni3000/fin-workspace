@@ -36,6 +36,13 @@ impl Side {
             Self::Sell => Self::Buy,
         }
     }
+
+    pub fn as_i64(self) -> i64 {
+        match self {
+            Self::Buy => 1,
+            Self::Sell => -1,
+        }
+    }
 }
 
 impl Neg for Side {
