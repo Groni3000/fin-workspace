@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate};
+use chrono_tz::Tz;
 use instrid::instruments::Instrument;
 use oms::fill::Fill;
 use tradeprim::{position::Position, price::Price, quantity::Quantity};
@@ -81,13 +82,6 @@ impl Strategy {
     }
 
     pub fn on_event(&mut self, event: &Event<MdRecord>) {
-        let dt = chrono::DateTime::from_timestamp_nanos(event.ts())
-            .with_timezone(&self.config.exchange_tz())
-            .date_naive();
-        if self.state.last_known_date != dt {
-            self.state.fired_today = false;
-            self.state.last_known_date = dt;
-        }
         match event.kind() {
             Kind::MarketData(md) => self.process_md(md),
             Kind::Ack(_order_id) => {}
@@ -103,13 +97,10 @@ impl Strategy {
 
     fn on_fill(&mut self, _fill: &Fill) {}
 
-    fn entry_condition(&mut self, md_record: &MdRecord) {
+    fn entry_condition(&mut self, md_record: &MdRecord, exchange_ts: DateTime<Tz>) {
         if self.state.fired_today {
             return;
         }
-        let exchange_ts = md_record
-            .timestamp()
-            .with_timezone(&self.config.exchange_tz());
         let exchange_time = exchange_ts.time();
         if exchange_time >= self.config.entry_time().0 && exchange_time < self.config.entry_time().1
         {
@@ -126,10 +117,7 @@ impl Strategy {
         }
     }
 
-    fn out_condition(&mut self, md_record: &MdRecord) {
-        let exchange_ts = md_record
-            .timestamp()
-            .with_timezone(&self.config.exchange_tz());
+    fn out_condition(&mut self, md_record: &MdRecord, exchange_ts: DateTime<Tz>) {
         let exchange_time = exchange_ts.time();
         let current_price = md_record.last_price();
         let stop_loss_fired = if let Some(sl_price) = self.state.stop_loss_price {
@@ -166,9 +154,20 @@ impl Strategy {
     }
 
     fn process_md(&mut self, md_record: &MdRecord) {
+        // The only tz conversion per record: chrono-tz binary-searches transitions on each call.
+        let exchange_ts = md_record
+            .timestamp()
+            .with_timezone(&self.config.exchange_tz());
+
+        let date = exchange_ts.date_naive();
+        if self.state.last_known_date != date {
+            self.state.fired_today = false;
+            self.state.last_known_date = date;
+        }
+
         self.roll_condition(md_record);
-        self.entry_condition(md_record);
-        self.out_condition(md_record);
+        self.entry_condition(md_record, exchange_ts);
+        self.out_condition(md_record, exchange_ts);
     }
 
     pub fn config(&self) -> &Config {

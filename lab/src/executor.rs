@@ -5,7 +5,6 @@ use oms::{
     fill::Fill,
     order::{New, Order, OrderType, Working},
 };
-use tradeprim::price::Price;
 
 use crate::{
     event::{Event, Kind, Scheduler},
@@ -20,7 +19,6 @@ pub struct SingleInstrumentOnlyMarketExecutor {
     working_orders: Vec<Order<Working>>,
     ack_latency: u64,
     fill_latency: u64,
-    last_known_price: Option<Price>,
 }
 
 impl SingleInstrumentOnlyMarketExecutor {
@@ -30,7 +28,6 @@ impl SingleInstrumentOnlyMarketExecutor {
             working_orders: Vec::new(),
             ack_latency,
             fill_latency,
-            last_known_price: None,
         }
     }
 
@@ -89,7 +86,6 @@ impl SingleInstrumentOnlyMarketExecutor {
         timestamp: i64,
         scheduler: &mut Scheduler<'_, M>,
     ) {
-        self.last_known_price = Some(md_record.last_price());
         self.working_orders.retain(|order| {
             if order.instrument() != md_record.instrument() {
                 return true;
