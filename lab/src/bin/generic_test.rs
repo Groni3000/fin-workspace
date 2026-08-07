@@ -104,7 +104,7 @@ fn init_files_md<'a>(listing: &'a ListedTenors) -> Result<FrdFutChainMdReader<'a
         None,
     );
     let chain = FutChain::new(instrument, listing).expect("Failed to create FutChain");
-    let market_data = FrdFutChainMdReader::new(chain, dir.to_path_buf(), String::new())?;
+    let market_data = FrdFutChainMdReader::new(chain, dir.to_path_buf())?;
 
     Ok(market_data)
 }

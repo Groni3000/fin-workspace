@@ -1,4 +1,6 @@
 use std::{
+    cmp::Reverse,
+    collections::BinaryHeap,
     error::Error,
     fmt::{Debug, Display},
     fs::File,
@@ -8,7 +10,7 @@ use std::{
 
 use chrono::{DateTime, Utc};
 use futchain::FutChain;
-use instrid::instruments::Instrument;
+use instrid::instruments::{FuturesContract, Instrument};
 use tradeprim::price::Price;
 
 use crate::formats::{
@@ -94,28 +96,76 @@ impl From<FrdCandleParsingError> for FrdMdError {
 // --- Structs ---
 // ---------------
 
-/// A reader that reads market data into a buffer.
+/// One contract's file, with its next candle read ahead so the merge can compare timestamps.
+#[derive(Debug)]
+struct Leg {
+    contract: FuturesContract,
+    reader: BufReader<File>,
+    buffer: String,
+    pending: Option<FrdCandle>,
+}
+
+impl Leg {
+    /// `Ok(None)` at end of file. Blank lines are skipped.
+    fn read_candle(&mut self) -> Result<Option<FrdCandle>, FrdMdError> {
+        loop {
+            self.buffer.clear();
+            if self.reader.read_line(&mut self.buffer)? == 0 {
+                return Ok(None);
+            }
+            if self.buffer.trim().is_empty() {
+                continue;
+            }
+            return Ok(Some(FrdCandle::from_frd_csv_line(&self.buffer)?));
+        }
+    }
+}
+
+/// Merges every contract file in the chain into one (timestamp, earlies_expiry)-ordered stream.
 #[derive(Debug)]
 pub struct FrdFutChainMdReader<'a> {
-    current: BufReader<File>,
+    legs: Vec<Leg>,
+    /// Min-heap of `(next timestamp, leg index)`.
+    queue: BinaryHeap<Reverse<(DateTime<Utc>, usize)>>,
+    /// Leg that produced the last record and still owes a read-ahead.
+    refill: Option<usize>,
     chain: FutChain<'a>,
     dir: PathBuf,
-    buffer: String,
-    last_known_ts: Option<DateTime<Utc>>,
 }
 
 impl<'a> FrdFutChainMdReader<'a> {
-    pub fn new(chain: FutChain<'a>, dir: PathBuf, buffer: String) -> Result<Self, FrdMdError> {
-        let file_name = Self::get_file_name(&chain);
-        let file = File::open(dir.join(&file_name))?;
-        let reader = BufReader::new(file);
+    pub fn new(mut chain: FutChain<'a>, dir: PathBuf) -> Result<Self, FrdMdError> {
+        let mut legs = Vec::new();
+        loop {
+            let path = dir.join(Self::get_file_name(&chain));
+            // The first file must exist; the chain ends at the first gap after it.
+            if !legs.is_empty() && !path.is_file() {
+                break;
+            }
+            legs.push(Leg {
+                contract: *chain.contract(),
+                reader: BufReader::new(File::open(&path)?),
+                buffer: String::new(),
+                pending: None,
+            });
+            chain.advance();
+        }
+        chain.retreat_by(legs.len());
+
+        let mut queue = BinaryHeap::with_capacity(legs.len());
+        for (idx, leg) in legs.iter_mut().enumerate() {
+            if let Some(candle) = leg.read_candle()? {
+                queue.push(Reverse((candle.timestamp(), idx)));
+                leg.pending = Some(candle);
+            }
+        }
 
         Ok(Self {
-            current: reader,
+            legs,
+            queue,
+            refill: None,
             chain,
             dir,
-            buffer,
-            last_known_ts: None,
         })
     }
 
@@ -129,18 +179,6 @@ impl<'a> FrdFutChainMdReader<'a> {
         )
     }
 
-    fn advance(&mut self) -> Result<bool, FrdMdError> {
-        self.chain.advance();
-        let file_name = Self::get_file_name(&self.chain);
-        let path = self.dir.join(&file_name);
-        if !path.is_file() {
-            return Ok(false);
-        }
-        self.current = BufReader::new(File::open(&path)?);
-
-        Ok(true)
-    }
-
     pub fn chain(&self) -> &FutChain<'a> {
         &self.chain
     }
@@ -148,46 +186,39 @@ impl<'a> FrdFutChainMdReader<'a> {
     pub fn dir(&self) -> &PathBuf {
         &self.dir
     }
+
+    pub fn contracts(&self) -> impl Iterator<Item = &FuturesContract> {
+        self.legs.iter().map(|leg| &leg.contract)
+    }
 }
 
 impl<'a> Iterator for FrdFutChainMdReader<'a> {
     type Item = Result<Tagged<FrdCandle>, FrdMdError>;
 
-    /// Returns None when files exhausted.
+    /// Returns None when every file is exhausted.
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            self.buffer.clear();
-            let n = match self.current.read_line(&mut self.buffer) {
-                Ok(n) => n,
-                Err(e) => return Some(Err(e.into())),
-            };
-            if n == 0 {
-                match self.advance() {
-                    // File found
-                    Ok(true) => continue,
-                    // File not found
-                    Ok(false) => return None,
-                    // Error reading file
-                    Err(e) => return Some(Err(e)),
+        // Deferred so a read error surfaces without swallowing the record already emitted.
+        if let Some(idx) = self.refill.take() {
+            match self.legs[idx].read_candle() {
+                Ok(Some(candle)) => {
+                    self.queue.push(Reverse((candle.timestamp(), idx)));
+                    self.legs[idx].pending = Some(candle);
                 }
+                Ok(None) => {}
+                Err(e) => return Some(Err(e)),
             }
-            let record = match FrdCandle::from_frd_csv_line(&self.buffer) {
-                Ok(record) => record,
-                Err(e) => return Some(Err(e.into())),
-            };
-
-            if let Some(lk_ts) = self.last_known_ts
-                && record.timestamp() <= lk_ts
-            {
-                continue;
-            }
-            self.last_known_ts = Some(record.timestamp());
-
-            return Some(Ok(Tagged::new(
-                Instrument::Futures(*self.chain.contract()),
-                record,
-            )));
         }
+
+        let Reverse((_, idx)) = self.queue.pop()?;
+        let leg = &mut self.legs[idx];
+        let candle = leg
+            .pending
+            .take()
+            .expect("a queued leg always holds a candle");
+        let instrument = Instrument::Futures(leg.contract);
+        self.refill = Some(idx);
+
+        Some(Ok(Tagged::new(instrument, candle)))
     }
 }
 

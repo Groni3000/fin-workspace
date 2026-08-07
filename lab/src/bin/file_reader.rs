@@ -21,7 +21,7 @@ fn main() -> Result<(), FrdMdError> {
     );
     let listing = ListedTenors::monthly();
     let chain = FutChain::new(instrument, &listing).expect("Failed to create FutChain");
-    let mut market_data = FrdFutChainMdReader::new(chain, dir.to_path_buf(), String::new())?;
+    let mut market_data = FrdFutChainMdReader::new(chain, dir.to_path_buf())?;
 
     let start = Instant::now();
     let (total_lines, last_record) = process_contracts(&mut market_data)?;
