@@ -11,6 +11,7 @@ use crate::{
     event::{Event, Kind},
     formats::{Tagged, frd::FrdCandle},
     market_data::{Instrumented, RelevantPrice, Timestamped},
+    portfolio::Portfolio,
     strategy::Desired,
     strats_impl::strat_1::config::Config,
 };
@@ -89,21 +90,45 @@ impl<E: EndOfTrading> Strategy<E> {
         &self.desired
     }
 
-    pub fn on_event(&mut self, event: &Event<MdRecord>) {
+    pub fn on_event(&mut self, event: &Event<MdRecord>, pf: &Portfolio) {
         match event.kind() {
             Kind::MarketData(md) => self.process_md(md),
-            Kind::Ack(_order_id) => {}
-            Kind::Reject(_order_id) => {}
-            Kind::CancelResponse(_order_id, true) => {}
-            Kind::CancelResponse(_order_id, false) => {}
-            Kind::FeedError(_err) => {}
+            Kind::Ack(_order_id) => {
+                // This strategy does not require specific actions of Ack.
+            }
+            Kind::Reject(_order_id) => {
+                todo!()
+            }
+            Kind::CancelResponse(_order_id, true) => {
+                todo!()
+            }
+            Kind::CancelResponse(_order_id, false) => {
+                todo!()
+            }
+            Kind::FeedError(_err) => {
+                todo!()
+            }
             Kind::Fill(fill) => {
-                self.on_fill(fill);
+                // This strategy does not require specific actions of Fill.
+                self.on_fill(fill, pf);
             }
         }
     }
 
-    fn on_fill(&mut self, _fill: &Fill) {}
+    fn on_fill(&mut self, _fill: &Fill, _pf: &Portfolio) {
+        // // if order is a protective one
+        // pf.orders_idx().get(&fill.order_id()).map(|idx| {
+        //     let order = &pf.orders()[*idx];
+        //     if order.order_type() != &OrderType::Market {
+        //         *self
+        //             .desired
+        //             .entry(fill.instrument())
+        //             .or_default()
+        //             .mut_position() -= order.as_position();
+        //     }
+        // });
+        // // and then delete from desired orders
+    }
 
     fn entry_condition(&mut self, md_record: &MdRecord, exchange_ts: DateTime<Tz>) {
         if self.state.fired_today {
