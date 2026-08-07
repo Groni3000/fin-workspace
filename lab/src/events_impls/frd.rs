@@ -103,7 +103,7 @@ impl<'a> EventSource for FrdEventQueue<'a> {
             Some(event) => {
                 let mut scheduler = Scheduler::new(&mut self.heap, &mut self.seq);
                 self.exec.on_event(&event, &mut scheduler);
-                return Some(event);
+                Some(event)
             }
             None => None,
         }

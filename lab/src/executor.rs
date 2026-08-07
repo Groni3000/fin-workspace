@@ -42,10 +42,7 @@ impl SingleInstrumentOnlyMarketExecutor {
         if order.order_type() != &OrderType::Market {
             panic!("Only market orders are supported");
         }
-        match self.unack_orders.insert(order.order_id(), order) {
-            Some(_) => panic!("Order already exists"),
-            None => {}
-        }
+        if self.unack_orders.insert(order.order_id(), order).is_some() { panic!("Order already exists") }
         scheduler.push(
             timestamp + self.ack_latency as i64,
             Kind::Ack(order.order_id()),

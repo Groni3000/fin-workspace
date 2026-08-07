@@ -78,7 +78,7 @@ impl Oms {
             self.working.insert(*order_id, order.into_working());
         } else {
             // There may be case where Ack arrives after Fill (which means order can be in working).
-            if !self.working.contains_key(&order_id) {
+            if !self.working.contains_key(order_id) {
                 tracing::warn!(order_id = ?order_id, "ack for unknown order");
             }
         }

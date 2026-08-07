@@ -125,6 +125,10 @@ impl Neg for Position {
 }
 
 impl SubAssign for Position {
+    #[allow(
+        clippy::suspicious_op_assign_impl,
+        reason = "I just add a negated position"
+    )]
     fn sub_assign(&mut self, rhs: Self) {
         *self = (*self + rhs.neg()).expect("Position overflow")
     }

@@ -1,12 +1,13 @@
 use chrono::{DateTime, Utc, serde::ts_nanoseconds};
 use serde::{Deserialize, Deserializer};
+
 use tradeprim::price::Price;
 
 use crate::market_data::{Candle, RelevantPrice, Timestamped};
 
-use std::fmt::Display;
 #[cfg(feature = "kafka")]
 use std::{
+    fmt::Display,
     str::Utf8Error,
     sync::{
         Arc,
@@ -74,13 +75,28 @@ impl Eq for CustomDatabentoAggregatedCandle {}
 
 impl PartialOrd for CustomDatabentoAggregatedCandle {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.ts_event.partial_cmp(&other.ts_event)
+        Some(self.cmp(other))
     }
 }
 
+/// Ordered by `ts_event`, then by the remaining `Eq` fields so that `cmp() == Equal`
+/// implies `==`. One topic carries every symbol, so equal timestamps are the norm.
 impl Ord for CustomDatabentoAggregatedCandle {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.ts_event.cmp(&other.ts_event)
+        (
+            self.ts_event,
+            &self.symbol,
+            self.instrument_id,
+            self.publisher_id,
+            &self.src,
+        )
+            .cmp(&(
+                other.ts_event,
+                &other.symbol,
+                other.instrument_id,
+                other.publisher_id,
+                &other.src,
+            ))
     }
 }
 

@@ -38,6 +38,12 @@ impl Portfolio {
     }
 }
 
+impl Default for Portfolio {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Portfolio {
     pub fn new() -> Self {
         Self {

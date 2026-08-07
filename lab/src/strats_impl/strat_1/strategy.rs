@@ -27,6 +27,7 @@ pub struct Strategy<E: EndOfTrading> {
     state: State,
 }
 
+#[derive(Default)]
 pub struct State {
     /// If we get stop loss, we will not fire again today.
     fired_today: bool,
@@ -39,18 +40,6 @@ pub struct State {
     eot_date: Option<NaiveDate>,
 }
 
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            fired_today: false,
-            last_known_date: NaiveDate::default(),
-            n_trades: 0,
-            stop_loss_price: None,
-            traded_instrument: None,
-            eot_date: None,
-        }
-    }
-}
 
 impl State {
     pub fn stop_loss_price(&self) -> Option<Price> {
@@ -152,7 +141,7 @@ impl<E: EndOfTrading> Strategy<E> {
 
             return true;
         }
-        return false;
+        false
     }
 
     fn out_condition(&mut self, md_record: &MdRecord, exchange_ts: DateTime<Tz>) {
@@ -209,12 +198,11 @@ impl<E: EndOfTrading> Strategy<E> {
         }
 
         let instrument = md_record.instrument();
-        if let Some(desired) = self.desired.get_mut(&instrument) {
-            if desired.position() != Position::Flat {
+        if let Some(desired) = self.desired.get_mut(&instrument)
+            && desired.position() != Position::Flat {
                 tracing::info!(instrument = %instrument, %eot, "end of trading: flatten");
                 *desired.mut_position() = Position::Flat;
             }
-        }
         self.state.stop_loss_price = None;
         true
     }
@@ -240,12 +228,11 @@ impl<E: EndOfTrading> Strategy<E> {
             .get(&md_record.instrument())
             .map_or(Position::Flat, Desired::position);
 
-        if current_position == Position::Flat {
-            if self.entry_condition(md_record, exchange_ts) {
+        if current_position == Position::Flat
+            && self.entry_condition(md_record, exchange_ts) {
                 // Do not check for exit on the same md_record
                 return;
             }
-        }
         if current_position != Position::Flat {
             self.out_condition(md_record, exchange_ts);
         }

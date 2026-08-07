@@ -77,7 +77,7 @@ impl<R> Eq for Scheduled<R> {}
 
 impl<R> PartialOrd for Scheduled<R> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        (&self.event.ts, self.seq).partial_cmp(&(&other.event.ts, other.seq))
+        Some(self.cmp(other))
     }
 }
 

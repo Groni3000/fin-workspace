@@ -28,7 +28,7 @@ where
     while let Some(Ok(record)) = market_data.next() {
         lines += 1;
         last = Some(record);
-        if lines % 1_000 == 0 {
+        if lines.is_multiple_of(1_000) {
             println!("Processed {lines} lines\nLast processed line {last:?}");
         }
     }

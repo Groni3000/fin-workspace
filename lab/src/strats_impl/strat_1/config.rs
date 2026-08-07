@@ -27,6 +27,10 @@ pub struct Config<E: EndOfTrading> {
 }
 
 impl<E: EndOfTrading> Config<E> {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "It's a dirty first try, I add and remove arguments, it would be overkill to design something more"
+    )]
     pub fn new(
         instrument: Instrument,
         spec: Specification,
@@ -104,7 +108,7 @@ impl Default for Config<LastNthBDayOfPrevMonth> {
         );
         let spec = Specification::new(
             Price::from_str_unchecked("0.0001"),
-            (Price::from_str_unchecked("4.20"), Currency::usd().into()),
+            (Price::from_str_unchecked("4.20"), Currency::usd()),
             Quantity::from_str_unchecked("1"),
             Quantity::from_str_unchecked("10"),
             QtyStep::new(Quantity::from_str_unchecked("1")).unwrap(),
