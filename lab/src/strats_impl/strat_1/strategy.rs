@@ -40,7 +40,6 @@ pub struct State {
     eot_date: Option<NaiveDate>,
 }
 
-
 impl State {
     pub fn stop_loss_price(&self) -> Option<Price> {
         self.stop_loss_price
@@ -199,10 +198,11 @@ impl<E: EndOfTrading> Strategy<E> {
 
         let instrument = md_record.instrument();
         if let Some(desired) = self.desired.get_mut(&instrument)
-            && desired.position() != Position::Flat {
-                tracing::info!(instrument = %instrument, %eot, "end of trading: flatten");
-                *desired.mut_position() = Position::Flat;
-            }
+            && desired.position() != Position::Flat
+        {
+            tracing::info!(instrument = %instrument, %eot, "end of trading: flatten");
+            *desired.mut_position() = Position::Flat;
+        }
         self.state.stop_loss_price = None;
         true
     }
@@ -228,11 +228,10 @@ impl<E: EndOfTrading> Strategy<E> {
             .get(&md_record.instrument())
             .map_or(Position::Flat, Desired::position);
 
-        if current_position == Position::Flat
-            && self.entry_condition(md_record, exchange_ts) {
-                // Do not check for exit on the same md_record
-                return;
-            }
+        if current_position == Position::Flat && self.entry_condition(md_record, exchange_ts) {
+            // Do not check for exit on the same md_record
+            return;
+        }
         if current_position != Position::Flat {
             self.out_condition(md_record, exchange_ts);
         }
