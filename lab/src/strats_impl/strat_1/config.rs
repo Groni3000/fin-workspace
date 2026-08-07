@@ -1,4 +1,5 @@
 use chrono::{Duration, NaiveTime, Weekday};
+use futchain::eot::{DateOffset, EndOfTrading, LastNthBDayOfPrevMonth};
 use instrid::{
     asset::{Asset, AssetClass},
     instruments::{FuturesContract, Instrument},
@@ -13,9 +14,10 @@ use tradeprim::{
 };
 
 #[derive(Debug)]
-pub struct Config {
+pub struct Config<E: EndOfTrading> {
     instrument: Instrument,
     spec: Specification,
+    eot: E,
     day_of_week: Weekday,
     exchange_tz: chrono_tz::Tz,
     /// (start, end)
@@ -24,10 +26,11 @@ pub struct Config {
     stop_loss_price_diff: Price,
 }
 
-impl Config {
+impl<E: EndOfTrading> Config<E> {
     pub fn new(
         instrument: Instrument,
         spec: Specification,
+        eot: E,
         day_of_week: Weekday,
         exchange_tz: chrono_tz::Tz,
         entry_time: NaiveTime,
@@ -42,6 +45,7 @@ impl Config {
         Self {
             instrument,
             spec,
+            eot,
             day_of_week,
             exchange_tz,
             entry_time: (entry_time, entry_time_end),
@@ -77,9 +81,14 @@ impl Config {
     pub fn spec(&self) -> Specification {
         self.spec
     }
+
+    pub fn eot(&self) -> &E {
+        &self.eot
+    }
 }
 
-impl Default for Config {
+/// Defaults describe RB: the contract, its spec, and its termination rule.
+impl Default for Config<LastNthBDayOfPrevMonth> {
     fn default() -> Self {
         let instrument = Instrument::Futures(
             FuturesContract::new(
@@ -110,6 +119,11 @@ impl Default for Config {
         Self {
             instrument,
             spec,
+            // RB terminates on the last business day of the month before delivery.
+            // But liquidity ends much earlier.
+            // (current_contract_volume, next_contract_volume) / sum(volumes) = 50/50
+            // ~ 10 days before the end of trading
+            eot: LastNthBDayOfPrevMonth::from_u8(1, DateOffset::BusinessDays(-10)),
             day_of_week: Weekday::Fri,
             exchange_tz: chrono_tz::Tz::US__Eastern,
             entry_time: (entry_time, entry_time_end),

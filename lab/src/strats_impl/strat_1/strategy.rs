@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, NaiveDate};
 use chrono_tz::Tz;
+use futchain::eot::EndOfTrading;
 use instrid::instruments::Instrument;
 use oms::fill::Fill;
 use tradeprim::{position::Position, price::Price, quantity::Quantity};
@@ -16,11 +17,11 @@ use crate::{
 
 type MdRecord = Tagged<FrdCandle>;
 
-pub struct Strategy {
+pub struct Strategy<E: EndOfTrading> {
     // --- base
     // todo: config, state
     id: String,
-    config: Config,
+    config: Config<E>,
     desired: HashMap<Instrument, Desired>,
     state: State,
 }
@@ -33,6 +34,8 @@ pub struct State {
     stop_loss_price: Option<Price>,
     /// Contract the feed is currently on. `config.instrument()` is only the chain root.
     traded_instrument: Option<Instrument>,
+    /// End of trading for `traded_instrument`, recomputed on every roll.
+    eot_date: Option<NaiveDate>,
 }
 
 impl Default for State {
@@ -43,6 +46,7 @@ impl Default for State {
             n_trades: 0,
             stop_loss_price: None,
             traded_instrument: None,
+            eot_date: None,
         }
     }
 }
@@ -59,10 +63,14 @@ impl State {
     pub fn traded_instrument(&self) -> Option<Instrument> {
         self.traded_instrument
     }
+
+    pub fn eot_date(&self) -> Option<NaiveDate> {
+        self.eot_date
+    }
 }
 
-impl Strategy {
-    pub fn new(id: String, config: Config) -> Self {
+impl<E: EndOfTrading> Strategy<E> {
+    pub fn new(id: String, config: Config<E>) -> Self {
         let desired = HashMap::new();
         let state = State::default();
         Self {
@@ -142,15 +150,43 @@ impl Strategy {
     /// we roll instrument and .entry/out_condition simply don't touch it.
     fn roll_condition(&mut self, md_record: &MdRecord) {
         let current = md_record.instrument();
-        match self.state.traded_instrument {
-            Some(previous) if previous != current => {
-                *self.desired.entry(previous).or_default().mut_position() = Position::Flat;
-                self.state.stop_loss_price = None;
-                tracing::info!(from = %previous, to = %current, "roll");
-            }
-            _ => {}
+        if self.state.traded_instrument == Some(current) {
+            return;
         }
+        if let Some(previous) = self.state.traded_instrument {
+            *self.desired.entry(previous).or_default().mut_position() = Position::Flat;
+            self.state.stop_loss_price = None;
+            tracing::info!(from = %previous, to = %current, "roll");
+        }
+
         self.state.traded_instrument = Some(current);
+        self.state.eot_date = match current {
+            Instrument::Futures(contract) => Some(self.config.eot().calculate(&contract)),
+            _ => None,
+        };
+    }
+
+    /// Invariant: `eot < real eot => md still goes`
+    ///
+    /// When we hit eot - flat position.
+    ///
+    /// Returns `true` when the contract is done, so entry/out are skipped.
+    fn eot_condition(&mut self, md_record: &MdRecord, date: NaiveDate) -> bool {
+        let Some(eot) = self.state.eot_date else {
+            return false;
+        };
+        if date < eot {
+            return false;
+        }
+
+        let instrument = md_record.instrument();
+        let entry = self.desired.entry(instrument).or_default();
+        if entry.position() != Position::Flat {
+            tracing::info!(instrument = %instrument, %eot, "end of trading: flatten");
+            *entry.mut_position() = Position::Flat;
+        }
+        self.state.stop_loss_price = None;
+        true
     }
 
     fn process_md(&mut self, md_record: &MdRecord) {
@@ -166,11 +202,14 @@ impl Strategy {
         }
 
         self.roll_condition(md_record);
+        if self.eot_condition(md_record, date) {
+            return;
+        }
         self.entry_condition(md_record, exchange_ts);
         self.out_condition(md_record, exchange_ts);
     }
 
-    pub fn config(&self) -> &Config {
+    pub fn config(&self) -> &Config<E> {
         &self.config
     }
 
