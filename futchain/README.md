@@ -168,6 +168,44 @@ Out of scope (intentionally):
 - Specs for every product on every venue. The crate gives you the _rules_;
   catalogues belong in a downstream layer.
 
+## Additional info
+
+Usually, you want to roll to the next contract a little bit earlier, because
+liquidity is slowly dacaying and transitioning to next contracts. Here is a small
+table of additional BDay offset for reference:
+
+```python
+# When `[curr_contract_daily_volume, next_contract_daily_volume] / sum ~= [0.5, 0.5]`
+ROLL_OFFSETS: dict[str, int] = {
+    # Roll at EOT
+    "BTC": 0,
+    "MET": 0,
+    "NKD": 0,
+    "6A": 0,
+    "6B": 0,
+    "6E": 0,
+    "ZB": 0,
+    # Roll ~1-3 sessions early
+    "GC": -1,
+    "SI": -1,
+    "PL": -1,
+    "6C": -1,
+    "CL": -1,
+    "NG": -1,
+    "HG": -2,
+    "NQ": -2,
+    "ES": -3,
+    # Roll well before EOT — FND / end-of-month base, market rolls earlier
+    "ZS": -4,
+    "ZW": -7,
+    "HO": -8,
+    "RB": -9,
+    "LE": -13,
+    "HE": -16,
+}
+
+```
+
 ## License
 
 Licensed under either of MIT ([LICENSE-MIT](../LICENSE-MIT)) or Apache-2.0
