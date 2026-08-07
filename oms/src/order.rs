@@ -2,7 +2,12 @@ use std::{fmt::Display, hash::Hash, marker::PhantomData};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use instrid::instruments::Instrument;
-use tradeprim::{Side, position::NonZeroQuantity, price::Price, quantity::Quantity};
+use tradeprim::{
+    Side,
+    position::{NonZeroQuantity, Position},
+    price::Price,
+    quantity::Quantity,
+};
 use uuid::Uuid;
 
 use crate::{OrderId, fill::Fill};
@@ -210,6 +215,32 @@ impl Order<Working> {
             leaves: leaves_qty,
             reason: TerminationReason::Reject,
         })
+    }
+}
+
+impl Order<Terminated> {
+    /// Terminated order can be expressed as a position.
+    ///
+    /// Rejects are treated as flat positions.
+    pub fn as_position(&self) -> Position {
+        match self.state.reason() {
+            TerminationReason::Reject | TerminationReason::RiskReject => {
+                return Position::Flat;
+            }
+            TerminationReason::Filled
+            | TerminationReason::Cancel
+            | TerminationReason::Overfilled => {}
+        }
+        // Cancels can be partially filled.
+        let qty = (self.quantity().qty() - self.state().leaves())
+            .expect("Qty >= LeavesQty, Sub should never overflow");
+        if qty == Quantity::ZERO {
+            return Position::Flat;
+        }
+        match self.side() {
+            Side::Buy => Position::Long(NonZeroQuantity::new_unchecked(qty)),
+            Side::Sell => Position::Short(NonZeroQuantity::new_unchecked(qty)),
+        }
     }
 }
 
