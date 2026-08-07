@@ -18,6 +18,21 @@ use crate::{
 
 type MdRecord = Tagged<FrdCandle>;
 
+/// Why the strategy decided to flatten. Emitted with the `exit` event for the trade ledger.
+#[derive(Debug, Clone, Copy)]
+pub enum ExitReason {
+    StopLoss,
+    TimeExit,
+    EndOfTrading,
+    Roll,
+}
+
+impl std::fmt::Display for ExitReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
 pub struct Strategy<E: EndOfTrading> {
     // --- base
     // todo: config, state
@@ -134,8 +149,15 @@ impl<E: EndOfTrading> Strategy<E> {
                 .or_default()
                 .mut_position() =
                 Position::Long(Quantity::from_str_unchecked("1").non_zero().unwrap());
-            self.state.stop_loss_price = Price::new(
+            let stop = Price::new(
                 md_record.last_price().value() - self.config.stop_loss_price_diff().value(),
+            );
+            self.state.stop_loss_price = stop;
+            tracing::info!(
+                instrument = %md_record.instrument(),
+                signal_price = %md_record.last_price(),
+                stop = %stop.map(|p| p.to_string()).unwrap_or_default(),
+                "entry"
             );
 
             return true;
@@ -151,9 +173,20 @@ impl<E: EndOfTrading> Strategy<E> {
             false
         };
         if exchange_time > self.config.out_time() || stop_loss_fired {
+            let reason = if stop_loss_fired {
+                ExitReason::StopLoss
+            } else {
+                ExitReason::TimeExit
+            };
             if let Some(desired) = self.desired.get_mut(&md_record.instrument()) {
                 *desired.mut_position() = Position::Flat;
             }
+            tracing::info!(
+                instrument = %md_record.instrument(),
+                %reason,
+                signal_price = %md_record.last_price(),
+                "exit"
+            );
             self.state.n_trades += 1;
             self.state.stop_loss_price = None;
         }
@@ -169,8 +202,11 @@ impl<E: EndOfTrading> Strategy<E> {
             return;
         }
         if let Some(previous) = self.state.traded_instrument {
-            if let Some(desired) = self.desired.get_mut(&previous) {
+            if let Some(desired) = self.desired.get_mut(&previous)
+                && desired.position() != Position::Flat
+            {
                 *desired.mut_position() = Position::Flat;
+                tracing::info!(instrument = %previous, reason = %ExitReason::Roll, "exit");
             }
             self.state.stop_loss_price = None;
             tracing::info!(from = %previous, to = %current, "roll");
@@ -200,8 +236,8 @@ impl<E: EndOfTrading> Strategy<E> {
         if let Some(desired) = self.desired.get_mut(&instrument)
             && desired.position() != Position::Flat
         {
-            tracing::info!(instrument = %instrument, %eot, "end of trading: flatten");
             *desired.mut_position() = Position::Flat;
+            tracing::info!(instrument = %instrument, reason = %ExitReason::EndOfTrading, %eot, "exit");
         }
         self.state.stop_loss_price = None;
         true

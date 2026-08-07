@@ -28,7 +28,11 @@ use tradeprim::{
 
 fn main() {
     let clock = SimClock::new();
-    telemetry::init(clock.clone());
+    // `LOG_JSON=1` emits one JSON object per line, for the analysis script.
+    match std::env::var("LOG_JSON").as_deref() {
+        Ok("1") => telemetry::init_json(clock.clone()),
+        _ => telemetry::init(clock.clone()),
+    }
 
     let config = Config::default();
     let mut strategy = Strategy::new("Frd RB backtest".into(), config);
