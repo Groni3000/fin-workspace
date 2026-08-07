@@ -60,10 +60,12 @@ fn main() {
                 .positions()
                 .iter()
                 .filter(|(_i, p)| *p != &Position::Flat)
-                .collect::<HashMap<&Instrument, &Position>>();
+                .map(|(i, p)| format!("{i}: {p}"))
+                .collect::<Vec<_>>()
+                .join(", ");
             tracing::info!(
                 fills = pf.fills().len(),
-                positions = ?final_positions,
+                positions = %final_positions,
                 "backtest done"
             );
         }
