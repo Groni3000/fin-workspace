@@ -1,5 +1,6 @@
 use std::{
-    fmt::Debug,
+    error::Error,
+    fmt::{Debug, Display},
     fs::File,
     io::{BufRead, BufReader},
     path::PathBuf,
@@ -7,24 +8,34 @@ use std::{
 
 use chrono::{DateTime, Utc};
 use futchain::FutChain;
+use instrid::instruments::Instrument;
 use tradeprim::price::Price;
 
-use crate::{FrdCandle, FrdCandleParsingError};
+use crate::formats::{
+    Tagged,
+    frd::{FrdCandle, FrdCandleParsingError},
+};
 
 // ------------------------------
 // --- General purpose traits ---
 // ------------------------------
+pub trait Timestamped {
+    fn timestamp(&self) -> DateTime<Utc>;
+}
+
+pub trait Instrumented {
+    fn instrument(&self) -> Instrument;
+}
 /// A trait for data that have as little useful data
 /// as possible: when and what the price was at that time.
-pub trait RelevantPrice {
+pub trait RelevantPrice: Timestamped {
     fn last_price(&self) -> Price;
-    fn timestamp(&self) -> DateTime<Utc>;
 }
 
 /// Represents an unknown time span aggregated candle.
 ///
 /// Naturally extends RelevantPrice.
-pub trait Candle: RelevantPrice + Debug {
+pub trait Candle: RelevantPrice {
     fn open(&self) -> Price;
     fn high(&self) -> Price;
     fn low(&self) -> Price;
@@ -32,13 +43,21 @@ pub trait Candle: RelevantPrice + Debug {
     fn volume(&self) -> u64;
 }
 
-pub trait MarketData {
-    type Record: Debug;
+pub trait MarketData: Iterator<Item = Result<Self::Record, Self::Error>> {
+    type Record: Debug + RelevantPrice;
     type Error;
-
-    /// Returns the next record, if one is available.
-    fn next_record(&mut self) -> Result<Option<Self::Record>, Self::Error>;
 }
+
+impl<T, R, E> MarketData for T
+where
+    T: Iterator<Item = Result<R, E>>,
+    R: Debug + RelevantPrice,
+    E: Error,
+{
+    type Record = R;
+    type Error = E;
+}
+
 // --------------
 // --- Errors ---
 // --------------
@@ -47,6 +66,17 @@ pub enum FrdMdError {
     Io(std::io::Error),
     Parse(FrdCandleParsingError),
 }
+
+impl Display for FrdMdError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FrdMdError::Io(e) => write!(f, "IO error: {}", e),
+            FrdMdError::Parse(e) => write!(f, "Parse error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for FrdMdError {}
 
 impl From<std::io::Error> for FrdMdError {
     fn from(e: std::io::Error) -> Self {
@@ -71,6 +101,7 @@ pub struct FrdFutChainMdReader<'a> {
     chain: FutChain<'a>,
     dir: PathBuf,
     buffer: String,
+    last_known_ts: Option<DateTime<Utc>>,
 }
 
 impl<'a> FrdFutChainMdReader<'a> {
@@ -84,6 +115,7 @@ impl<'a> FrdFutChainMdReader<'a> {
             chain,
             dir,
             buffer,
+            last_known_ts: None,
         })
     }
 
@@ -99,7 +131,7 @@ impl<'a> FrdFutChainMdReader<'a> {
 
     fn advance(&mut self) -> Result<bool, FrdMdError> {
         self.chain.advance();
-        let file_name = Self::get_file_name(self.chain());
+        let file_name = Self::get_file_name(&self.chain);
         let path = self.dir.join(&file_name);
         if !path.is_file() {
             return Ok(false);
@@ -118,64 +150,105 @@ impl<'a> FrdFutChainMdReader<'a> {
     }
 }
 
-impl<'a> MarketData for FrdFutChainMdReader<'a> {
-    type Record = FrdCandle;
-    type Error = FrdMdError;
+impl<'a> Iterator for FrdFutChainMdReader<'a> {
+    type Item = Result<Tagged<FrdCandle>, FrdMdError>;
 
-    fn next_record(&mut self) -> Result<Option<Self::Record>, Self::Error> {
+    /// Returns None when files exhausted.
+    fn next(&mut self) -> Option<Self::Item> {
         loop {
             self.buffer.clear();
-            let n = self.current.read_line(&mut self.buffer)?;
+            let n = match self.current.read_line(&mut self.buffer) {
+                Ok(n) => n,
+                Err(e) => return Some(Err(e.into())),
+            };
             if n == 0 {
-                if self.advance()? {
-                    continue;
+                match self.advance() {
+                    // File found
+                    Ok(true) => continue,
+                    // File not found
+                    Ok(false) => return None,
+                    // Error reading file
+                    Err(e) => return Some(Err(e)),
                 }
-                // No next file, signal end of stream
-                return Ok(None);
             }
-            let record = FrdCandle::from_frd_csv_line(&self.buffer)?;
+            let record = match FrdCandle::from_frd_csv_line(&self.buffer) {
+                Ok(record) => record,
+                Err(e) => return Some(Err(e.into())),
+            };
 
-            return Ok(Some(record));
+            if let Some(lk_ts) = self.last_known_ts
+                && record.timestamp() <= lk_ts
+            {
+                continue;
+            }
+            self.last_known_ts = Some(record.timestamp());
+
+            return Some(Ok(Tagged::new(
+                Instrument::Futures(*self.chain.contract()),
+                record,
+            )));
         }
     }
 }
 
-/// A reader that reads market data into a buffer.
-#[derive(Debug)]
-pub struct FrdMdReader<T: BufRead> {
-    reader: T,
-    buffer: String,
-}
+// impl<'a> MarketData for FrdFutChainMdReader<'a> {
+//     type Record = FrdCandle;
+//     type Error = FrdMdError;
 
-impl<T: BufRead> FrdMdReader<T> {
-    pub fn new(reader: T) -> Self {
-        Self {
-            reader,
-            buffer: String::new(),
-        }
-    }
+//     fn next_record(&mut self) -> Result<Option<Self::Record>, Self::Error> {
+//         loop {
+//             self.buffer.clear();
+//             let n = self.current.read_line(&mut self.buffer)?;
+//             if n == 0 {
+//                 if self.advance()? {
+//                     continue;
+//                 }
+//                 // No next file, signal end of stream
+//                 return Ok(None);
+//             }
+//             let record = FrdCandle::from_frd_csv_line(&self.buffer)?;
 
-    pub fn with_capacity(reader: T, n: usize) -> Self {
-        Self {
-            reader,
-            buffer: String::with_capacity(n),
-        }
-    }
-}
+//             return Ok(Some(record));
+//         }
+//     }
+// }
 
-impl<T: BufRead> MarketData for FrdMdReader<T> {
-    type Record = FrdCandle;
-    type Error = FrdMdError;
+// /// A reader that reads market data into a buffer.
+// #[derive(Debug)]
+// pub struct FrdMdReader<T: BufRead> {
+//     reader: T,
+//     buffer: String,
+// }
 
-    fn next_record(&mut self) -> Result<Option<Self::Record>, Self::Error> {
-        self.buffer.clear();
-        let n = self.reader.read_line(&mut self.buffer)?;
+// impl<T: BufRead> FrdMdReader<T> {
+//     pub fn new(reader: T) -> Self {
+//         Self {
+//             reader,
+//             buffer: String::new(),
+//         }
+//     }
 
-        if n == 0 {
-            return Ok(None);
-        }
-        let record = FrdCandle::from_frd_csv_line(&self.buffer)?;
+//     pub fn with_capacity(reader: T, n: usize) -> Self {
+//         Self {
+//             reader,
+//             buffer: String::with_capacity(n),
+//         }
+//     }
+// }
 
-        Ok(Some(record))
-    }
-}
+// impl<T: BufRead> MarketData for FrdMdReader<T> {
+//     type Record = FrdCandle;
+//     type Error = FrdMdError;
+
+//     fn next_record(&mut self) -> Result<Option<Self::Record>, Self::Error> {
+//         self.buffer.clear();
+//         let n = self.reader.read_line(&mut self.buffer)?;
+
+//         if n == 0 {
+//             return Ok(None);
+//         }
+//         let record = FrdCandle::from_frd_csv_line(&self.buffer)?;
+
+//         Ok(Some(record))
+//     }
+// }

@@ -13,10 +13,16 @@ instrid = { path = "../instrid", features = ["mic-full"] }
 futchain = { path = "../futchain" }
 # `cmake-build` compiles librdkafka from C source, needing cmake + a C toolchain.
 rdkafka = { version = "0.36", features = ["cmake-build"], optional = true }
+ctrlc = { version = "3", optional = true }
+oms = { path = "../oms" }
+# `release_max_level_info` compiles trace!/debug! out entirely in release builds.
+tracing = { version = "0.1", features = ["release_max_level_info"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
 
 [features]
 default = []
-kafka = ["dep:rdkafka"]
+kafka = ["dep:rdkafka", "dep:ctrlc"]
 
 [[bin]]
 name = "kafka_check"
@@ -24,4 +30,8 @@ required-features = ["kafka"]
 
 [[bin]]
 name = "generic_test"
+required-features = ["kafka"]
+
+[[bin]]
+name = "strat_1"
 required-features = ["kafka"]

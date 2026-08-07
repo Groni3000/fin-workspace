@@ -1,4 +1,8 @@
-use std::{cmp::Ordering, fmt::Display, ops::Add};
+use std::{
+    cmp::Ordering,
+    fmt::Display,
+    ops::{Add, AddAssign, Neg, SubAssign},
+};
 
 use crate::quantity::Quantity;
 
@@ -8,6 +12,16 @@ pub enum Position {
     Flat,
     Long(NonZeroQuantity),
     Short(NonZeroQuantity),
+}
+
+impl Position {
+    pub fn as_i64(self) -> i64 {
+        match self {
+            Position::Flat => 0,
+            Position::Long(quantity) => quantity.value() as i64,
+            Position::Short(quantity) => -(quantity.value() as i64),
+        }
+    }
 }
 
 impl Display for Position {
@@ -92,6 +106,34 @@ impl Add for Position {
     }
 }
 
+impl AddAssign for Position {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = (*self + rhs).expect("Position overflow");
+    }
+}
+
+impl Neg for Position {
+    type Output = Position;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            Position::Flat => Position::Flat,
+            Position::Long(qty) => Position::Short(qty),
+            Position::Short(qty) => Position::Long(qty),
+        }
+    }
+}
+
+impl SubAssign for Position {
+    #[allow(
+        clippy::suspicious_op_assign_impl,
+        reason = "I just add a negated position"
+    )]
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = (*self + rhs.neg()).expect("Position overflow")
+    }
+}
+
 // Backs up `Position`
 #[derive(Hash, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct NonZeroQuantity {
@@ -106,8 +148,16 @@ impl NonZeroQuantity {
         }
     }
 
+    pub fn new_unchecked(quantity: Quantity) -> Self {
+        Self { qty: quantity }
+    }
+
     pub fn qty(&self) -> Quantity {
         self.qty
+    }
+
+    pub fn value(&self) -> u64 {
+        self.qty.value()
     }
 }
 

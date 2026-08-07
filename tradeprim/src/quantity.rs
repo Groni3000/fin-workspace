@@ -115,6 +115,17 @@ impl Quantity {
         }
         NonZeroQuantity::new(self)
     }
+
+    /// Render a signed raw value the way `Display` renders `Quantity`.
+    ///
+    /// Side-aware sums of `Quantity` are plain `i64` in raw units, so `1` reads as `1000000000` without this.
+    pub fn display_raw(raw: i64) -> String {
+        let sign = if raw < 0 { "-" } else { "" };
+        match Self::new(raw.unsigned_abs()) {
+            Some(q) => format!("{sign}{q}"),
+            None => raw.to_string(),
+        }
+    }
 }
 
 impl Display for Quantity {
@@ -138,6 +149,14 @@ impl From<Quantity> for f64 {
 impl From<Quantity> for u64 {
     fn from(value: Quantity) -> Self {
         value.value
+    }
+}
+
+impl Sub<NonZeroQuantity> for Quantity {
+    type Output = Option<Quantity>;
+
+    fn sub(self, rhs: NonZeroQuantity) -> Self::Output {
+        Quantity::new(self.value.checked_sub(rhs.qty().value)?)
     }
 }
 

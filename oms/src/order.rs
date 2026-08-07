@@ -2,10 +2,15 @@ use std::{fmt::Display, hash::Hash, marker::PhantomData};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use instrid::instruments::Instrument;
-use tradeprim::{Side, position::NonZeroQuantity, price::Price, quantity::Quantity};
+use tradeprim::{
+    Side,
+    position::{NonZeroQuantity, Position},
+    price::Price,
+    quantity::Quantity,
+};
 use uuid::Uuid;
 
-use crate::fill::Fill;
+use crate::{OrderId, fill::Fill};
 
 /// An internal representation of Order.
 ///
@@ -21,7 +26,7 @@ use crate::fill::Fill;
 /// The only transformations allowed are: `New -> Working|Terminated(RiskReject)`, `Working -> Terminated`.
 #[derive(Debug, Clone, Copy)]
 pub struct Order<S> {
-    order_id: Uuid,
+    order_id: OrderId,
     instrument: Instrument,
     order_type: OrderType,
     time_in_force: TimeInForce,
@@ -48,6 +53,8 @@ pub enum TerminationReason {
     Filled,
     Reject,
     RiskReject,
+    /// Filled beyond the requested quantity. Nothing left to fill, so the order terminates.
+    Overfilled,
 }
 
 //--- States imls ---
@@ -78,7 +85,7 @@ impl Terminated {
 
 // --- Order generic methods ---
 impl<T> Order<T> {
-    pub fn order_id(&self) -> Uuid {
+    pub fn order_id(&self) -> OrderId {
         self.order_id
     }
 
@@ -143,7 +150,7 @@ impl Order<New> {
         quantity: NonZeroQuantity,
     ) -> Self {
         Self {
-            order_id: Uuid::now_v7(),
+            order_id: OrderId(Uuid::now_v7()),
             instrument,
             order_type,
             time_in_force,
@@ -171,7 +178,19 @@ impl Order<Working> {
         // Check for overfill
         self.state.leaves = match self.state.leaves - fill.quantity() {
             Some(a) => a,
-            None => return FillOutcome::Overfill(self, fill.quantity()),
+            None => {
+                // Overfilled: nothing can fill anymore, so leaves is ZERO, same as `Filled`.
+                let excess = (fill.quantity().qty() - self.state.leaves)
+                    .and_then(|q| q.non_zero())
+                    .expect("overfill implies fill quantity exceeds leaves");
+                return FillOutcome::Overfill(
+                    self.set_state(Terminated::new(
+                        Quantity::ZERO,
+                        TerminationReason::Overfilled,
+                    )),
+                    excess,
+                );
+            }
         };
         // Check if filled
         match self.state.leaves {
@@ -199,14 +218,40 @@ impl Order<Working> {
     }
 }
 
+impl Order<Terminated> {
+    /// Terminated order can be expressed as a position.
+    ///
+    /// Rejects are treated as flat positions.
+    pub fn as_position(&self) -> Position {
+        match self.state.reason() {
+            TerminationReason::Reject | TerminationReason::RiskReject => {
+                return Position::Flat;
+            }
+            TerminationReason::Filled
+            | TerminationReason::Cancel
+            | TerminationReason::Overfilled => {}
+        }
+        // Cancels can be partially filled.
+        let qty = (self.quantity().qty() - self.state().leaves())
+            .expect("Qty >= LeavesQty, Sub should never overflow");
+        if qty == Quantity::ZERO {
+            return Position::Flat;
+        }
+        match self.side() {
+            Side::Buy => Position::Long(NonZeroQuantity::new_unchecked(qty)),
+            Side::Sell => Position::Short(NonZeroQuantity::new_unchecked(qty)),
+        }
+    }
+}
+
 // ---
 
-/// Fill outcome report. Overfill should return not modified order paired with Fill.qty
+/// Fill outcome report. Overfill carries the terminated order paired with the excess quantity.
 #[derive(Debug)]
 pub enum FillOutcome {
     Filled(Order<Terminated>),
     Partial(Order<Working>),
-    Overfill(Order<Working>, Quantity),
+    Overfill(Order<Terminated>, NonZeroQuantity),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -676,14 +721,14 @@ mod tests {
                 DateTime::from_timestamp_nanos(1_662_921_288_000_000_000),
                 order.instrument(),
                 order.side(),
-                quantity,
+                quantity.non_zero().unwrap(),
                 Price::from_str_unchecked("753.23"),
             )
         }
 
         /// Test pipeline:
         ///
-        /// `New -> Working -> Partially filled (x3) -> Overfill -> Filled`
+        /// `New -> Working -> Partially filled (x3) -> Filled`
         #[test]
         fn working_into_filled() {
             let total = Quantity::from_str_unchecked("100");
@@ -709,25 +754,31 @@ mod tests {
                 );
             }
 
-            // Now check for Overfill
-            let leaves_before = oms_order.state().leaves();
-            let overfill = fill_for(&oms_order, total);
-            let oms_order = match oms_order.apply_fill(&overfill) {
-                FillOutcome::Overfill(order, fill_qty) => {
-                    assert_eq!(order.state(), &Working::new(leaves_before));
-                    assert_eq!(fill_qty, overfill.quantity());
-                    order
-                }
-                other => panic!("expected Overfill, got {other:?}"),
-            };
-
-            let last = fill_for(&oms_order, leaves_before);
+            let last = fill_for(&oms_order, oms_order.state().leaves());
             match oms_order.apply_fill(&last) {
                 FillOutcome::Filled(order) => assert_eq!(
                     order.state(),
                     &Terminated::new(Quantity::ZERO, TerminationReason::Filled)
                 ),
                 other => panic!("expected Filled, got {other:?}"),
+            }
+        }
+
+        /// An overfill terminates the order: it can never fill again, and the excess is reported.
+        #[test]
+        fn working_into_overfilled() {
+            let total = Quantity::from_str_unchecked("100");
+            let oms_order = spy_new_order_of(total).into_working();
+            let overfill = fill_for(&oms_order, Quantity::from_str_unchecked("130"));
+            match oms_order.apply_fill(&overfill) {
+                FillOutcome::Overfill(order, excess) => {
+                    assert_eq!(
+                        order.state(),
+                        &Terminated::new(Quantity::ZERO, TerminationReason::Overfilled)
+                    );
+                    assert_eq!(excess.qty(), Quantity::from_str_unchecked("30"));
+                }
+                other => panic!("expected Overfill, got {other:?}"),
             }
         }
 
@@ -800,7 +851,10 @@ mod tests {
                     oms_order.instrument(),
                     oms_order.side(),
                     // qty = 0.5
-                    Quantity::new(Quantity::SCALE / 2).unwrap(),
+                    Quantity::new(Quantity::SCALE / 2)
+                        .unwrap()
+                        .non_zero()
+                        .unwrap(),
                     Price::from_str_unchecked("753.23"),
                 );
                 let fill_outcome = oms_order.apply_fill(&fill);

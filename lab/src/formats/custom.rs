@@ -1,11 +1,20 @@
 use chrono::{DateTime, Utc, serde::ts_nanoseconds};
 use serde::{Deserialize, Deserializer};
+
 use tradeprim::price::Price;
 
-use crate::market_data::{Candle, RelevantPrice};
+use crate::market_data::{Candle, RelevantPrice, Timestamped};
 
 #[cfg(feature = "kafka")]
-use std::{str::Utf8Error, time::Duration};
+use std::{
+    fmt::Display,
+    str::Utf8Error,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 
 #[cfg(feature = "kafka")]
 use rdkafka::{
@@ -14,8 +23,8 @@ use rdkafka::{
     error::KafkaError,
 };
 
-#[cfg(feature = "kafka")]
-use crate::market_data::MarketData;
+// #[cfg(feature = "kafka")]
+// use crate::market_data::MarketData;
 
 // --------------
 // --- Record ---
@@ -52,18 +61,59 @@ pub struct CustomDatabentoAggregatedCandle {
     pub volume: u64,
 }
 
+impl PartialEq for CustomDatabentoAggregatedCandle {
+    fn eq(&self, other: &Self) -> bool {
+        self.symbol == other.symbol
+            && self.instrument_id == other.instrument_id
+            && self.publisher_id == other.publisher_id
+            && self.ts_event == other.ts_event
+            && self.src == other.src
+    }
+}
+
+impl Eq for CustomDatabentoAggregatedCandle {}
+
+impl PartialOrd for CustomDatabentoAggregatedCandle {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// Ordered by `ts_event`, then by the remaining `Eq` fields so that `cmp() == Equal`
+/// implies `==`. One topic carries every symbol, so equal timestamps are the norm.
+impl Ord for CustomDatabentoAggregatedCandle {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (
+            self.ts_event,
+            &self.symbol,
+            self.instrument_id,
+            self.publisher_id,
+            &self.src,
+        )
+            .cmp(&(
+                other.ts_event,
+                &other.symbol,
+                other.instrument_id,
+                other.publisher_id,
+                &other.src,
+            ))
+    }
+}
+
 fn de_price_f64<'de, D: Deserializer<'de>>(d: D) -> Result<Price, D::Error> {
     let v = f64::deserialize(d)?;
     Price::try_from(v).map_err(serde::de::Error::custom)
 }
 
+impl Timestamped for CustomDatabentoAggregatedCandle {
+    fn timestamp(&self) -> DateTime<Utc> {
+        self.ts_event
+    }
+}
+
 impl RelevantPrice for CustomDatabentoAggregatedCandle {
     fn last_price(&self) -> Price {
         self.close
-    }
-
-    fn timestamp(&self) -> DateTime<Utc> {
-        self.ts_event
     }
 }
 
@@ -95,6 +145,9 @@ impl Candle for CustomDatabentoAggregatedCandle {
 #[cfg(feature = "kafka")]
 pub struct CustomDatabentoConsumerMd {
     consumer: BaseConsumer,
+    /// Set from a Ctrl-C handler; ends iteration so the consumer drops
+    /// (and librdkafka leaves the group cleanly).
+    shutdown: Arc<AtomicBool>,
 }
 
 #[cfg(feature = "kafka")]
@@ -105,6 +158,7 @@ impl CustomDatabentoConsumerMd {
         auto_offset_reset: &str,
         enable_auto_commit: bool,
         topic: &str,
+        shutdown: Arc<AtomicBool>,
     ) -> Self {
         let consumer: BaseConsumer = ClientConfig::new()
             .set("bootstrap.servers", bootstrap_servers)
@@ -118,7 +172,7 @@ impl CustomDatabentoConsumerMd {
             .subscribe(&[topic])
             .expect("failed to subscribe to topic");
 
-        Self { consumer }
+        Self { consumer, shutdown }
     }
 
     pub fn consumer(&self) -> &BaseConsumer {
@@ -136,6 +190,16 @@ pub enum KafkaMdError {
 }
 
 #[cfg(feature = "kafka")]
+impl Display for KafkaMdError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[cfg(feature = "kafka")]
+impl std::error::Error for KafkaMdError {}
+
+#[cfg(feature = "kafka")]
 impl From<serde_json::Error> for KafkaMdError {
     fn from(value: serde_json::Error) -> Self {
         KafkaMdError::Json(value)
@@ -150,26 +214,29 @@ impl From<KafkaError> for KafkaMdError {
 }
 
 #[cfg(feature = "kafka")]
-impl MarketData for CustomDatabentoConsumerMd {
-    type Record = CustomDatabentoAggregatedCandle;
-    type Error = KafkaMdError;
+impl Iterator for CustomDatabentoConsumerMd {
+    type Item = Result<CustomDatabentoAggregatedCandle, KafkaMdError>;
 
-    fn next_record(&mut self) -> Result<Option<Self::Record>, Self::Error> {
+    fn next(&mut self) -> Option<Self::Item> {
         loop {
+            if self.shutdown.load(Ordering::Relaxed) {
+                return None;
+            }
             match self.consumer.poll(Duration::from_millis(500)) {
                 Some(Ok(msg)) => {
-                    let record = msg
-                        .payload_view::<str>()
-                        .ok_or(KafkaMdError::EmptyPayload)?
-                        .map_err(KafkaMdError::Utf8Error)?;
+                    let record = match msg.payload_view::<str>()? {
+                        Ok(payload) => payload,
+                        Err(e) => return Some(Err(KafkaMdError::Utf8Error(e))),
+                    };
 
-                    return Ok(Some(serde_json::from_str(record)?));
+                    return match serde_json::from_str::<CustomDatabentoAggregatedCandle>(record) {
+                        Ok(candle) => Some(Ok(candle)),
+                        Err(e) => Some(Err(KafkaMdError::Json(e))),
+                    };
                 }
-                Some(Err(e)) => return Err(KafkaMdError::Kafka(e)),
-                None => {
-                    continue;
-                }
-            };
+                Some(Err(e)) => return Some(Err(KafkaMdError::Kafka(e))),
+                None => continue,
+            }
         }
     }
 }
