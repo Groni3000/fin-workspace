@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, NaiveDate};
+use chrono::{DateTime, Datelike, NaiveDate};
 use chrono_tz::Tz;
 use futchain::eot::EndOfTrading;
 use instrid::instruments::Instrument;
@@ -10,7 +10,7 @@ use tradeprim::{position::Position, price::Price, quantity::Quantity};
 use crate::{
     event::{Event, Kind},
     formats::{Tagged, frd::FrdCandle},
-    market_data::{Instrumented, RelevantPrice, Timestamped},
+    market_data::{Candle, Instrumented, RelevantPrice, Timestamped},
     portfolio::Portfolio,
     strategy::Desired,
     strats_impl::strat_1::config::Config,
@@ -97,16 +97,16 @@ impl<E: EndOfTrading> Strategy<E> {
                 // This strategy does not require specific actions of Ack.
             }
             Kind::Reject(_order_id) => {
-                todo!()
+                // This strategy does not require specific actions of Reject.
             }
             Kind::CancelResponse(_order_id, true) => {
-                todo!()
+                // This strategy does not require specific actions of CancelResponse.
             }
             Kind::CancelResponse(_order_id, false) => {
-                todo!()
+                // This strategy does not require specific actions of CancelResponse.
             }
             Kind::FeedError(_err) => {
-                todo!()
+                // This strategy does not require specific actions of FeedError.
             }
             Kind::Fill(fill) => {
                 // This strategy does not require specific actions of Fill.
@@ -130,12 +130,14 @@ impl<E: EndOfTrading> Strategy<E> {
         // // and then delete from desired orders
     }
 
-    fn entry_condition(&mut self, md_record: &MdRecord, exchange_ts: DateTime<Tz>) {
+    fn entry_condition(&mut self, md_record: &MdRecord, exchange_ts: DateTime<Tz>) -> bool {
         if self.state.fired_today {
-            return;
+            return false;
         }
         let exchange_time = exchange_ts.time();
-        if exchange_time >= self.config.entry_time().0 && exchange_time < self.config.entry_time().1
+        if exchange_time >= self.config.entry_time().0
+            && exchange_time < self.config.entry_time().1
+            && exchange_ts.weekday() == self.config().day_of_week()
         {
             self.state.fired_today = true;
             *self
@@ -147,23 +149,23 @@ impl<E: EndOfTrading> Strategy<E> {
             self.state.stop_loss_price = Price::new(
                 md_record.last_price().value() - self.config.stop_loss_price_diff().value(),
             );
+
+            return true;
         }
+        return false;
     }
 
     fn out_condition(&mut self, md_record: &MdRecord, exchange_ts: DateTime<Tz>) {
         let exchange_time = exchange_ts.time();
-        let current_price = md_record.last_price();
         let stop_loss_fired = if let Some(sl_price) = self.state.stop_loss_price {
-            current_price <= sl_price
+            md_record.low() <= sl_price
         } else {
             false
         };
         if exchange_time > self.config.out_time() || stop_loss_fired {
-            *self
-                .desired
-                .entry(md_record.instrument())
-                .or_default()
-                .mut_position() = Position::Flat;
+            if let Some(desired) = self.desired.get_mut(&md_record.instrument()) {
+                *desired.mut_position() = Position::Flat;
+            }
             self.state.n_trades += 1;
             self.state.stop_loss_price = None;
         }
@@ -179,7 +181,9 @@ impl<E: EndOfTrading> Strategy<E> {
             return;
         }
         if let Some(previous) = self.state.traded_instrument {
-            *self.desired.entry(previous).or_default().mut_position() = Position::Flat;
+            if let Some(desired) = self.desired.get_mut(&previous) {
+                *desired.mut_position() = Position::Flat;
+            }
             self.state.stop_loss_price = None;
             tracing::info!(from = %previous, to = %current, "roll");
         }
@@ -205,10 +209,11 @@ impl<E: EndOfTrading> Strategy<E> {
         }
 
         let instrument = md_record.instrument();
-        let entry = self.desired.entry(instrument).or_default();
-        if entry.position() != Position::Flat {
-            tracing::info!(instrument = %instrument, %eot, "end of trading: flatten");
-            *entry.mut_position() = Position::Flat;
+        if let Some(desired) = self.desired.get_mut(&instrument) {
+            if desired.position() != Position::Flat {
+                tracing::info!(instrument = %instrument, %eot, "end of trading: flatten");
+                *desired.mut_position() = Position::Flat;
+            }
         }
         self.state.stop_loss_price = None;
         true
@@ -230,8 +235,20 @@ impl<E: EndOfTrading> Strategy<E> {
         if self.eot_condition(md_record, date) {
             return;
         }
-        self.entry_condition(md_record, exchange_ts);
-        self.out_condition(md_record, exchange_ts);
+        let current_position = self
+            .desired
+            .get(&md_record.instrument())
+            .map_or(Position::Flat, Desired::position);
+
+        if current_position == Position::Flat {
+            if self.entry_condition(md_record, exchange_ts) {
+                // Do not check for exit on the same md_record
+                return;
+            }
+        }
+        if current_position != Position::Flat {
+            self.out_condition(md_record, exchange_ts);
+        }
     }
 
     pub fn config(&self) -> &Config<E> {
