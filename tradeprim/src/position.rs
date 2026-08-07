@@ -1,7 +1,7 @@
 use std::{
     cmp::Ordering,
     fmt::Display,
-    ops::{Add, AddAssign},
+    ops::{Add, AddAssign, Neg, SubAssign},
 };
 
 use crate::quantity::Quantity;
@@ -106,9 +106,27 @@ impl Add for Position {
     }
 }
 
-impl AddAssign<Position> for Position {
+impl AddAssign for Position {
     fn add_assign(&mut self, rhs: Self) {
         *self = (*self + rhs).expect("Position overflow");
+    }
+}
+
+impl Neg for Position {
+    type Output = Position;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            Position::Flat => Position::Flat,
+            Position::Long(qty) => Position::Short(qty),
+            Position::Short(qty) => Position::Long(qty),
+        }
+    }
+}
+
+impl SubAssign for Position {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = (*self + rhs.neg()).expect("Position overflow")
     }
 }
 
@@ -124,6 +142,10 @@ impl NonZeroQuantity {
             Quantity::ZERO => None,
             a => Some(Self { qty: a }),
         }
+    }
+
+    pub fn new_unchecked(quantity: Quantity) -> Self {
+        Self { qty: quantity }
     }
 
     pub fn qty(&self) -> Quantity {
