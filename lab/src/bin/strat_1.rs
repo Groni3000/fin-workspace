@@ -52,7 +52,7 @@ fn main() {
                 clock.set(event.ts());
 
                 oms.on_event(&event, &mut pf);
-                strategy.on_event(&event);
+                strategy.on_event(&event, &pf);
 
                 oms.reconcile(strategy.desired(), &pf, &rms, &mut event_queue);
             }
