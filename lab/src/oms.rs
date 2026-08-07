@@ -37,10 +37,37 @@ impl Oms {
                 self.on_fill(f, pf);
             }
             Kind::Reject(id) => {
-                tracing::warn!(order_id = ?id, "reject");
-                self.unacked.remove(id);
+                self.on_reject(id, pf);
             }
-            _ => {}
+            Kind::CancelResponse(_, false) => {
+                // this oms is not concerned with response to cancels
+            }
+            Kind::CancelResponse(_, true) => {
+                // this oms is not concerned with response to cancels
+            }
+            Kind::MarketData(_) => {
+                // This oms is not concerned with market data
+            }
+            Kind::FeedError(_) => {
+                // This oms is not concerned with feed errors
+            }
+        }
+    }
+
+    fn on_reject(&mut self, order_id: &OrderId, pf: &mut Portfolio) {
+        tracing::warn!(order_id = ?order_id, "reject");
+        // Rejected order may be in both unacked or working.
+        //
+        // Just push it to the portfolio as is.
+        let order = self
+            .unacked
+            .remove(order_id)
+            .map(Order::into_working)
+            .or_else(|| self.working.remove(order_id));
+
+        match order {
+            Some(o) => pf.push_order(o.into_rejected()),
+            None => tracing::warn!(order_id = ?order_id, "reject for unknown order"),
         }
     }
 
@@ -49,6 +76,11 @@ impl Oms {
         if let Some(order) = self.unacked.remove(order_id) {
             tracing::debug!(order_id = ?order_id, side = ?order.side(), qty = %order.quantity().qty(), "ack");
             self.working.insert(*order_id, order.into_working());
+        } else {
+            // There may be case where Ack arrives after Fill (which means order can be in working).
+            if !self.working.contains_key(&order_id) {
+                tracing::warn!(order_id = ?order_id, "ack for unknown order");
+            }
         }
     }
 
