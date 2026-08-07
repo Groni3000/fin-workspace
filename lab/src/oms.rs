@@ -64,8 +64,13 @@ impl Oms {
             position = %pf.position(&fill.instrument()),
             "fill"
         );
+        let order = self.working.remove(&fill.order_id()).or_else(|| {
+            self.unacked
+                .remove(&fill.order_id())
+                .map(|o| o.into_working())
+        });
 
-        match self.working.remove(&fill.order_id()) {
+        match order {
             Some(working_order) => match working_order.apply_fill(fill) {
                 FillOutcome::Filled(terminated) => {
                     // push to portfolio
