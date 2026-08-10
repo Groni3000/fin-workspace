@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Neg};
+use std::collections::HashMap;
 
 use chrono::DateTime;
 use instrid::{
@@ -245,6 +245,12 @@ fn protected_market_with_no_protective_order_behaves_like_simple_desired_positio
     assert_eq!(m_ords_raw_qty.unsigned_abs(), qty.value());
 }
 
+/// Desired: 1 protective order (in working) with desired negated market order
+/// (not in working, we simulate last step when we send netted desired market order)
+/// Working: desired protective order only
+/// Real: Zero
+///
+/// Expected: send market order for a negated qty
 #[test]
 fn protective_order_sends_market_order_it_protects_and_changes_dpp() {
     let instrument = spy();
@@ -262,22 +268,17 @@ fn protective_order_sends_market_order_it_protects_and_changes_dpp() {
         .build();
     let protective_order = order_new.into_working();
     desired.desired_protective_orders = vec![order_new];
-    let protected_order = OrderBuilder::new(instrument, protective_order.side().neg(), qty)
-        .verify()
-        .expect("This should be ok")
-        .build()
-        .into_working();
-    desired.desired_protected_position = match protected_order.side() {
-        Side::Buy => Position::Long(qty),
-        Side::Sell => Position::Short(qty),
+    desired.desired_protected_position = match (qty, order_new.side()) {
+        (_, Side::Buy) => Position::Short(qty),
+        (_, Side::Sell) => Position::Long(qty),
     };
+
     let working: HashMap<Instrument, Vec<Order<Working>>> =
-        HashMap::from([(instrument, vec![protected_order, protective_order])]);
+        HashMap::from([(instrument, vec![protective_order])]);
     // No real positions
     let real_positions: HashMap<Instrument, Position> = HashMap::default();
-    // Expect no market orders to be reconciled
-    // The state of desired protected position is already changed and
-    // an order is sent when we send desired_order
+    // Expect -qty market orders to be reconciled
     let m_ords_raw_qty = reconcile(instrument, &desired, &working, &real_positions);
-    assert_eq!(m_ords_raw_qty.unsigned_abs(), Quantity::ZERO.value());
+    assert!(m_ords_raw_qty.is_negative());
+    assert_eq!(m_ords_raw_qty.unsigned_abs(), qty.value());
 }
