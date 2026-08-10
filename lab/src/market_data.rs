@@ -116,6 +116,7 @@ impl Leg {
             if self.buffer.trim().is_empty() {
                 continue;
             }
+
             return Ok(Some(FrdCandle::from_frd_csv_line(&self.buffer)?));
         }
     }

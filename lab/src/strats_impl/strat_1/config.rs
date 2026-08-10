@@ -1,5 +1,8 @@
 use chrono::{Duration, NaiveTime, Weekday};
-use futchain::eot::{DateOffset, EndOfTrading, LastNthBDayOfPrevMonth};
+use futchain::{
+    ListedTenors,
+    eot::{DateOffset, EndOfTrading, LastNthBDayOfPrevMonth},
+};
 use instrid::{
     asset::{Asset, AssetClass},
     instruments::{FuturesContract, Instrument},
@@ -17,6 +20,7 @@ use tradeprim::{
 pub struct Config<E: EndOfTrading> {
     instrument: Instrument,
     spec: Specification,
+    listing: ListedTenors,
     eot: E,
     day_of_week: Weekday,
     exchange_tz: chrono_tz::Tz,
@@ -34,6 +38,7 @@ impl<E: EndOfTrading> Config<E> {
     pub fn new(
         instrument: Instrument,
         spec: Specification,
+        listing: ListedTenors,
         eot: E,
         day_of_week: Weekday,
         exchange_tz: chrono_tz::Tz,
@@ -49,6 +54,7 @@ impl<E: EndOfTrading> Config<E> {
         Self {
             instrument,
             spec,
+            listing,
             eot,
             day_of_week,
             exchange_tz,
@@ -89,6 +95,10 @@ impl<E: EndOfTrading> Config<E> {
     pub fn eot(&self) -> &E {
         &self.eot
     }
+
+    pub fn listing(&self) -> &ListedTenors {
+        &self.listing
+    }
 }
 
 /// Defaults describe RB: the contract, its spec, and its termination rule.
@@ -100,8 +110,8 @@ impl Default for Config<LastNthBDayOfPrevMonth> {
                 Asset::new("USD", AssetClass::Currency).unwrap(),
                 Mic::xcme(),
                 Currency::usd(),
-                2025,
-                Tenor::December,
+                2008,
+                Tenor::April,
                 None,
             )
             .unwrap(),
@@ -123,6 +133,7 @@ impl Default for Config<LastNthBDayOfPrevMonth> {
         Self {
             instrument,
             spec,
+            listing: ListedTenors::monthly(),
             // RB terminates on the last business day of the month before delivery.
             // But liquidity ends much earlier.
             // (current_contract_volume, next_contract_volume) / sum(volumes) = 50/50

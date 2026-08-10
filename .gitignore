@@ -27,3 +27,4 @@ things_to_fix
 
 # Profiler
 profile.json.gz
+analysis/
