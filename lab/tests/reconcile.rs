@@ -14,10 +14,10 @@ use tradeprim::{Side, currency::Currency, position::Position, price::Price, quan
 
 #[derive(Debug, Default)]
 pub struct Desired {
-    desired_positions: HashMap<Instrument, Position>,
-    desired_orders: HashMap<Instrument, Vec<Order<New>>>,
-    desired_protected_positions: HashMap<Instrument, Position>,
-    desired_protective_orders: HashMap<Instrument, Vec<Order<New>>>,
+    desired_position: Position,
+    desired_orders: Vec<Order<New>>,
+    desired_protected_position: Position,
+    desired_protective_orders: Vec<Order<New>>,
 }
 
 impl Desired {
@@ -25,19 +25,19 @@ impl Desired {
         Self::default()
     }
 
-    pub fn dp(&self) -> &HashMap<Instrument, Position> {
-        &self.desired_positions
+    pub fn dp(&self) -> &Position {
+        &self.desired_position
     }
 
-    pub fn des_ords(&self) -> &HashMap<Instrument, Vec<Order<New>>> {
+    pub fn des_ords(&self) -> &Vec<Order<New>> {
         &self.desired_orders
     }
 
-    pub fn dpp(&self) -> &HashMap<Instrument, Position> {
-        &self.desired_protected_positions
+    pub fn dpp(&self) -> &Position {
+        &self.desired_protected_position
     }
 
-    pub fn des_prot_ords(&self) -> &HashMap<Instrument, Vec<Order<New>>> {
+    pub fn des_prot_ords(&self) -> &Vec<Order<New>> {
         &self.desired_protective_orders
     }
 }
@@ -59,13 +59,12 @@ fn reconcile(
     real_positions: &HashMap<Instrument, Position>,
 ) -> i64 {
     let ev = vec![];
-    let ev2 = vec![];
 
-    let dp = desired.dp().get(&instrument).unwrap_or(&Position::Flat);
-    let des_ords = desired.des_ords().get(&instrument).unwrap_or(&ev);
-    let dpp = desired.dpp().get(&instrument).unwrap_or(&Position::Flat);
-    let des_prot_ords = desired.des_prot_ords().get(&instrument).unwrap_or(&ev);
-    let wo_l_q = working.get(&instrument).unwrap_or(&ev2);
+    let dp = desired.dp();
+    let des_ords = desired.des_ords();
+    let dpp = desired.dpp();
+    let des_prot_ords = desired.des_prot_ords();
+    let wo_l_q = working.get(&instrument).unwrap_or(&ev);
     let rp = real_positions.get(&instrument).unwrap_or(&Position::Flat);
 
     let dp_raw = dp.as_i64();
@@ -105,7 +104,7 @@ fn simple_flat() {
     let mut desired = Desired::new();
 
     // Flat means we want to be flat
-    desired.desired_positions = HashMap::from([(instrument, Position::Flat)]);
+    desired.desired_position = Position::Flat;
     // No working orders
     let working: HashMap<Instrument, Vec<Order<Working>>> = HashMap::default();
     // No real positions
@@ -136,8 +135,8 @@ fn desired_order_that_is_acked_is_no_op() {
         .build();
     let order_working = order_new.into_working();
     // Flat means we want to be flat
-    desired.desired_positions = HashMap::from([(instrument, Position::Flat)]);
-    desired.desired_orders = HashMap::from([(instrument, vec![order_new])]);
+    desired.desired_position = Position::Flat;
+    desired.desired_orders = vec![order_new];
     let working: HashMap<Instrument, Vec<Order<Working>>> =
         HashMap::from([(instrument, vec![order_working])]);
     // No real positions
@@ -185,8 +184,8 @@ fn desired_order_that_is_part_filled_is_no_op() {
         FillOutcome::Overfill(_, _) => panic!("Overfill should not happen"),
     };
     // Flat means we want to be flat
-    desired.desired_positions = HashMap::from([(instrument, Position::Flat)]);
-    desired.desired_orders = HashMap::from([(instrument, vec![order_new])]);
+    desired.desired_position = Position::Flat;
+    desired.desired_orders = vec![order_new];
     let working: HashMap<Instrument, Vec<Order<Working>>> =
         HashMap::from([(instrument, vec![order_working])]);
     // No real positions
@@ -211,7 +210,7 @@ fn send_market() {
     let qty = Quantity::from_str_unchecked("16")
         .non_zero()
         .expect("This should be ok");
-    desired.desired_positions = HashMap::from([(instrument, Position::Long(qty))]);
+    desired.desired_position = Position::Long(qty);
     let working: HashMap<Instrument, Vec<Order<Working>>> = HashMap::default();
     // No real positions
     let real_positions: HashMap<Instrument, Position> = HashMap::default();
@@ -237,7 +236,7 @@ fn protected_market_with_no_protective_order_behaves_like_simple_desired_positio
         .non_zero()
         .expect("This should be ok");
     // Flat means we want to be flat
-    desired.desired_protected_positions = HashMap::from([(instrument, Position::Long(qty))]);
+    desired.desired_protected_position = Position::Long(qty);
     let working: HashMap<Instrument, Vec<Order<Working>>> = HashMap::default();
     // No real positions
     let real_positions: HashMap<Instrument, Position> = HashMap::default();
@@ -262,19 +261,16 @@ fn protective_order_sends_market_order_it_protects_and_changes_dpp() {
         .expect("Limit order with all other default values must be ok to build")
         .build();
     let protective_order = order_new.into_working();
-    desired.desired_protective_orders = HashMap::from([(instrument, vec![order_new])]);
+    desired.desired_protective_orders = vec![order_new];
     let protected_order = OrderBuilder::new(instrument, protective_order.side().neg(), qty)
         .verify()
         .expect("This should be ok")
         .build()
         .into_working();
-    desired.desired_protected_positions = HashMap::from([(
-        instrument,
-        match protected_order.side() {
-            Side::Buy => Position::Long(qty),
-            Side::Sell => Position::Short(qty),
-        },
-    )]);
+    desired.desired_protected_position = match protected_order.side() {
+        Side::Buy => Position::Long(qty),
+        Side::Sell => Position::Short(qty),
+    };
     let working: HashMap<Instrument, Vec<Order<Working>>> =
         HashMap::from([(instrument, vec![protected_order, protective_order])]);
     // No real positions
