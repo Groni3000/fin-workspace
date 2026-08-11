@@ -1,13 +1,18 @@
 use chrono::{DateTime, Utc, serde::ts_nanoseconds};
-use serde::{Deserialize, Deserializer};
+use instrid::instruments::Instrument;
+use serde::Deserialize;
+use serde::de::DeserializeOwned;
 
+use crate::formats::de_price_f64;
 use tradeprim::price::Price;
 
 use crate::market_data::{Candle, RelevantPrice, Timestamped};
+use crate::{formats::Tagged, market_data::Symboled};
 
-#[cfg(feature = "kafka")]
 use std::{
+    collections::HashMap,
     fmt::Display,
+    marker::PhantomData,
     str::Utf8Error,
     sync::{
         Arc,
@@ -16,11 +21,11 @@ use std::{
     time::Duration,
 };
 
-#[cfg(feature = "kafka")]
 use rdkafka::{
     ClientConfig, Message,
     consumer::{BaseConsumer, Consumer},
     error::KafkaError,
+    util::Timeout,
 };
 
 // #[cfg(feature = "kafka")]
@@ -100,14 +105,15 @@ impl Ord for CustomDatabentoAggregatedCandle {
     }
 }
 
-fn de_price_f64<'de, D: Deserializer<'de>>(d: D) -> Result<Price, D::Error> {
-    let v = f64::deserialize(d)?;
-    Price::try_from(v).map_err(serde::de::Error::custom)
-}
-
 impl Timestamped for CustomDatabentoAggregatedCandle {
     fn timestamp(&self) -> DateTime<Utc> {
         self.ts_event
+    }
+}
+
+impl Symboled for CustomDatabentoAggregatedCandle {
+    fn symbol(&self) -> &str {
+        &self.symbol
     }
 }
 
@@ -143,15 +149,19 @@ impl Candle for CustomDatabentoAggregatedCandle {
 // --- Market Data ---
 // -------------------
 #[cfg(feature = "kafka")]
-pub struct CustomDatabentoConsumerMd {
+pub struct CustomDatabentoConsumerMd<T> {
     consumer: BaseConsumer,
     /// Set from a Ctrl-C handler; ends iteration so the consumer drops
     /// (and librdkafka leaves the group cleanly).
     shutdown: Arc<AtomicBool>,
+    symbols: HashMap<String, Instrument>,
+    high_watermark: i64,
+    _record: PhantomData<fn() -> T>,
 }
 
 #[cfg(feature = "kafka")]
-impl CustomDatabentoConsumerMd {
+impl<T> CustomDatabentoConsumerMd<T> {
+    #[expect(clippy::too_many_arguments, reason = "Kafka has too many setting.")]
     pub fn new(
         bootstrap_servers: &str,
         group_id: &str,
@@ -159,12 +169,21 @@ impl CustomDatabentoConsumerMd {
         enable_auto_commit: bool,
         topic: &str,
         shutdown: Arc<AtomicBool>,
+        symbols: HashMap<String, Instrument>,
+        settings: KafkaSettings,
     ) -> Self {
         let consumer: BaseConsumer = ClientConfig::new()
             .set("bootstrap.servers", bootstrap_servers)
             .set("group.id", group_id)
             .set("auto.offset.reset", auto_offset_reset)
             .set("enable.auto.commit", enable_auto_commit.to_string())
+            .set("fetch.min.bytes", settings.min_bytes.to_string())
+            .set("fetch.wait.max.ms", settings.wait_max_ms.to_string())
+            .set("queued.min.messages", settings.min_messages.to_string())
+            .set(
+                "queued.max.messages.kbytes",
+                settings.max_messages_kbytes.to_string(),
+            )
             .create()
             .expect("failed to create consumer");
 
@@ -172,7 +191,17 @@ impl CustomDatabentoConsumerMd {
             .subscribe(&[topic])
             .expect("failed to subscribe to topic");
 
-        Self { consumer, shutdown }
+        let (_low, high) = consumer
+            .fetch_watermarks(topic, 0, Timeout::After(Duration::from_secs(10)))
+            .expect("Coudn't get (low, high) watermarks");
+
+        Self {
+            consumer,
+            shutdown,
+            symbols,
+            high_watermark: high,
+            _record: PhantomData,
+        }
     }
 
     pub fn consumer(&self) -> &BaseConsumer {
@@ -214,8 +243,8 @@ impl From<KafkaError> for KafkaMdError {
 }
 
 #[cfg(feature = "kafka")]
-impl Iterator for CustomDatabentoConsumerMd {
-    type Item = Result<CustomDatabentoAggregatedCandle, KafkaMdError>;
+impl<T: DeserializeOwned + Symboled> Iterator for CustomDatabentoConsumerMd<T> {
+    type Item = Result<Tagged<T>, KafkaMdError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -224,13 +253,22 @@ impl Iterator for CustomDatabentoConsumerMd {
             }
             match self.consumer.poll(Duration::from_millis(500)) {
                 Some(Ok(msg)) => {
-                    let record = match msg.payload_view::<str>()? {
-                        Ok(payload) => payload,
-                        Err(e) => return Some(Err(KafkaMdError::Utf8Error(e))),
+                    if msg.offset() == self.high_watermark - 1 {
+                        return None;
+                    };
+                    let record = match msg.payload_view::<str>() {
+                        Some(Ok(payload)) => payload,
+                        Some(Err(e)) => return Some(Err(KafkaMdError::Utf8Error(e))),
+                        None => return Some(Err(KafkaMdError::EmptyPayload)),
                     };
 
-                    return match serde_json::from_str::<CustomDatabentoAggregatedCandle>(record) {
-                        Ok(candle) => Some(Ok(candle)),
+                    return match serde_json::from_str::<T>(record) {
+                        Ok(candle) => {
+                            let Some(&instrument) = self.symbols.get(candle.symbol()) else {
+                                continue; // not ours: spreads, other products, other months
+                            };
+                            Some(Ok(Tagged::new(instrument, candle)))
+                        }
                         Err(e) => Some(Err(KafkaMdError::Json(e))),
                     };
                 }
@@ -238,5 +276,68 @@ impl Iterator for CustomDatabentoConsumerMd {
                 None => continue,
             }
         }
+    }
+}
+
+pub struct KafkaSettings {
+    min_bytes: u32,
+    wait_max_ms: u32,
+    min_messages: u32,
+    max_messages_kbytes: u32,
+}
+
+impl KafkaSettings {
+    pub fn new(
+        min_bytes: u32,
+        wait_max_ms: u32,
+        min_messages: u32,
+        max_messages_kbytes: u32,
+    ) -> Self {
+        Self {
+            min_bytes,
+            wait_max_ms,
+            min_messages,
+            max_messages_kbytes,
+        }
+    }
+
+    pub fn min_bytes(&self) -> u32 {
+        self.min_bytes
+    }
+
+    pub fn wait_max_ms(&self) -> u32 {
+        self.wait_max_ms
+    }
+
+    pub fn min_messages(&self) -> u32 {
+        self.min_messages
+    }
+
+    pub fn max_messages_kbytes(&self) -> u32 {
+        self.max_messages_kbytes
+    }
+
+    /// Bulk replay: big batches, latency irrelevant.
+    pub fn replay() -> Self {
+        // 1^10 = 1 KiB
+        // 1^20 = 1 MiB
+        // 1^30 = 1 GiB
+        Self::new(1 << 20, 500, 1_000_000, 1 << 20)
+    }
+    /// Live: reply immediately.
+    ///
+    /// Something like this:
+    /// - min_bytes = 1
+    /// - wait_max_ms = 500
+    /// - queued_min_msgs = 100_000
+    /// - queued_max_msgs_kbytes = 65_536 (64 MiB)
+    pub fn live() -> Self {
+        Self::new(1, 10, 100_000, 65_536)
+    }
+}
+
+impl Default for KafkaSettings {
+    fn default() -> Self {
+        Self::live()
     }
 }

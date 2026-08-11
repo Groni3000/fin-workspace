@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     path::Path,
     str::FromStr,
     sync::{
@@ -11,7 +12,7 @@ use futchain::{FutChain, ListedTenors};
 use instrid::{asset::Asset, instruments::FuturesContract, mic::Mic, tenor::Tenor};
 
 use lab::{
-    formats::custom::CustomDatabentoConsumerMd,
+    formats::custom::{CustomDatabentoAggregatedCandle, CustomDatabentoConsumerMd, KafkaSettings},
     market_data::{Candle, FrdFutChainMdReader, FrdMdError},
     process_md,
 };
@@ -71,7 +72,9 @@ fn source_from_args() -> Source {
         .unwrap()
 }
 
-fn init_kafka_md(shutdown: Arc<AtomicBool>) -> CustomDatabentoConsumerMd {
+fn init_kafka_md(
+    shutdown: Arc<AtomicBool>,
+) -> CustomDatabentoConsumerMd<CustomDatabentoAggregatedCandle> {
     // --- Connection
     const BOOTSTRAP_SERVERS: &str = "192.168.217.126:9092";
     // const TOPIC: &str = "md.db.GLBX.MDP3.RB.FUT.merged.ohlcv-1s";
@@ -89,6 +92,9 @@ fn init_kafka_md(shutdown: Arc<AtomicBool>) -> CustomDatabentoConsumerMd {
         false,
         TOPIC,
         shutdown,
+        // Will skip all messages
+        HashMap::default(),
+        KafkaSettings::default(),
     )
 }
 
@@ -104,7 +110,7 @@ fn init_files_md<'a>(listing: &'a ListedTenors) -> Result<FrdFutChainMdReader<'a
         None,
     );
     let chain = FutChain::new(instrument, listing).expect("Failed to create FutChain");
-    let market_data = FrdFutChainMdReader::new(chain, dir.to_path_buf(), String::new())?;
+    let market_data = FrdFutChainMdReader::new(chain, dir.to_path_buf())?;
 
     Ok(market_data)
 }
