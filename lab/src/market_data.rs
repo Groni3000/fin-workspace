@@ -28,6 +28,10 @@ pub trait Timestamped {
 pub trait Instrumented {
     fn instrument(&self) -> Instrument;
 }
+
+pub trait Symboled {
+    fn symbol(&self) -> &str;
+}
 /// A trait for data that have as little useful data
 /// as possible: when and what the price was at that time.
 pub trait RelevantPrice: Timestamped {

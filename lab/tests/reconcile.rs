@@ -70,11 +70,11 @@ fn reconcile(
     let dp_raw = dp.as_i64();
     let des_ords_raw = des_ords
         .iter()
-        .map(|o| o.quantity().value() as i64)
+        .map(|o| o.side().as_i64() * o.quantity().value() as i64)
         .sum::<i64>();
     let des_prot_ords_raw = des_prot_ords
         .iter()
-        .map(|o| o.quantity().value() as i64)
+        .map(|o| o.side().as_i64() * o.quantity().value() as i64)
         .sum::<i64>();
     let wo_l_q_raw = wo_l_q
         .iter()
@@ -169,7 +169,7 @@ fn desired_order_that_is_part_filled_is_no_op() {
     let mut order_working = order_new.into_working();
     let fill = Fill::new(
         order_working.order_id(),
-        DateTime::from_timestamp_nanos(1662921288_000_000_000),
+        DateTime::from_timestamp_nanos(1_662_921_288_000_000_000),
         instrument,
         order_working.side(),
         Quantity::ONE.non_zero().expect("One is safe"),
@@ -214,8 +214,8 @@ fn send_market() {
     let working: HashMap<Instrument, Vec<Order<Working>>> = HashMap::default();
     // No real positions
     let real_positions: HashMap<Instrument, Position> = HashMap::default();
-    // Expect no market orders to be reconciled
     let m_ords_raw_qty = reconcile(instrument, &desired, &working, &real_positions);
+    assert!(m_ords_raw_qty.is_positive());
     assert_eq!(m_ords_raw_qty.unsigned_abs(), qty.value());
 }
 
@@ -242,6 +242,7 @@ fn protected_market_with_no_protective_order_behaves_like_simple_desired_positio
     let real_positions: HashMap<Instrument, Position> = HashMap::default();
     // Expect no market orders to be reconciled
     let m_ords_raw_qty = reconcile(instrument, &desired, &working, &real_positions);
+    assert!(m_ords_raw_qty.is_positive());
     assert_eq!(m_ords_raw_qty.unsigned_abs(), qty.value());
 }
 

@@ -9,14 +9,11 @@ use tradeprim::{position::Position, price::Price, quantity::Quantity};
 
 use crate::{
     event::{Event, Kind},
-    formats::{Tagged, frd::FrdCandle},
     market_data::{Candle, Instrumented, RelevantPrice, Timestamped},
     portfolio::Portfolio,
     strategy::Desired,
     strats_impl::strat_1::config::Config,
 };
-
-type MdRecord = Tagged<FrdCandle>;
 
 /// Why the strategy decided to flatten. Emitted with the `exit` event for the trade ledger.
 #[derive(Debug, Clone, Copy)]
@@ -111,7 +108,10 @@ impl<E: EndOfTrading> Strategy<E> {
         &self.desired
     }
 
-    pub fn on_event(&mut self, event: &Event<MdRecord>, pf: &Portfolio) {
+    pub fn on_event<R>(&mut self, event: &Event<R>, pf: &Portfolio)
+    where
+        R: Timestamped + Instrumented + Candle,
+    {
         match event.kind() {
             Kind::MarketData(md) => self.process_md(md),
             Kind::Ack(_order_id) => {
@@ -173,7 +173,10 @@ impl<E: EndOfTrading> Strategy<E> {
         // // and then delete from desired orders
     }
 
-    fn entry_condition(&mut self, md_record: &MdRecord, exchange_ts: DateTime<Tz>) -> bool {
+    fn entry_condition<R>(&mut self, md_record: &R, exchange_ts: DateTime<Tz>) -> bool
+    where
+        R: Timestamped + Instrumented + RelevantPrice,
+    {
         if self.state.fired_today {
             return false;
         }
@@ -205,7 +208,10 @@ impl<E: EndOfTrading> Strategy<E> {
         false
     }
 
-    fn out_condition(&mut self, md_record: &MdRecord, exchange_ts: DateTime<Tz>) {
+    fn out_condition<R>(&mut self, md_record: &R, exchange_ts: DateTime<Tz>)
+    where
+        R: Timestamped + Instrumented + Candle,
+    {
         let exchange_time = exchange_ts.time();
         let stop_loss_fired = if let Some(sl_price) = self.state.stop_loss_price {
             md_record.low() <= sl_price
@@ -262,7 +268,10 @@ impl<E: EndOfTrading> Strategy<E> {
         }
     }
 
-    fn process_md(&mut self, md_record: &MdRecord) {
+    fn process_md<R>(&mut self, md_record: &R)
+    where
+        R: Timestamped + Instrumented + Candle,
+    {
         // The only tz conversion per record: chrono-tz binary-searches transitions on each call.
         let exchange_ts = md_record
             .timestamp()
