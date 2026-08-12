@@ -1,32 +1,36 @@
-use std::collections::HashMap;
-
-use oms::{
-    OrderId,
-    order::{New, Order},
-};
+use oms::order::{New, Order};
 use tradeprim::position::Position;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Desired {
-    position: Position,
-    orders: HashMap<OrderId, Order<New>>,
-    // cancels: Vec<OrderId>,
+    desired_position: Position,
+    desired_orders: Vec<Order<New>>,
+    desired_protected_position: Position,
+    desired_protective_orders: Vec<Order<New>>,
 }
 
 impl Desired {
-    pub fn new(position: Position, orders: HashMap<OrderId, Order<New>>) -> Self {
-        Self { position, orders }
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    pub fn position(&self) -> Position {
-        self.position
+    pub fn dp(&self) -> &Position {
+        &self.desired_position
     }
 
-    pub fn orders(&self) -> &HashMap<OrderId, Order<New>> {
-        &self.orders
+    pub fn des_ords(&self) -> &Vec<Order<New>> {
+        &self.desired_orders
     }
 
-    pub fn mut_position(&mut self) -> &mut Position {
-        &mut self.position
+    pub fn dpp(&self) -> &Position {
+        &self.desired_protected_position
+    }
+
+    pub fn des_prot_ords(&self) -> &Vec<Order<New>> {
+        &self.desired_protective_orders
+    }
+
+    pub fn dp_mut(&mut self) -> &mut Position {
+        &mut self.desired_position
     }
 }

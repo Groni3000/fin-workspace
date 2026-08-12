@@ -123,9 +123,9 @@ impl Oms {
         }
     }
 
-    fn desired_orders_qty(&self, orders: &HashMap<OrderId, Order<New>>) -> i64 {
+    fn desired_orders_qty(&self, orders: &Vec<Order<New>>) -> i64 {
         orders
-            .values()
+            .iter()
             .map(|o| o.side().as_i64() * o.quantity().value() as i64)
             .sum()
     }
@@ -153,8 +153,10 @@ impl Oms {
         sink: &mut S,
     ) {
         for instrument_desired in desired.values() {
-            for (id, order) in instrument_desired.orders() {
+            for order in instrument_desired.des_ords() {
                 let order = *order;
+                let id = &order.order_id();
+
                 if self.unacked.contains_key(id) || self.working.contains_key(id) {
                     continue;
                 }
@@ -182,8 +184,8 @@ impl Oms {
     ) {
         for (instr, want) in desired {
             // Clamp the level, not the delta: clamping `m` would creep past the limit each pass.
-            let dp = rms.clamp_position(instr, want.position(), pf).as_i64();
-            let do_q = self.desired_orders_qty(want.orders());
+            let dp = rms.clamp_position(instr, *want.dp(), pf).as_i64();
+            let do_q = self.desired_orders_qty(want.des_ords());
             let wo = self.leaves_qty(instr);
             let rp = pf.position(instr).as_i64();
             let m = dp + do_q - wo - rp;
