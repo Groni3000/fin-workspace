@@ -20,28 +20,19 @@ And if that's the case, I would invalidate the indicator.
 But I'm replicating pandas behavior, so I'm forced to allow NaNs, but chose to ignore them.
 */
 
-use pyo3::{exceptions::PyValueError, prelude::*};
-
-#[pyclass]
 #[derive(Clone)]
 pub struct Parameters {
-    #[pyo3(get)]
     alpha: f64,
-    #[pyo3(get)]
     warmup_samples: usize,
 }
 
-#[pymethods]
 impl Parameters {
-    #[new]
-    pub fn new(alpha: f64, warmup_samples: usize) -> PyResult<Self> {
+    pub fn new(alpha: f64, warmup_samples: usize) -> Result<Self, String> {
         if warmup_samples == 0 {
-            return Err(PyValueError::new_err(
-                "Invalid `warmup_sample`. Must be at least 1.",
-            ));
+            return Err("Invalid `warmup_sample`. Must be at least 1.".into());
         }
         if alpha <= 0.0 || alpha > 1.0 {
-            return Err(PyValueError::new_err("Invalid `alpha`. Must be in (0, 1]."));
+            return Err("Invalid `alpha`. Must be in (0, 1].".into());
         }
 
         Ok(Parameters {
@@ -59,7 +50,6 @@ impl Parameters {
     }
 }
 
-#[pyclass]
 pub struct Indicator {
     alpha: f64,
     beta: f64,
@@ -68,9 +58,7 @@ pub struct Indicator {
     previous_value: f64,
 }
 
-#[pymethods]
 impl Indicator {
-    #[new]
     pub fn new(parameters: &Parameters) -> Self {
         Indicator {
             alpha: parameters.get_alpha(),
