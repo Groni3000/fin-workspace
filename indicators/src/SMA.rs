@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 ///
 /// # Fields
 /// * `period` - The window size for the SMA calculation. Must be at least 1.
-#[derive(Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Parameters {
     period: usize,
 }
@@ -55,10 +55,10 @@ impl Indicator {
     ///
     /// # Returns
     /// A new Indicator instance initialized with an empty window and sum of 0.0.
-    pub fn new(parameters: &Parameters) -> Self {
+    pub fn new(parameters: Parameters) -> Self {
         Indicator {
             values: VecDeque::with_capacity(parameters.get_period()),
-            parameters: parameters.clone(),
+            parameters: parameters,
             sum: 0.0,
         }
     }
@@ -97,9 +97,13 @@ impl Indicator {
         self.sum / self.parameters.period as f64
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.values.clear();
         self.sum = 0.0;
+    }
+
+    pub fn parameters(&self) -> Parameters {
+        self.parameters
     }
 }
 

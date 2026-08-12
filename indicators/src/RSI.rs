@@ -5,7 +5,7 @@ use std::cmp::Ordering;
 ///
 /// # Fields
 /// * `period` - The window size for the RSI calculation. Must be at least 1.
-#[derive(Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Parameters {
     sma_parameters: SMA::Parameters,
 }
@@ -24,17 +24,19 @@ impl Parameters {
 }
 
 pub struct Indicator {
+    parameters: Parameters,
     last_price: Option<f64>,
     rolling_gain: SMA::Indicator,
     rolling_loss: SMA::Indicator,
 }
 
 impl Indicator {
-    pub fn new(parameters: &Parameters) -> Self {
+    pub fn new(parameters: Parameters) -> Self {
         Indicator {
+            parameters,
             last_price: None,
-            rolling_gain: SMA::Indicator::new(&parameters.sma_parameters),
-            rolling_loss: SMA::Indicator::new(&parameters.sma_parameters),
+            rolling_gain: SMA::Indicator::new(parameters.sma_parameters),
+            rolling_loss: SMA::Indicator::new(parameters.sma_parameters),
         }
     }
 
@@ -84,5 +86,9 @@ impl Indicator {
         let rsi = 100.0 - (100.0 / (1.0 + rs));
 
         rsi
+    }
+
+    pub fn parameters(&self) -> Parameters {
+        self.parameters
     }
 }

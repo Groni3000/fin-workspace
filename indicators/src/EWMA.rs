@@ -20,7 +20,7 @@ And if that's the case, I would invalidate the indicator.
 But I'm replicating pandas behavior, so I'm forced to allow NaNs, but chose to ignore them.
 */
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Parameters {
     alpha: f64,
     warmup_samples: usize,
@@ -41,29 +41,27 @@ impl Parameters {
         })
     }
 
-    pub fn get_warmup_samples(&self) -> usize {
+    pub fn warmup_samples(&self) -> usize {
         self.warmup_samples
     }
 
-    pub fn get_alpha(&self) -> f64 {
+    pub fn alpha(&self) -> f64 {
         self.alpha
     }
 }
 
 pub struct Indicator {
-    alpha: f64,
+    parameters: Parameters,
     beta: f64,
-    warmup_samples: usize,
     warmup_counter: usize,
     previous_value: f64,
 }
 
 impl Indicator {
-    pub fn new(parameters: &Parameters) -> Self {
+    pub fn new(parameters: Parameters) -> Self {
         Indicator {
-            alpha: parameters.get_alpha(),
-            beta: 1.0 - parameters.get_alpha(),
-            warmup_samples: parameters.get_warmup_samples(),
+            parameters,
+            beta: 1.0 - parameters.alpha(),
             warmup_counter: 0,
             previous_value: f64::NAN,
         }
@@ -73,26 +71,26 @@ impl Indicator {
     pub fn update(&mut self, price: f64) -> f64 {
         // We ignore NaNs/infinities, it doesn't count to the `warmup_counter`
         if !price.is_finite() {
-            if self.warmup_counter < self.warmup_samples {
+            if self.warmup_counter < self.parameters.warmup_samples {
                 return f64::NAN;
             }
             return self.previous_value;
         }
 
         // Warmup process.
-        if self.warmup_counter < self.warmup_samples {
+        if self.warmup_counter < self.parameters.warmup_samples {
             self.warmup_counter += 1;
             // If it is the first sample
             if self.warmup_counter == 1 {
                 // We store initial y_0 = x_0
                 self.previous_value = price;
                 // If it is the only sample we need - return it.
-                if self.warmup_samples == 1 {
+                if self.parameters.warmup_samples == 1 {
                     return self.previous_value;
                 }
             }
-            if self.warmup_counter != self.warmup_samples {
-                let new_value = self.alpha * price + self.beta * self.previous_value;
+            if self.warmup_counter != self.parameters.warmup_samples {
+                let new_value = self.parameters.alpha * price + self.beta * self.previous_value;
                 self.previous_value = new_value;
 
                 return f64::NAN;
@@ -100,10 +98,14 @@ impl Indicator {
         }
         // If it's the last sample in warmup or just a regular sample
         // we calculate a new value.
-        let new_value = self.alpha * price + self.beta * self.previous_value;
+        let new_value = self.parameters.alpha * price + self.beta * self.previous_value;
 
         self.previous_value = new_value;
 
         new_value
+    }
+
+    pub fn parameters(&self) -> Parameters {
+        self.parameters
     }
 }
