@@ -74,9 +74,9 @@ impl Indicator {
         };
         // Check ended
         let rs = current_gain / current_loss;
-        let rsi = 100.0 - (100.0 / (1.0 + rs));
+        
 
-        rsi
+        100.0 - (100.0 / (1.0 + rs))
     }
 
     pub fn parameters(&self) -> Parameters {

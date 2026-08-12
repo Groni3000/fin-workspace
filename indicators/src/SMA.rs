@@ -55,7 +55,7 @@ impl Indicator {
     pub fn new(parameters: Parameters) -> Self {
         Indicator {
             values: VecDeque::with_capacity(parameters.get_period()),
-            parameters: parameters,
+            parameters,
             sum: 0.0,
         }
     }
