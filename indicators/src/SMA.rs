@@ -1,9 +1,6 @@
 use std::collections::VecDeque;
 
 /// Parameters for configuring a Simple Moving Average (SMA) indicator.
-///
-/// # Fields
-/// * `period` - The window size for the SMA calculation. Must be at least 1.
 #[derive(Debug, Clone, Copy)]
 pub struct Parameters {
     period: usize,
@@ -16,7 +13,7 @@ impl Parameters {
     /// * `period` - The window size for the SMA. Must be at least 1.
     ///
     /// # Errors
-    /// Returns a PyValueError if period is 0.
+    /// Returns an error if period is 0.
     pub fn new(period: usize) -> Result<Self, String> {
         if period == 0 {
             return Err("Period for SMA must be at least 1".into());

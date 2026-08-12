@@ -2,22 +2,13 @@ use crate::SMA;
 use std::cmp::Ordering;
 
 /// Parameters for configuring a Relative Strength Index (RSI) indicator.
-///
-/// # Fields
-/// * `period` - The window size for the RSI calculation. Must be at least 1.
 #[derive(Debug, Clone, Copy)]
 pub struct Parameters {
     sma_parameters: SMA::Parameters,
 }
 
 impl Parameters {
-    /// Creates a new Parameters instance with the specified period.
-    ///
-    /// # Arguments
-    /// * `period` - The window size for the RSI. Must be at least 1.
-    ///
-    /// # Errors
-    /// Returns a PyValueError if period is 0.
+    /// Creates a new Parameters instance.
     pub fn new(sma_parameters: SMA::Parameters) -> Self {
         Parameters { sma_parameters }
     }

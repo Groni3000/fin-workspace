@@ -20,6 +20,7 @@ And if that's the case, I would invalidate the indicator.
 But I'm replicating pandas behavior, so I'm forced to allow NaNs, but chose to ignore them.
 */
 
+/// Parameters for configuring an Exponential Weighted Moving Average (EWMA) indicator.
 #[derive(Debug, Clone, Copy)]
 pub struct Parameters {
     alpha: f64,
@@ -27,6 +28,11 @@ pub struct Parameters {
 }
 
 impl Parameters {
+    /// Creates a new Parameters instance.
+    ///
+    /// May return error if:
+    /// * `warmup_samples` is 0
+    /// * `alpha` is not in (0, 1]
     pub fn new(alpha: f64, warmup_samples: usize) -> Result<Self, String> {
         if warmup_samples == 0 {
             return Err("Invalid `warmup_sample`. Must be at least 1.".into());
