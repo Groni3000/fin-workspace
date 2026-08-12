@@ -1,19 +1,15 @@
+use crate::SMA;
 use std::cmp::Ordering;
-
-use crate::rust_backend::SMA;
-use pyo3::prelude::*;
 
 /// Parameters for configuring a Relative Strength Index (RSI) indicator.
 ///
 /// # Fields
 /// * `period` - The window size for the RSI calculation. Must be at least 1.
-#[pyclass]
 #[derive(Clone)]
 pub struct Parameters {
     sma_parameters: SMA::Parameters,
 }
 
-#[pymethods]
 impl Parameters {
     /// Creates a new Parameters instance with the specified period.
     ///
@@ -22,22 +18,18 @@ impl Parameters {
     ///
     /// # Errors
     /// Returns a PyValueError if period is 0.
-    #[new]
-    fn new(sma_parameters: SMA::Parameters) -> Self {
+    pub fn new(sma_parameters: SMA::Parameters) -> Self {
         Parameters { sma_parameters }
     }
 }
 
-#[pyclass]
 pub struct Indicator {
     last_price: Option<f64>,
     rolling_gain: SMA::Indicator,
     rolling_loss: SMA::Indicator,
 }
 
-#[pymethods]
 impl Indicator {
-    #[new]
     pub fn new(parameters: &Parameters) -> Self {
         Indicator {
             last_price: None,
