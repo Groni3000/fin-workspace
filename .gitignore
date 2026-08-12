@@ -28,3 +28,6 @@ things_to_fix
 # Profiler
 profile.json.gz
 analysis/
+lab/data/files/futures/frd/rb_here.zip
+lab/logs/
+diagrams/
