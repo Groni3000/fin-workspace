@@ -1,4 +1,7 @@
-use oms::order::{New, Order};
+use oms::{
+    OrderId,
+    order::{New, Order},
+};
 use tradeprim::position::Position;
 
 #[derive(Debug, Default)]
@@ -7,6 +10,7 @@ pub struct Desired {
     desired_orders: Vec<Order<New>>,
     desired_protected_position: Position,
     desired_protective_orders: Vec<Order<New>>,
+    desired_cancels: Vec<OrderId>,
 }
 
 impl Desired {
@@ -32,5 +36,17 @@ impl Desired {
 
     pub fn dp_mut(&mut self) -> &mut Position {
         &mut self.desired_position
+    }
+
+    pub fn desired_orders_mut(&mut self) -> &mut Vec<Order<New>> {
+        &mut self.desired_orders
+    }
+
+    pub fn desired_cancels(&self) -> &[OrderId] {
+        &self.desired_cancels
+    }
+
+    pub fn desired_cancels_mut(&mut self) -> &mut Vec<OrderId> {
+        &mut self.desired_cancels
     }
 }
