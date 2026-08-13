@@ -123,7 +123,7 @@ impl Oms {
         }
     }
 
-    fn desired_orders_qty(&self, orders: &Vec<Order<New>>) -> i64 {
+    fn desired_orders_qty(&self, orders: &[Order<New>]) -> i64 {
         orders
             .iter()
             .map(|o| o.side().as_i64() * o.quantity().value() as i64)
