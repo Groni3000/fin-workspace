@@ -1,3 +1,4 @@
+pub mod aggregation;
 pub mod event;
 pub mod event_loop;
 pub mod events_impls;
@@ -171,17 +172,17 @@ pub(crate) mod untested {
 
             // `,` is ommited
             let mut split = trimmed[20..].split(',');
+            let open = Price::from_str_unchecked(
+                split
+                    .next()
+                    .ok_or(FrdCandleParsingError::Missing(FrdField::Price))?,
+            );
             let high = Price::from_str_unchecked(
                 split
                     .next()
                     .ok_or(FrdCandleParsingError::Missing(FrdField::Price))?,
             );
             let low = Price::from_str_unchecked(
-                split
-                    .next()
-                    .ok_or(FrdCandleParsingError::Missing(FrdField::Price))?,
-            );
-            let open = Price::from_str_unchecked(
                 split
                     .next()
                     .ok_or(FrdCandleParsingError::Missing(FrdField::Price))?,
