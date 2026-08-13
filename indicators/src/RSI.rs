@@ -74,7 +74,6 @@ impl Indicator {
         };
         // Check ended
         let rs = current_gain / current_loss;
-        
 
         100.0 - (100.0 / (1.0 + rs))
     }
