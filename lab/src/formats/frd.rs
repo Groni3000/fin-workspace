@@ -225,6 +225,12 @@ impl FrdCandle {
             .next()
             .ok_or(FrdCandleParsingError::Missing(FrdField::Timestamp))?;
         let utc_ts = Self::frd_convert_str_with_tz_to_utc_timestamp(raw_ts, ExchangeTZ)?;
+        let open = Price::from_str(
+            split
+                .next()
+                .ok_or(FrdCandleParsingError::Missing(FrdField::Price))?,
+        )
+        .map_err(FrdCandleParsingError::PriceParsingError)?;
         let high = Price::from_str(
             split
                 .next()
@@ -232,12 +238,6 @@ impl FrdCandle {
         )
         .map_err(FrdCandleParsingError::PriceParsingError)?;
         let low = Price::from_str(
-            split
-                .next()
-                .ok_or(FrdCandleParsingError::Missing(FrdField::Price))?,
-        )
-        .map_err(FrdCandleParsingError::PriceParsingError)?;
-        let open = Price::from_str(
             split
                 .next()
                 .ok_or(FrdCandleParsingError::Missing(FrdField::Price))?,

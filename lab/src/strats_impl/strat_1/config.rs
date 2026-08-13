@@ -140,7 +140,7 @@ impl Default for Config<LastNthBDayOfPrevMonth> {
             // ~ 10 days before the end of trading
             eot: LastNthBDayOfPrevMonth::from_u8(1, DateOffset::BusinessDays(-10)),
             day_of_week: Weekday::Fri,
-            exchange_tz: chrono_tz::Tz::US__Eastern,
+            exchange_tz: chrono_tz::Tz::US__Central,
             entry_time: (entry_time, entry_time_end),
             out_time: NaiveTime::from_hms_opt(20, 0, 0).unwrap(),
             stop_loss_price_diff,
