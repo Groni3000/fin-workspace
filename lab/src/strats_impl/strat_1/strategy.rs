@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Datelike, NaiveDate};
+use chrono::{DateTime, Datelike, NaiveDate, NaiveTime};
 use chrono_tz::Tz;
 use futchain::{FutChain, eot::EndOfTrading};
 use instrid::instruments::{FuturesContract, Instrument};
@@ -8,6 +8,7 @@ use oms::fill::Fill;
 use tradeprim::{position::Position, price::Price, quantity::Quantity};
 
 use crate::{
+    aggregation::SessionAggregator,
     event::{Event, Kind},
     market_data::{Candle, Instrumented, RelevantPrice, Timestamped},
     portfolio::Portfolio,
@@ -39,7 +40,6 @@ pub struct Strategy<E: EndOfTrading> {
     state: State,
 }
 
-#[derive(Default)]
 pub struct State {
     /// If we get stop loss, we will not fire again today.
     fired_today: bool,
@@ -52,6 +52,8 @@ pub struct State {
     eot_date: Option<NaiveDate>,
     /// Contracts rolled away from, waiting on their closing fill before `desired` drops them.
     settling: Vec<Instrument>,
+    /// Candle aggregator
+    session_aggregator: SessionAggregator,
 }
 
 impl State {
@@ -70,6 +72,26 @@ impl State {
     pub fn eot_date(&self) -> Option<NaiveDate> {
         self.eot_date
     }
+
+    pub fn default_cme_energy(
+        traded_instrument: Option<Instrument>,
+        eot_date: Option<NaiveDate>,
+    ) -> State {
+        State {
+            fired_today: false,
+            last_known_date: NaiveDate::MIN,
+            n_trades: 0,
+            stop_loss_price: None,
+            traded_instrument,
+            eot_date,
+            settling: Vec::new(),
+            session_aggregator: SessionAggregator::new(
+                NaiveTime::from_hms_opt(17, 0, 0).expect("CME energy RTH"),
+                NaiveTime::from_hms_opt(16, 0, 0).expect("CME energy RTH"),
+                chrono_tz::America::Chicago,
+            ),
+        }
+    }
 }
 
 impl<E: EndOfTrading> Strategy<E> {
@@ -79,11 +101,7 @@ impl<E: EndOfTrading> Strategy<E> {
             Instrument::Futures(contract) => Some(config.eot().calculate(&contract)),
             _ => None,
         };
-        let state = State {
-            traded_instrument: Some(config.instrument()),
-            eot_date,
-            ..State::default()
-        };
+        let state = State::default_cme_energy(Some(config.instrument()), eot_date);
         Self {
             id,
             config,
@@ -291,6 +309,11 @@ impl<E: EndOfTrading> Strategy<E> {
         if self.state.traded_instrument != Some(md_record.instrument()) {
             return;
         }
+
+        // Ingest data
+        if let Some(bar) = self.state.session_aggregator.update(md_record) {
+            tracing::info!(session_bar=?bar, new_candle_ts=%md_record.timestamp(), "session_end");
+        };
 
         let current_position = *self
             .desired
