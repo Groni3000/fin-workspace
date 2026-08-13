@@ -2,12 +2,13 @@ use chrono::{
     DateTime, Datelike, LocalResult, NaiveDate, NaiveTime, TimeDelta, TimeZone, Timelike, Utc,
 };
 use chrono_tz::Tz;
+use serde::{Deserialize, Serialize};
 use tradeprim::price::Price;
 
 use crate::market_data::{Candle, RelevantPrice, Timestamped};
 
 /// Aggregated OHLCV. `ts` is the bucket start.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Bar {
     /// Bucket start
     ts: DateTime<Utc>,
