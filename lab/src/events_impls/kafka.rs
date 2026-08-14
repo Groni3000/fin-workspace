@@ -123,14 +123,8 @@ where
     }
 
     fn submit(&mut self, req: Request) {
-        match req {
-            Request::SendOrder(order) => {
-                let mut scheduler = Scheduler::new(&mut self.heap, &mut self.seq);
-                self.exec.push(order, self.now, &mut scheduler);
-            }
-            Request::CancelOrder(_order_id) => {}
-            Request::Snapshot => {}
-        }
+        let mut scheduler = Scheduler::new(&mut self.heap, &mut self.seq);
+        self.exec.on_request(self.now, req, &mut scheduler);
     }
 }
 

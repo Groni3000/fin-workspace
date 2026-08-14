@@ -61,6 +61,8 @@ fn main() {
                 MarketExecutor::new(
                     Duration::from_millis(250).as_nanos() as u64,
                     Duration::from_secs(1).as_nanos() as u64,
+                    Duration::from_millis(250).as_nanos() as u64,
+                    Duration::from_millis(250).as_nanos() as u64,
                 ),
             );
             let rms = rms_from_args();
@@ -103,6 +105,8 @@ fn main() {
                 MarketExecutor::new(
                     Duration::from_millis(250).as_nanos() as u64,
                     Duration::from_secs(1).as_nanos() as u64,
+                    Duration::from_millis(250).as_nanos() as u64,
+                    Duration::from_millis(250).as_nanos() as u64,
                 ),
             );
             let rms = rms_from_args();
@@ -153,6 +157,8 @@ fn main() {
                 MarketExecutor::new(
                     Duration::from_millis(250).as_nanos() as u64,
                     Duration::from_secs(1).as_nanos() as u64,
+                    Duration::from_millis(250).as_nanos() as u64,
+                    Duration::from_millis(250).as_nanos() as u64,
                 ),
             );
             let rms = rms_from_args();
