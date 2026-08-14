@@ -11,9 +11,10 @@ use crate::{
     market_data::{Instrumented, RelevantPrice},
 };
 
-/// Fills everything at last known price at once.
-///
-/// Supports only Market orders, no TiF checks
+/// Simplest executor:
+///     * Accepts market orders only
+///     * Every fill is fully executed at the last known price
+///     * Constant ack/fill latency
 pub struct MarketExecutor {
     unack_orders: HashMap<OrderId, Order<New>>,
     working_orders: Vec<Order<Working>>,
