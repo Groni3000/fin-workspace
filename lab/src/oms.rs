@@ -43,7 +43,7 @@ impl Oms {
             Kind::Fill(f) => {
                 self.on_fill(f, pf);
             }
-            Kind::Reject(id) => {
+            Kind::Reject(id, _reason) => {
                 self.on_reject(id, pf);
             }
             Kind::CancelResponse(id, success) => {

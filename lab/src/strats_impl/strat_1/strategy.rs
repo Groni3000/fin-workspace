@@ -135,7 +135,7 @@ impl<E: EndOfTrading> Strategy<E> {
             Kind::Ack(_order_id) => {
                 // This strategy does not require specific actions of Ack.
             }
-            Kind::Reject(_order_id) => {
+            Kind::Reject(_order_id, _reason) => {
                 // This strategy does not require specific actions of Reject.
             }
             Kind::CancelResponse(_order_id, true) => {

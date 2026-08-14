@@ -8,7 +8,7 @@ use oms::{
 };
 
 use crate::{
-    event::{Kind, Scheduler},
+    event::{Kind, RejectReason, Scheduler},
     market_data::{Instrumented, RelevantPrice},
 };
 
@@ -17,7 +17,9 @@ use crate::{
 ///     * Every fill is fully executed at the last known price
 ///     * Constant ack/fill/cancel/reject latency
 pub struct MarketExecutor {
-    unack_orders: HashMap<OrderId, Order<New>>,
+    /// Executor got an order, yet it's not tradable yet. May be rejected.
+    pending_orders: HashMap<OrderId, Order<New>>,
+    /// Executor is trying to fill these orders.
     working_orders: Vec<Order<Working>>,
     ack_latency: u64,
     fill_latency: u64,
@@ -33,7 +35,7 @@ impl MarketExecutor {
         reject_latency: u64,
     ) -> Self {
         Self {
-            unack_orders: HashMap::new(),
+            pending_orders: HashMap::new(),
             working_orders: Vec::new(),
             ack_latency,
             fill_latency,
@@ -42,8 +44,8 @@ impl MarketExecutor {
         }
     }
 
-    pub fn unack_orders(&self) -> &HashMap<OrderId, Order<New>> {
-        &self.unack_orders
+    pub fn pending_orders(&self) -> &HashMap<OrderId, Order<New>> {
+        &self.pending_orders
     }
 
     pub fn working_orders(&self) -> &[Order<Working>] {
@@ -62,13 +64,24 @@ impl MarketExecutor {
     /// Schedules acknowledgment.
     pub fn push<M>(&mut self, order: Order<New>, timestamp: i64, scheduler: &mut Scheduler<'_, M>) {
         if order.order_type() != &OrderType::Market {
-            self.reject(order.order_id(), timestamp, scheduler);
+            self.reject(
+                order.order_id(),
+                RejectReason::UnsupportedOrderType(*order.order_type()),
+                timestamp,
+                scheduler,
+            );
             return;
         }
-        if self.unack_orders.contains_key(&order.order_id()) {
-            self.reject(order.order_id(), timestamp, scheduler);
+        if self.pending_orders.contains_key(&order.order_id()) {
+            self.reject(
+                order.order_id(),
+                RejectReason::DuplicateOrderId,
+                timestamp,
+                scheduler,
+            );
             return;
         }
+        self.pending_orders.insert(order.order_id(), order);
         self.acknowledge(order.order_id(), timestamp, scheduler);
     }
 
@@ -89,8 +102,8 @@ impl MarketExecutor {
         timestamp: i64,
         scheduler: &mut Scheduler<'_, M>,
     ) {
-        // If the order is in unack_orders or working_orders, schedule response with `true`
-        if self.unack_orders.contains_key(&order_id)
+        // If the order is in pending_orders or working_orders, schedule response with `true`
+        if self.pending_orders.contains_key(&order_id)
             || self
                 .working_orders()
                 .iter()
@@ -103,7 +116,7 @@ impl MarketExecutor {
             );
             return;
         }
-        // If the order is not in unack_orders or working_orders, it's already been cancelled or filled.
+        // If the order is not in pending_orders or working_orders, it's already been cancelled or filled.
         // Schedule response with `false`
         scheduler.push(
             timestamp + self.cancel_latency as i64,
@@ -115,12 +128,13 @@ impl MarketExecutor {
     pub fn reject<M>(
         &mut self,
         order_id: OrderId,
+        reason: RejectReason,
         timestamp: i64,
         scheduler: &mut Scheduler<'_, M>,
     ) {
         scheduler.push(
             timestamp + self.reject_latency as i64,
-            Kind::Reject(order_id),
+            Kind::Reject(order_id, reason),
         )
     }
 
@@ -154,7 +168,7 @@ impl MarketExecutor {
 impl MarketExecutor {
     /// On arrival of an acknowledgment, moves the order to the working orders.
     pub fn on_ack(&mut self, order_id: &OrderId) {
-        if let Some(order) = self.unack_orders.remove(order_id) {
+        if let Some(order) = self.pending_orders.remove(order_id) {
             self.working_orders.push(order.into_working());
         }
     }
@@ -166,14 +180,25 @@ impl MarketExecutor {
             .retain(|order| order.order_id() != order_id);
     }
 
-    pub fn on_reject(&mut self, order_id: &OrderId) {
-        match self.unack_orders.remove(order_id) {
-            // Successfully removed from unack_orders, no need to remove from working_orders
+    pub fn on_reject(&mut self, order_id: &OrderId, reason: &RejectReason) {
+        match reason {
+            // Never was in pending orders
+            RejectReason::UnsupportedOrderType(_ord_type) => {
+                return;
+            }
+            // Never was in pending orders
+            RejectReason::DuplicateOrderId => {
+                return;
+            }
+            // Live reason
+            RejectReason::Venue(_str_reason) => {}
+        }
+        match self.pending_orders.remove(order_id) {
+            // Successfully removed from pending_orders, no need to remove from working_orders
             Some(_) => {}
-            // Order was not found in unack_orders, remove from working_orders
+            // Order was not found in pending_orders
             None => {
-                self.working_orders
-                    .retain(|order| order.order_id() != *order_id);
+                unreachable!("Order not found in pending_orders: {:?}", order_id)
             }
         }
     }
@@ -184,6 +209,6 @@ impl MarketExecutor {
         }
         self.working_orders
             .retain(|order| &order.order_id() != order_id);
-        self.unack_orders.remove(order_id);
+        self.pending_orders.remove(order_id);
     }
 }

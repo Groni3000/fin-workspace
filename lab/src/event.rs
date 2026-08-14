@@ -3,7 +3,7 @@ use std::{cmp::Reverse, collections::BinaryHeap};
 use oms::{
     OrderId,
     fill::Fill,
-    order::{New, Order},
+    order::{New, Order, OrderType},
 };
 
 #[derive(Debug)]
@@ -118,10 +118,18 @@ pub enum Kind<R> {
     FeedError(Box<dyn std::error::Error + Send>),
     Ack(OrderId),
     Fill(Fill),
-    Reject(OrderId),
+    Reject(OrderId, RejectReason),
     CancelResponse(OrderId, bool),
     // Timer(TimerKind),
     // Operator(Command),
+}
+
+#[derive(Debug)]
+pub enum RejectReason {
+    UnsupportedOrderType(OrderType),
+    DuplicateOrderId,
+    /// Free text for a live trading.
+    Venue(String),
 }
 
 #[derive(Debug)]

@@ -29,7 +29,7 @@ impl Executor for MarketExecutor {
             Kind::MarketData(md_record) => self.on_record(md_record, event.ts(), scheduler),
             Kind::Ack(order_id) => self.on_ack(order_id),
             Kind::Fill(fill) => self.on_fill(fill),
-            Kind::Reject(order_id) => self.on_reject(order_id),
+            Kind::Reject(order_id, reason) => self.on_reject(order_id, reason),
             Kind::CancelResponse(order_id, ok) => self.on_cancel(order_id, ok),
             Kind::FeedError(_) => {}
         }
