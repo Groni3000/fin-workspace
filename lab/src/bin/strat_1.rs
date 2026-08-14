@@ -51,7 +51,7 @@ fn main() {
                 .unwrap()
                 .peekable();
             let mut pf = Portfolio::new();
-            let mut oms = Oms::new(HashMap::default(), HashMap::default());
+            let mut oms = Oms::default();
             let mut event_queue = FrdEventQueue::new(0, 0, md);
             let rms = rms_from_args();
 
@@ -85,7 +85,7 @@ fn main() {
 
             let md = init_kafka_md(shutdown, init_futures_contract, &listing).peekable();
             let mut pf = Portfolio::new();
-            let mut oms = Oms::new(HashMap::default(), HashMap::default());
+            let mut oms = Oms::default();
             let mut event_queue = KafkaEventQueue::new(0, 0, md);
             let rms = rms_from_args();
 
@@ -127,7 +127,7 @@ fn main() {
 
             let md = init_kafka_merged_md(shutdown, init_futures_contract, &listing).peekable();
             let mut pf = Portfolio::new();
-            let mut oms = Oms::new(HashMap::default(), HashMap::default());
+            let mut oms = Oms::default();
             let mut event_queue = KafkaEventQueue::new(0, 0, md);
             let rms = rms_from_args();
 

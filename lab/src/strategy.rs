@@ -49,4 +49,8 @@ impl Desired {
     pub fn desired_cancels_mut(&mut self) -> &mut Vec<OrderId> {
         &mut self.desired_cancels
     }
+
+    pub fn desired_protective_orders_mut(&mut self) -> &mut Vec<Order<New>> {
+        &mut self.desired_protective_orders
+    }
 }

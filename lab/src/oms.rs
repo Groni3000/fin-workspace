@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use instrid::instruments::Instrument;
 use oms::{
     OrderId,
     fill::Fill,
-    order::{FillOutcome, New, Order, OrderBuilder, Working},
+    order::{FillOutcome, New, Order, OrderBuilder, OrderType, Working},
 };
 use tradeprim::{Side, quantity::Quantity};
 
@@ -15,17 +15,24 @@ use crate::{
     strategy::Desired,
 };
 
+#[derive(Default)]
 pub struct Oms {
     unacked: HashMap<OrderId, Order<New>>,
     working: HashMap<OrderId, Order<Working>>,
+    pending_cancels: HashSet<OrderId>,
 }
 
 impl Oms {
     pub fn new(
         unacked: HashMap<OrderId, Order<New>>,
         working: HashMap<OrderId, Order<Working>>,
+        pending_cancels: HashSet<OrderId>,
     ) -> Self {
-        Self { unacked, working }
+        Self {
+            unacked,
+            working,
+            pending_cancels,
+        }
     }
 
     pub fn on_event<R>(&mut self, event: &Event<R>, pf: &mut Portfolio) {
@@ -39,11 +46,8 @@ impl Oms {
             Kind::Reject(id) => {
                 self.on_reject(id, pf);
             }
-            Kind::CancelResponse(_, false) => {
-                // this oms is not concerned with response to cancels
-            }
-            Kind::CancelResponse(_, true) => {
-                // this oms is not concerned with response to cancels
+            Kind::CancelResponse(id, success) => {
+                self.on_cancel_response(id, success, pf);
             }
             Kind::MarketData(_) => {
                 // This oms is not concerned with market data
@@ -234,9 +238,70 @@ impl Oms {
         if !rms.trading_allowed(pf) {
             return;
         }
+        self.cancel_undesired(desired, sink);
         self.send_desired_orders(desired, pf, rms, sink);
 
         // MUST BE CALLED LAST
         self.send_market_orders(desired, pf, rms, sink);
+    }
+
+    ///
+    fn cancel_undesired<S: EventSource>(
+        &mut self,
+        desired: &HashMap<Instrument, Desired>,
+        sink: &mut S,
+    ) {
+        // all desired orders
+        let wanted: HashSet<OrderId> = desired
+            .values()
+            .flat_map(|d| d.des_ords().iter().map(|o| o.order_id()))
+            .collect();
+
+        // all unack+working orders
+        let live = self
+            .unacked
+            .values()
+            .map(|o| (o.order_id(), *o.order_type()))
+            .chain(
+                self.working
+                    .values()
+                    .map(|o| (o.order_id(), *o.order_type())),
+            );
+
+        for (id, ty) in live.collect::<Vec<_>>() {
+            // Market orders are never desired. Skip or we cancel them.
+            if ty == OrderType::Market || wanted.contains(&id) || !self.pending_cancels.insert(id) {
+                continue;
+            }
+            sink.submit(Request::CancelOrder(id));
+        }
+    }
+
+    fn on_cancel_response(&mut self, id: &OrderId, success: &bool, pf: &mut Portfolio) {
+        if !self.pending_cancels.contains(id) {
+            tracing::warn!(id=?id, succ=?success, "cancel response not found in working cancels");
+            return;
+        };
+        if !success {
+            tracing::warn!(id=?id, succ=?success, "cancel response failed");
+            return;
+        }
+        // We have already checked that it's there and cancel is successful
+        let _ = self.pending_cancels.remove(id);
+
+        // Now we need to get rid of that order in unacked or working
+        let order = self
+            .unacked
+            .remove(id)
+            .map(Order::into_working)
+            // If order was in working
+            .or_else(|| self.working.remove(id));
+
+        match order {
+            Some(working) => pf.push_order(working.into_cancelled()),
+            None => {
+                tracing::warn!(id=?id, "could not find order for a successful cancel");
+            }
+        }
     }
 }
