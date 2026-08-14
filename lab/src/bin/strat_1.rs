@@ -6,6 +6,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
+    time::Duration,
 };
 
 use chrono::Datelike;
@@ -14,6 +15,7 @@ use instrid::instruments::{FuturesContract, Instrument};
 use lab::{
     event::EventSource,
     events_impls::{frd::FrdEventQueue, kafka::KafkaEventQueue},
+    executors::market_only::MarketExecutor,
     formats::{
         custom::{CustomDatabentoAggregatedCandle, CustomDatabentoConsumerMd, KafkaSettings},
         merged_custom_kafka::MergedCandle,
@@ -52,7 +54,15 @@ fn main() {
                 .peekable();
             let mut pf = Portfolio::new();
             let mut oms = Oms::default();
-            let mut event_queue = FrdEventQueue::new(0, 0, md);
+            let mut event_queue = FrdEventQueue::new(
+                0,
+                0,
+                md,
+                MarketExecutor::new(
+                    Duration::from_millis(250).as_nanos() as u64,
+                    Duration::from_secs(1).as_nanos() as u64,
+                ),
+            );
             let rms = rms_from_args();
 
             tracing::info!(strategy = strategy.id(), "backtest start");
@@ -86,7 +96,15 @@ fn main() {
             let md = init_kafka_md(shutdown, init_futures_contract, &listing).peekable();
             let mut pf = Portfolio::new();
             let mut oms = Oms::default();
-            let mut event_queue = KafkaEventQueue::new(0, 0, md);
+            let mut event_queue = KafkaEventQueue::new(
+                0,
+                0,
+                md,
+                MarketExecutor::new(
+                    Duration::from_millis(250).as_nanos() as u64,
+                    Duration::from_secs(1).as_nanos() as u64,
+                ),
+            );
             let rms = rms_from_args();
 
             let mut i = 0;
@@ -128,7 +146,15 @@ fn main() {
             let md = init_kafka_merged_md(shutdown, init_futures_contract, &listing).peekable();
             let mut pf = Portfolio::new();
             let mut oms = Oms::default();
-            let mut event_queue = KafkaEventQueue::new(0, 0, md);
+            let mut event_queue = KafkaEventQueue::new(
+                0,
+                0,
+                md,
+                MarketExecutor::new(
+                    Duration::from_millis(250).as_nanos() as u64,
+                    Duration::from_secs(1).as_nanos() as u64,
+                ),
+            );
             let rms = rms_from_args();
 
             let mut i = 0;

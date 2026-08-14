@@ -245,7 +245,6 @@ impl Oms {
         self.send_market_orders(desired, pf, rms, sink);
     }
 
-    ///
     fn cancel_undesired<S: EventSource>(
         &mut self,
         desired: &HashMap<Instrument, Desired>,

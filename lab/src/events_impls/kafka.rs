@@ -5,34 +5,36 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     event::{Event, EventSource, Kind, Request, Scheduled, Scheduler},
-    executors::market_only::MarketExecutor,
+    executors::Executor,
     formats::{Tagged, custom::CustomDatabentoConsumerMd},
-    market_data::{RelevantPrice, Symboled, Timestamped},
+    market_data::{Candle, Symboled, Timestamped},
 };
 
-pub struct KafkaEventQueue<T>
+pub struct KafkaEventQueue<T, E>
 where
     T: DeserializeOwned + Symboled,
+    E: Executor,
 {
     now: i64,
     seq: u64,
     md: Peekable<CustomDatabentoConsumerMd<T>>,
     heap: BinaryHeap<Reverse<Scheduled<Tagged<T>>>>,
-    exec: MarketExecutor,
+    exec: E,
 }
 
-impl<T> KafkaEventQueue<T>
+impl<T, E> KafkaEventQueue<T, E>
 where
     T: DeserializeOwned + Symboled,
+    E: Executor,
 {
-    pub fn new(now: i64, seq: u64, md: Peekable<CustomDatabentoConsumerMd<T>>) -> Self {
+    pub fn new(now: i64, seq: u64, md: Peekable<CustomDatabentoConsumerMd<T>>, exec: E) -> Self {
         let heap = BinaryHeap::new();
         Self {
             now,
             seq,
             md,
             heap,
-            exec: MarketExecutor::new(250_000_000, 3_000_000_000),
+            exec,
         }
     }
 
@@ -49,9 +51,10 @@ where
     }
 }
 
-impl<T> EventSource for KafkaEventQueue<T>
+impl<T, E> EventSource for KafkaEventQueue<T, E>
 where
-    T: DeserializeOwned + Symboled + Timestamped + Debug + RelevantPrice,
+    T: DeserializeOwned + Symboled + Timestamped + Debug + Candle,
+    E: Executor,
 {
     type Record = Tagged<T>;
 
