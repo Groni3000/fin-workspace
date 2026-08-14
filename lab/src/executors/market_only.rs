@@ -14,14 +14,14 @@ use crate::{
 /// Fills everything at last known price at once.
 ///
 /// Supports only Market orders, no TiF checks
-pub struct SingleInstrumentOnlyMarketExecutor {
+pub struct MarketExecutor {
     unack_orders: HashMap<OrderId, Order<New>>,
     working_orders: Vec<Order<Working>>,
     ack_latency: u64,
     fill_latency: u64,
 }
 
-impl SingleInstrumentOnlyMarketExecutor {
+impl MarketExecutor {
     pub fn new(ack_latency: u64, fill_latency: u64) -> Self {
         Self {
             unack_orders: HashMap::new(),
@@ -101,17 +101,6 @@ impl SingleInstrumentOnlyMarketExecutor {
             false
         });
     }
-
-    // fn match_order<M: RelevantPrice>(&self, md_record: &M, order: &Order<Working>) -> Option<Fill> {
-    //     Some(Fill::new(
-    //         order.order_id(),
-    //         md_record.timestamp(),
-    //         order.instrument(),
-    //         order.side(),
-    //         order.quantity(),
-    //         md_record.last_price(),
-    //     ))
-    // }
 
     pub fn ack_latency(&self) -> u64 {
         self.ack_latency

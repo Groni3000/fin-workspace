@@ -5,7 +5,7 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     event::{Event, EventSource, Kind, Request, Scheduled, Scheduler},
-    executor::SingleInstrumentOnlyMarketExecutor,
+    executors::market_only::MarketExecutor,
     formats::{Tagged, custom::CustomDatabentoConsumerMd},
     market_data::{RelevantPrice, Symboled, Timestamped},
 };
@@ -18,7 +18,7 @@ where
     seq: u64,
     md: Peekable<CustomDatabentoConsumerMd<T>>,
     heap: BinaryHeap<Reverse<Scheduled<Tagged<T>>>>,
-    exec: SingleInstrumentOnlyMarketExecutor,
+    exec: MarketExecutor,
 }
 
 impl<T> KafkaEventQueue<T>
@@ -32,7 +32,7 @@ where
             seq,
             md,
             heap,
-            exec: SingleInstrumentOnlyMarketExecutor::new(250_000_000, 3_000_000_000),
+            exec: MarketExecutor::new(250_000_000, 3_000_000_000),
         }
     }
 

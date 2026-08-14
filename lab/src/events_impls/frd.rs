@@ -4,7 +4,7 @@ use chrono::{DateTime, TimeDelta, Utc};
 
 use crate::{
     event::{Event, EventSource, Kind, Request, Scheduled, Scheduler},
-    executor::SingleInstrumentOnlyMarketExecutor,
+    executors::market_only::MarketExecutor,
     formats::{Tagged, frd::FrdCandle},
     market_data::{FrdFutChainMdReader, Timestamped},
 };
@@ -14,7 +14,7 @@ pub struct FrdEventQueue<'a> {
     seq: u64,
     md: Peekable<FrdFutChainMdReader<'a>>,
     heap: BinaryHeap<Reverse<Scheduled<Tagged<FrdCandle>>>>,
-    exec: SingleInstrumentOnlyMarketExecutor,
+    exec: MarketExecutor,
 }
 
 impl<'a> FrdEventQueue<'a> {
@@ -25,7 +25,7 @@ impl<'a> FrdEventQueue<'a> {
             seq,
             md,
             heap,
-            exec: SingleInstrumentOnlyMarketExecutor::new(250_000_000, 3_000_000_000),
+            exec: MarketExecutor::new(250_000_000, 3_000_000_000),
         }
     }
 
