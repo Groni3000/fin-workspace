@@ -157,7 +157,12 @@ impl Oms {
         sink: &mut S,
     ) {
         for instrument_desired in desired.values() {
-            for order in instrument_desired.des_ords() {
+            // Take all desired + prot_desired orders
+            for order in instrument_desired
+                .des_ords()
+                .iter()
+                .chain(instrument_desired.des_prot_ords())
+            {
                 let order = *order;
                 let id = &order.order_id();
 
@@ -177,6 +182,9 @@ impl Oms {
 
     /// Sends market orders.
     ///
+    /// The formula is:
+    ///     - m = dp + do_q + dpp + dpo_q − wo − rp
+    ///
     /// Must be called the last:
     ///     **all manipulations with desired state and OMS state must be done before this.**
     fn send_market_orders<S: EventSource, R: Rms>(
@@ -190,9 +198,11 @@ impl Oms {
             // Clamp the level, not the delta: clamping `m` would creep past the limit each pass.
             let dp = rms.clamp_position(instr, *want.dp(), pf).as_i64();
             let do_q = self.desired_orders_qty(want.des_ords());
+            let dpp = want.dpp().as_i64();
+            let dpo_q = self.desired_orders_qty(want.des_prot_ords());
             let wo = self.leaves_qty(instr);
             let rp = pf.position(instr).as_i64();
-            let m = dp + do_q - wo - rp;
+            let m = dp + do_q + dpp + dpo_q - wo - rp;
             // skip case
             if m == 0 {
                 continue;
@@ -217,6 +227,8 @@ impl Oms {
                 qty = %order.quantity().qty(),
                 dp = %Quantity::display_raw(dp),
                 do_q = %Quantity::display_raw(do_q),
+                dpp = %Quantity::display_raw(dpp),
+                dpo_q = %Quantity::display_raw(dpo_q),
                 wo = %Quantity::display_raw(wo),
                 rp = %Quantity::display_raw(rp),
                 m = %Quantity::display_raw(m),
@@ -253,7 +265,12 @@ impl Oms {
         // all desired orders
         let wanted: HashSet<OrderId> = desired
             .values()
-            .flat_map(|d| d.des_ords().iter().map(|o| o.order_id()))
+            .flat_map(|d| {
+                d.des_ords()
+                    .iter()
+                    .chain(d.des_prot_ords())
+                    .map(|o| o.order_id())
+            })
             .collect();
 
         // all unack+working orders
@@ -278,15 +295,17 @@ impl Oms {
 
     fn on_cancel_response(&mut self, id: &OrderId, success: &bool, pf: &mut Portfolio) {
         if !self.pending_cancels.contains(id) {
-            tracing::warn!(id=?id, succ=?success, "cancel response not found in working cancels");
+            tracing::warn!(id=?id, succ=?success, "cancel response not found in pending cancels");
             return;
         };
+
+        // We have already checked that it's there and cancel is successful
+        let _ = self.pending_cancels.remove(id);
+
         if !success {
             tracing::warn!(id=?id, succ=?success, "cancel response failed");
             return;
         }
-        // We have already checked that it's there and cancel is successful
-        let _ = self.pending_cancels.remove(id);
 
         // Now we need to get rid of that order in unacked or working
         let order = self

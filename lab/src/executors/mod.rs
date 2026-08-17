@@ -3,6 +3,12 @@ pub mod mkt_stp;
 
 use crate::{
     event::{Event, Kind, Request, Scheduler},
+    // Each executor concrete impl *should be* a superset of previous one.
+    // Most of the code *should be* copy-pasted. It's a sign of success, not a bad design.
+    //
+    // Once I'm confident enough that those executors are basically supersets of previous,
+    // more simple ones, I can entirely drop predecessors or leave them as is because they
+    // may flag more clearly strategy intention to the user.
     executors::{market_only::MarketExecutor, mkt_stp::MarketStopExecutor},
     market_data::{Candle, Instrumented},
 };
@@ -53,6 +59,14 @@ impl Executor for MarketStopExecutor {
         event: &Event<M>,
         scheduler: &mut Scheduler<'_, M>,
     ) {
+        match event.kind() {
+            Kind::MarketData(md_record) => self.on_record(md_record, event.ts(), scheduler),
+            Kind::Ack(order_id) => self.on_ack(order_id),
+            Kind::Fill(fill) => self.on_fill(fill),
+            Kind::Reject(order_id, reason) => self.on_reject(order_id, reason),
+            Kind::CancelResponse(order_id, ok) => self.on_cancel(order_id, ok),
+            Kind::FeedError(_) => {}
+        }
     }
     fn on_request<M>(
         &mut self,
@@ -60,5 +74,10 @@ impl Executor for MarketStopExecutor {
         request: Request,
         scheduler: &mut Scheduler<'_, M>,
     ) {
+        match request {
+            Request::SendOrder(order) => self.push(order, timestamp, scheduler),
+            Request::CancelOrder(order_id) => self.cancel(order_id, timestamp, scheduler),
+            Request::Snapshot => {}
+        }
     }
 }

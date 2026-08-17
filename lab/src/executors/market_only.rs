@@ -102,25 +102,15 @@ impl MarketExecutor {
         timestamp: i64,
         scheduler: &mut Scheduler<'_, M>,
     ) {
-        // If the order is in pending_orders or working_orders, schedule response with `true`
-        if self.pending_orders.contains_key(&order_id)
-            || self
-                .working_orders()
-                .iter()
-                .find(|o| o.order_id() == order_id)
-                .is_some()
-        {
-            scheduler.push(
-                timestamp + self.cancel_latency as i64,
-                Kind::CancelResponse(order_id, true),
-            );
-            return;
-        }
-        // If the order is not in pending_orders or working_orders, it's already been cancelled or filled.
-        // Schedule response with `false`
+        let existed = self.pending_orders.remove(&order_id).is_some();
+        let existed = existed || {
+            let n = self.working_orders.len();
+            self.working_orders.retain(|o| o.order_id() != order_id);
+            self.working_orders.len() != n
+        };
         scheduler.push(
             timestamp + self.cancel_latency as i64,
-            Kind::CancelResponse(order_id, false),
+            Kind::CancelResponse(order_id, existed),
         );
     }
 
@@ -203,12 +193,6 @@ impl MarketExecutor {
         }
     }
 
-    pub fn on_cancel(&mut self, order_id: &OrderId, ok: &bool) {
-        if !ok {
-            return;
-        }
-        self.working_orders
-            .retain(|order| &order.order_id() != order_id);
-        self.pending_orders.remove(order_id);
-    }
+    /// No-op, - venue has already cancelled an order
+    pub fn on_cancel(&mut self, _order_id: &OrderId, _ok: &bool) {}
 }

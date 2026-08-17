@@ -53,4 +53,14 @@ impl Desired {
     pub fn desired_protective_orders_mut(&mut self) -> &mut Vec<Order<New>> {
         &mut self.desired_protective_orders
     }
+
+    /// Sets (overwrites) the desired protected position to the given position.
+    pub fn set_desired_protected_position(&mut self, desired_protected_position: Position) {
+        self.desired_protected_position = desired_protected_position;
+    }
+
+    /// Sets (overwrites) the desired position to the given position.
+    pub fn set_desired_position(&mut self, desired_position: Position) {
+        self.desired_position = desired_position;
+    }
 }
