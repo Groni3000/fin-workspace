@@ -167,11 +167,7 @@ impl Oms {
     ) {
         for instrument_desired in desired.values() {
             // Take all desired + prot_desired orders
-            for order in instrument_desired
-                .des_ords()
-                .iter()
-                .chain(instrument_desired.des_prot_ords())
-            {
+            for order in instrument_desired.des_ords().iter() {
                 let order = *order;
                 let id = &order.order_id();
 
@@ -191,9 +187,6 @@ impl Oms {
 
     /// Sends market orders.
     ///
-    /// The formula is:
-    ///     - m = dp + do_q + dpp + dpo_q − wo − rp
-    ///
     /// Must be called the last:
     ///     **all manipulations with desired state and OMS state must be done before this.**
     fn send_market_orders<S: EventSource, R: Rms>(
@@ -204,14 +197,26 @@ impl Oms {
         sink: &mut S,
     ) {
         for (instr, want) in desired {
-            // Clamp the level, not the delta: clamping `m` would creep past the limit each pass.
-            let dp = rms.clamp_position(instr, *want.dp(), pf).as_i64();
-            let do_q = self.desired_orders_qty(want.des_ords());
-            let dpp = want.dpp().as_i64();
-            let dpo_q = self.desired_orders_qty(want.des_prot_ords());
-            let wo = self.leaves_qty(instr);
-            let rp = pf.position(instr).as_i64();
-            let m = dp + do_q + dpp + dpo_q - wo - rp;
+            let dp_raw = rms.clamp_position(instr, *want.dp(), pf);
+            let rp_raw = pf.position(instr);
+
+            let dp = dp_raw.as_i64();
+            let mkt_wo_l_q = self
+                .unacked
+                .values()
+                .filter(|o| &o.instrument() == instr && o.order_type() == &OrderType::Market)
+                .map(|o| o.side().as_i64() * o.quantity().value() as i64)
+                .sum::<i64>()
+                + self
+                    .working
+                    .values()
+                    .filter(|o| &o.instrument() == instr && o.order_type() == &OrderType::Market)
+                    .map(|o| o.side().as_i64() * o.state().leaves().value() as i64)
+                    .sum::<i64>();
+            let rp = rp_raw.as_i64();
+
+            let m = dp - (mkt_wo_l_q + rp);
+            // let _ = dbg!(dp, mkt_wo_l_q, rp, m);
             // skip case
             if m == 0 {
                 continue;
@@ -235,10 +240,6 @@ impl Oms {
                 side = ?side,
                 qty = %order.quantity().qty(),
                 dp = %Quantity::display_raw(dp),
-                do_q = %Quantity::display_raw(do_q),
-                dpp = %Quantity::display_raw(dpp),
-                dpo_q = %Quantity::display_raw(dpo_q),
-                wo = %Quantity::display_raw(wo),
                 rp = %Quantity::display_raw(rp),
                 m = %Quantity::display_raw(m),
                 "send market order"
@@ -274,12 +275,7 @@ impl Oms {
         // all desired orders
         let wanted: HashSet<OrderId> = desired
             .values()
-            .flat_map(|d| {
-                d.des_ords()
-                    .iter()
-                    .chain(d.des_prot_ords())
-                    .map(|o| o.order_id())
-            })
+            .flat_map(|d| d.des_ords().iter().map(|o| o.order_id()))
             .collect();
 
         // all unack+working orders

@@ -1,11 +1,20 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
+use chrono::DateTime;
 use instrid::{
     asset::{Asset, AssetClass},
     instruments::{Instrument, Stock},
     mic::Mic,
 };
-use oms::order::{New, Order, OrderBuilder, OrderType, Working};
+use lab::{
+    event::{Event, EventSource, Request},
+    oms::Oms,
+    portfolio::Portfolio,
+};
+use oms::{
+    fill::Fill,
+    order::{New, Order, OrderBuilder, OrderType, Working},
+};
 use tradeprim::{
     Side,
     currency::Currency,
@@ -13,6 +22,27 @@ use tradeprim::{
     price::Price,
     quantity::Quantity,
 };
+
+#[derive(Default)]
+struct TestSink {
+    sent: Vec<Request>,
+}
+
+impl TestSink {
+    fn new() -> Self {
+        Self { sent: Vec::new() }
+    }
+}
+
+impl EventSource for TestSink {
+    type Record = ();
+    fn next_event(&mut self) -> Option<Event<()>> {
+        None
+    }
+    fn submit(&mut self, req: Request) {
+        self.sent.push(req);
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct Desired {
@@ -94,64 +124,138 @@ fn build_lmt(instrument: Instrument, qty: NonZeroQuantity, px: Price) -> Order<N
         .build()
 }
 
-fn build_mkt(instrument: Instrument, qty: NonZeroQuantity) -> Order<New> {
-    OrderBuilder::new(instrument, Side::Buy, qty)
+fn build_mkt(instrument: Instrument, qty: NonZeroQuantity, side: Side) -> Order<New> {
+    OrderBuilder::new(instrument, side, qty)
         .verify()
         .expect("Limit order with all other default values must be ok to build")
         .build()
 }
 
+fn setup() -> (Oms, Portfolio, TestSink) {
+    (
+        Oms::new(HashMap::default(), HashMap::default(), HashSet::default()),
+        Portfolio::new(),
+        TestSink::new(),
+    )
+}
+
+fn part_eq<T>(order_1: &Order<T>, order_2: &Order<T>) -> bool {
+    order_1.instrument() == order_2.instrument()
+        && order_1.order_type() == order_2.order_type()
+        && order_1.side() == order_2.side()
+        && order_1.quantity() == order_2.quantity()
+        && order_1.time_in_force() == order_2.time_in_force()
+}
+
+fn build_fill(order: &Order<Working>, q: NonZeroQuantity, px: Price) -> Fill {
+    Fill::new(
+        order.order_id(),
+        DateTime::from_timestamp_nanos(0),
+        order.instrument(),
+        order.side(),
+        q,
+        px,
+    )
+}
+
 mod dp {
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
 
-    use instrid::instruments::Instrument;
-    use oms::order::{Order, Working};
-    use tradeprim::position::Position;
+    use lab::{event::Request, oms::Oms, rms::NaiveRms, strategy::Desired};
+    use oms::order::FillOutcome;
+    use tradeprim::{Side, position::Position};
 
-    use crate::{Desired, nz_qty, reconcile, spy};
+    use crate::{build_fill, build_mkt, nz_qty, part_eq, px, setup, spy};
+    use std::assert_matches;
 
     /// Desired = zero, working = zero, real = zero
     ///
     /// Expected: no market order qty to be sent.
     #[test]
     fn simple_flat() {
+        let (mut oms, portfolio, mut sink) = setup();
         let instrument = spy();
-        let mut desired = Desired::new();
+        let rms = NaiveRms;
+        let desired = HashMap::from_iter([(instrument, Desired::new())]);
 
-        // Flat means we want to be flat
-        desired.desired_position = Position::Flat;
-        // No working orders
-        let working: HashMap<Instrument, Vec<Order<Working>>> = HashMap::default();
-        // No real positions
-        let real_positions: HashMap<Instrument, Position> = HashMap::default();
-        // Expect no market orders to be reconciled
-        let m_ords_qty = reconcile(instrument, &desired, &working, &real_positions);
-        assert_eq!(m_ords_qty, 0);
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+
+        assert!(sink.sent.is_empty());
     }
 
-    /// Desired: 1 Pos
+    /// Desired: N Pos
     /// Working: Zero
     /// Real: Zero
     ///
     /// Expected: make a market order with desired qty
     #[test]
     fn send_market() {
+        let (mut oms, portfolio, mut sink) = setup();
         let instrument = spy();
-        let mut desired = Desired::new();
+        let rms = NaiveRms;
+        let mut desired = HashMap::from_iter([(instrument, Desired::new())]);
 
-        // Set desired position
+        // Desire a position
         let q = nz_qty("16");
-        desired.desired_position = Position::Long(q);
+        let side = Side::Buy;
+        desired
+            .get_mut(&instrument)
+            .expect("should have instrument")
+            .set_desired_position(Position::Long(q));
 
-        // Nothing in working
-        let working: HashMap<Instrument, Vec<Order<Working>>> = HashMap::default();
-        // No real positions
-        let real_positions: HashMap<Instrument, Position> = HashMap::default();
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
 
-        // Expect to send a market order with respect to its sign
-        let m_ords_raw_qty = reconcile(instrument, &desired, &working, &real_positions);
-        assert!(m_ords_raw_qty.is_positive());
-        assert_eq!(m_ords_raw_qty.unsigned_abs(), q.value());
+        assert_eq!(sink.sent.len(), 1);
+        let expected = build_mkt(instrument, q, side);
+        assert_matches!(sink.sent[0], Request::SendOrder(order) if part_eq(&order, &expected));
+    }
+
+    /// Send market, partial fill, no new orders expected
+    #[test]
+    fn send_market_part_fill_no_op() {
+        let (mut oms, mut portfolio, mut sink) = setup();
+        let instrument = spy();
+        let rms = NaiveRms;
+        let mut desired = HashMap::from_iter([(instrument, Desired::new())]);
+
+        // Desire a position
+        let q = nz_qty("16");
+        let side = Side::Buy;
+        desired
+            .get_mut(&instrument)
+            .expect("should have instrument")
+            .set_desired_position(Position::Long(q));
+
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+
+        assert_eq!(sink.sent.len(), 1, "{:?}", sink.sent);
+        let expected = build_mkt(instrument, q, side);
+        assert_matches!(sink.sent[0], Request::SendOrder(order) if part_eq(&order, &expected));
+
+        // Partial fill
+        let order_new = match sink.sent[0] {
+            Request::SendOrder(o) => o,
+            _ => unreachable!(),
+        };
+        let fill_q = nz_qty("10");
+        let fill_px = px("100");
+        let fill = build_fill(&order_new.into_working(), fill_q, fill_px);
+        portfolio.push_fill(fill);
+        assert!(
+            portfolio.position(&instrument) == &Position::Long(fill_q),
+            "{}",
+            portfolio.position(&instrument)
+        );
+        let FillOutcome::Partial(working) = order_new.into_working().apply_fill(&fill) else {
+            panic!("16 minus 10 should be partial")
+        };
+        let oms_working = HashMap::from([(order_new.order_id(), working)]);
+        let mut oms = Oms::new(HashMap::default(), oms_working, HashSet::default());
+
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+
+        // No new orders were send
+        assert_eq!(sink.sent.len(), 1, "{:#?}", sink.sent);
     }
 }
 
