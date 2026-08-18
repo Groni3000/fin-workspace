@@ -1,23 +1,23 @@
 use std::collections::HashMap;
 
-use chrono::DateTime;
 use instrid::{
     asset::{Asset, AssetClass},
     instruments::{Instrument, Stock},
     mic::Mic,
 };
-use oms::{
-    fill::Fill,
-    order::{FillOutcome, New, Order, OrderBuilder, OrderType, Working},
+use oms::order::{New, Order, OrderBuilder, OrderType, Working};
+use tradeprim::{
+    Side,
+    currency::Currency,
+    position::{NonZeroQuantity, Position},
+    price::Price,
+    quantity::Quantity,
 };
-use tradeprim::{Side, currency::Currency, position::Position, price::Price, quantity::Quantity};
 
 #[derive(Debug, Default)]
 pub struct Desired {
     desired_position: Position,
     desired_orders: Vec<Order<New>>,
-    desired_protected_position: Position,
-    desired_protective_orders: Vec<Order<New>>,
 }
 
 impl Desired {
@@ -32,14 +32,6 @@ impl Desired {
     pub fn des_ords(&self) -> &Vec<Order<New>> {
         &self.desired_orders
     }
-
-    pub fn dpp(&self) -> &Position {
-        &self.desired_protected_position
-    }
-
-    pub fn des_prot_ords(&self) -> &Vec<Order<New>> {
-        &self.desired_protective_orders
-    }
 }
 
 fn spy() -> Instrument {
@@ -51,7 +43,6 @@ fn spy() -> Instrument {
     ))
 }
 
-// M = dp + sum(des_ords) + (dpp + sum(des_prot_ords)) - sum(wo_l_q) - rp
 fn reconcile(
     instrument: Instrument,
     desired: &Desired,
@@ -60,226 +51,167 @@ fn reconcile(
 ) -> i64 {
     let ev = vec![];
 
-    let dp = desired.dp();
-    let des_ords = desired.des_ords();
-    let dpp = desired.dpp();
-    let des_prot_ords = desired.des_prot_ords();
-    let wo_l_q = working.get(&instrument).unwrap_or(&ev);
-    let rp = real_positions.get(&instrument).unwrap_or(&Position::Flat);
+    let dp_raw = desired.dp();
+    let wo_l_q_raw = working.get(&instrument).unwrap_or(&ev);
+    let rp_raw = real_positions.get(&instrument).unwrap_or(&Position::Flat);
 
-    let dp_raw = dp.as_i64();
-    let des_ords_raw = des_ords
+    let dp = dp_raw.as_i64();
+    let mkt_wo_l_q = wo_l_q_raw
         .iter()
-        .map(|o| o.side().as_i64() * o.quantity().value() as i64)
-        .sum::<i64>();
-    let des_prot_ords_raw = des_prot_ords
-        .iter()
-        .map(|o| o.side().as_i64() * o.quantity().value() as i64)
-        .sum::<i64>();
-    let wo_l_q_raw = wo_l_q
-        .iter()
+        .filter(|o| o.order_type() == &OrderType::Market)
         .map(|o| o.side().as_i64() * o.state().leaves().value() as i64)
         .sum::<i64>();
-    let rp_raw = rp.as_i64();
+    let rp = rp_raw.as_i64();
 
     let _ = dbg!(
-        dp_raw,
-        des_ords_raw,
-        dpp.as_i64(),
-        des_prot_ords_raw,
-        wo_l_q_raw,
-        rp_raw,
-        "M = dp + sum(des_ords) + (dpp + sum(des_prot_ords)) - sum(wo_l_q) - rp"
+        dp,
+        mkt_wo_l_q,
+        rp,
+        dp - (mkt_wo_l_q + rp),
+        "dp - (mkt_wo_l_q + rp)"
     );
 
-    dp_raw + des_ords_raw + (dpp.as_i64() + des_prot_ords_raw) - wo_l_q_raw - rp_raw
+    dp - (mkt_wo_l_q + rp)
 }
 
-/// Desired = zero, working = zero, real = zero
-///
-/// Expected: no market order qty to be sent.
-#[test]
-fn simple_flat() {
-    let instrument = spy();
-    let mut desired = Desired::new();
-
-    // Flat means we want to be flat
-    desired.desired_position = Position::Flat;
-    // No working orders
-    let working: HashMap<Instrument, Vec<Order<Working>>> = HashMap::default();
-    // No real positions
-    let real_positions: HashMap<Instrument, Position> = HashMap::default();
-    // Expect no market orders to be reconciled
-    let m_ords_qty = reconcile(instrument, &desired, &working, &real_positions);
-    assert_eq!(m_ords_qty, 0);
+fn qty(q: &str) -> Quantity {
+    Quantity::from_str_unchecked(q)
 }
 
-/// Desired: 1 order (let it be limit)
-/// Working: 1 order (order above, no fills at all, let's pretend it is unack/just ack)
-/// Real: Zero
-///
-/// Expected: Zero - it's working, it's desired, no additional actions are required.
-#[test]
-fn desired_order_that_is_acked_is_no_op() {
-    let instrument = spy();
-    let mut desired = Desired::new();
+fn nz_qty(q: &str) -> NonZeroQuantity {
+    qty(q).non_zero().expect("This should be ok")
+}
 
-    // We have 1 order (it doesn't matter unack or ack, just working)
-    let qty = Quantity::from_str_unchecked("16")
-        .non_zero()
-        .expect("This should be ok");
-    let order_new = OrderBuilder::new(instrument, Side::Buy, qty)
-        .with_order_type(OrderType::Limit(Price::from_str_unchecked("750.32")))
+fn px(p: &str) -> Price {
+    Price::from_str_unchecked(p)
+}
+
+fn build_lmt(instrument: Instrument, qty: NonZeroQuantity, px: Price) -> Order<New> {
+    OrderBuilder::new(instrument, Side::Buy, qty)
+        .with_order_type(OrderType::Limit(px))
         .verify()
         .expect("Limit order with all other default values must be ok to build")
-        .build();
-    let order_working = order_new.into_working();
-    // Flat means we want to be flat
-    desired.desired_position = Position::Flat;
-    desired.desired_orders = vec![order_new];
-    let working: HashMap<Instrument, Vec<Order<Working>>> =
-        HashMap::from([(instrument, vec![order_working])]);
-    // No real positions
-    let real_positions: HashMap<Instrument, Position> = HashMap::default();
-    // Expect no market orders to be reconciled
-    let m_ords_raw_qty = reconcile(instrument, &desired, &working, &real_positions);
-    assert_eq!(m_ords_raw_qty.unsigned_abs(), Quantity::ZERO.value());
+        .build()
 }
 
-/// Desired: 1 order (let it be limit)
-/// Working: 1 order (order above, partially filled)
-/// Real: That partial fill amount
-///
-/// Expected: Zero - it's working, it's desired, no additional actions are required.
-#[test]
-fn desired_order_that_is_part_filled_is_no_op() {
-    let instrument = spy();
-    let mut desired = Desired::new();
-
-    // We have 1 order (it doesn't matter unack or ack, just working)
-    let qty = Quantity::from_str_unchecked("16")
-        .non_zero()
-        .expect("This should be ok");
-    let ord_type = OrderType::Limit(Price::from_str_unchecked("750.32"));
-    let order_new = OrderBuilder::new(instrument, Side::Buy, qty)
-        .with_order_type(ord_type)
+fn build_mkt(instrument: Instrument, qty: NonZeroQuantity) -> Order<New> {
+    OrderBuilder::new(instrument, Side::Buy, qty)
         .verify()
         .expect("Limit order with all other default values must be ok to build")
-        .build();
-    let mut order_working = order_new.into_working();
-    let fill = Fill::new(
-        order_working.order_id(),
-        DateTime::from_timestamp_nanos(1_662_921_288_000_000_000),
-        instrument,
-        order_working.side(),
-        Quantity::ONE.non_zero().expect("One is safe"),
-        match ord_type {
-            OrderType::Limit(price) => price,
-            _ => panic!("This is limit order"),
-        },
-    );
-    order_working = match order_working.apply_fill(&fill) {
-        FillOutcome::Partial(order) => order,
-        FillOutcome::Filled(_) => panic!("Filled should not happen"),
-        FillOutcome::Overfill(_, _) => panic!("Overfill should not happen"),
-    };
-    // Flat means we want to be flat
-    desired.desired_position = Position::Flat;
-    desired.desired_orders = vec![order_new];
-    let working: HashMap<Instrument, Vec<Order<Working>>> =
-        HashMap::from([(instrument, vec![order_working])]);
-    // No real positions
-    let real_positions: HashMap<Instrument, Position> =
-        HashMap::from([(instrument, fill.as_position())]);
-    // Expect no market orders to be reconciled
-    let m_ords_raw_qty = reconcile(instrument, &desired, &working, &real_positions);
-    assert_eq!(m_ords_raw_qty.unsigned_abs(), Quantity::ZERO.value());
+        .build()
 }
 
-/// Desired: 1 Pos
-/// Working: Zero
-/// Real: Zero
-///
-/// Expected: make a market order with desired qty
-#[test]
-fn send_market() {
-    let instrument = spy();
-    let mut desired = Desired::new();
+mod dp {
+    use std::collections::HashMap;
 
-    // We have 1 order (it doesn't matter unack or ack, just working)
-    let qty = Quantity::from_str_unchecked("16")
-        .non_zero()
-        .expect("This should be ok");
-    desired.desired_position = Position::Long(qty);
-    let working: HashMap<Instrument, Vec<Order<Working>>> = HashMap::default();
-    // No real positions
-    let real_positions: HashMap<Instrument, Position> = HashMap::default();
-    let m_ords_raw_qty = reconcile(instrument, &desired, &working, &real_positions);
-    assert!(m_ords_raw_qty.is_positive());
-    assert_eq!(m_ords_raw_qty.unsigned_abs(), qty.value());
+    use instrid::instruments::Instrument;
+    use oms::order::{Order, Working};
+    use tradeprim::position::Position;
+
+    use crate::{Desired, nz_qty, reconcile, spy};
+
+    /// Desired = zero, working = zero, real = zero
+    ///
+    /// Expected: no market order qty to be sent.
+    #[test]
+    fn simple_flat() {
+        let instrument = spy();
+        let mut desired = Desired::new();
+
+        // Flat means we want to be flat
+        desired.desired_position = Position::Flat;
+        // No working orders
+        let working: HashMap<Instrument, Vec<Order<Working>>> = HashMap::default();
+        // No real positions
+        let real_positions: HashMap<Instrument, Position> = HashMap::default();
+        // Expect no market orders to be reconciled
+        let m_ords_qty = reconcile(instrument, &desired, &working, &real_positions);
+        assert_eq!(m_ords_qty, 0);
+    }
+
+    /// Desired: 1 Pos
+    /// Working: Zero
+    /// Real: Zero
+    ///
+    /// Expected: make a market order with desired qty
+    #[test]
+    fn send_market() {
+        let instrument = spy();
+        let mut desired = Desired::new();
+
+        // Set desired position
+        let q = nz_qty("16");
+        desired.desired_position = Position::Long(q);
+
+        // Nothing in working
+        let working: HashMap<Instrument, Vec<Order<Working>>> = HashMap::default();
+        // No real positions
+        let real_positions: HashMap<Instrument, Position> = HashMap::default();
+
+        // Expect to send a market order with respect to its sign
+        let m_ords_raw_qty = reconcile(instrument, &desired, &working, &real_positions);
+        assert!(m_ords_raw_qty.is_positive());
+        assert_eq!(m_ords_raw_qty.unsigned_abs(), q.value());
+    }
 }
 
-/// Desired: 1 protected market order, but ZERO protective orders
-/// Working: zero
-/// Real: zero
-///
-/// Expected: send market order. This should behave as a simple `dp` (desired_position).
-///
-/// BUT. This means you did construct it by hand. Which is not a good choice.
-#[test]
-fn protected_market_with_no_protective_order_behaves_like_simple_desired_position() {
-    let instrument = spy();
-    let mut desired = Desired::new();
+mod d_o {
+    use std::collections::HashMap;
 
-    // We have 1 order (it doesn't matter unack or ack, just working)
-    let qty = Quantity::from_str_unchecked("16")
-        .non_zero()
-        .expect("This should be ok");
-    // Flat means we want to be flat
-    desired.desired_protected_position = Position::Long(qty);
-    let working: HashMap<Instrument, Vec<Order<Working>>> = HashMap::default();
-    // No real positions
-    let real_positions: HashMap<Instrument, Position> = HashMap::default();
-    // Expect no market orders to be reconciled
-    let m_ords_raw_qty = reconcile(instrument, &desired, &working, &real_positions);
-    assert!(m_ords_raw_qty.is_positive());
-    assert_eq!(m_ords_raw_qty.unsigned_abs(), qty.value());
-}
+    use instrid::instruments::Instrument;
+    use oms::order::{Order, Working};
+    use tradeprim::{position::Position, quantity::Quantity};
 
-/// Desired: 1 protective order (in working) with desired negated market order
-/// (not in working, we simulate last step when we send netted desired market order)
-/// Working: desired protective order only
-/// Real: Zero
-///
-/// Expected: send market order for a negated qty
-#[test]
-fn protective_order_sends_market_order_it_protects_and_changes_dpp() {
-    let instrument = spy();
-    let mut desired = Desired::new();
+    use crate::{Desired, build_lmt, nz_qty, px, reconcile, spy};
 
-    // We have 1 order (it doesn't matter unack or ack, just working)
-    let qty = Quantity::from_str_unchecked("16")
-        .non_zero()
-        .expect("This should be ok");
-    let ord_type = OrderType::Limit(Price::from_str_unchecked("750.32"));
-    let order_new = OrderBuilder::new(instrument, Side::Buy, qty)
-        .with_order_type(ord_type)
-        .verify()
-        .expect("Limit order with all other default values must be ok to build")
-        .build();
-    let protective_order = order_new.into_working();
-    desired.desired_protective_orders = vec![order_new];
-    desired.desired_protected_position = match (qty, order_new.side()) {
-        (_, Side::Buy) => Position::Short(qty),
-        (_, Side::Sell) => Position::Long(qty),
-    };
+    /// Desired: 1 order (let it be limit)
+    /// Working: 1 order (order above, no fills at all, let's pretend it is unack/just ack)
+    /// Real: Zero
+    ///
+    /// Expected: Zero - it's working, it's desired, no additional actions are required.
+    #[test]
+    fn desired_order_that_is_acked_is_no_op() {
+        let instrument = spy();
+        let mut desired = Desired::new();
 
-    let working: HashMap<Instrument, Vec<Order<Working>>> =
-        HashMap::from([(instrument, vec![protective_order])]);
-    // No real positions
-    let real_positions: HashMap<Instrument, Position> = HashMap::default();
-    // Expect -qty market orders to be reconciled
-    let m_ords_raw_qty = reconcile(instrument, &desired, &working, &real_positions);
-    assert!(m_ords_raw_qty.is_negative());
-    assert_eq!(m_ords_raw_qty.unsigned_abs(), qty.value());
+        // We have 1 order (it doesn't matter unack or ack, just working)
+        let order_new = build_lmt(instrument, nz_qty("16"), px("750.32"));
+        let order_working = order_new.into_working();
+
+        // Flat means we want to be flat
+        desired.desired_position = Position::Flat;
+        desired.desired_orders = vec![order_new];
+        let working: HashMap<Instrument, Vec<Order<Working>>> =
+            HashMap::from([(instrument, vec![order_working])]);
+        // No real positions
+        let real_positions: HashMap<Instrument, Position> = HashMap::default();
+        // Expect no market orders to be reconciled
+        let m_ords_raw_qty = reconcile(instrument, &desired, &working, &real_positions);
+        assert_eq!(m_ords_raw_qty.unsigned_abs(), Quantity::ZERO.value());
+    }
+
+    /// Desired: 1 order (let it be limit)
+    /// Working: 1 order (order above, partial fill)
+    /// Real: Some qty
+    ///
+    /// Expected: Zero - it's working, it's desired, it changed desired position, no additional actions are required.
+    #[test]
+    fn partial_fill_of_desired_order_self_corrects_desired_position_thus_no_op() {
+        let instrument = spy();
+        let mut desired = Desired::new();
+
+        // We have 1 order (it doesn't matter unack or ack, just working)
+        let order_new = build_lmt(instrument, nz_qty("16"), px("750.32"));
+        let order_working = order_new.into_working();
+        // Flat means we want to be flat
+        desired.desired_position = Position::Flat;
+        desired.desired_orders = vec![order_new];
+        let working: HashMap<Instrument, Vec<Order<Working>>> =
+            HashMap::from([(instrument, vec![order_working])]);
+        // No real positions
+        let real_positions: HashMap<Instrument, Position> = HashMap::default();
+        // Expect no market orders to be reconciled
+        let m_ords_raw_qty = reconcile(instrument, &desired, &working, &real_positions);
+        assert_eq!(m_ords_raw_qty.unsigned_abs(), Quantity::ZERO.value());
+    }
 }
