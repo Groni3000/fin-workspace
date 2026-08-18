@@ -26,6 +26,7 @@ impl Portfolio {
     }
 
     pub fn push_order(&mut self, order: Order<Terminated>) {
+        self.orders_idx.insert(order.order_id(), self.orders.len());
         self.orders.push(order);
     }
 

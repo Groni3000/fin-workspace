@@ -70,7 +70,10 @@ impl Oms {
             .or_else(|| self.working.remove(order_id));
 
         match order {
-            Some(o) => pf.push_order(o.into_rejected()),
+            Some(o) => {
+                self.pending_cancels.remove(&o.order_id());
+                pf.push_order(o.into_rejected());
+            }
             None => tracing::warn!(order_id = ?order_id, "reject for unknown order"),
         }
     }
@@ -111,6 +114,7 @@ impl Oms {
                 FillOutcome::Filled(terminated) => {
                     // push to portfolio
                     pf.push_order(terminated);
+                    self.pending_cancels.remove(&fill.order_id());
                 }
                 FillOutcome::Partial(working) => {
                     // return order to working
@@ -120,6 +124,7 @@ impl Oms {
                     // Order is terminated: it can never fill again. The excess is already in `pf`.
                     tracing::error!(order_id = ?fill.order_id(), excess = %excess.qty(), "overfill");
                     pf.push_order(terminated);
+                    self.pending_cancels.remove(&fill.order_id());
                 }
             },
             // Position still moved, we just have no order to attribute it to.
@@ -137,13 +142,17 @@ impl Oms {
     fn leaves_qty(&self, instrument: &Instrument) -> i64 {
         self.unacked
             .values()
-            .filter(|o| &o.instrument() == instrument)
+            .filter(|o| {
+                &o.instrument() == instrument && !self.pending_cancels.contains(&o.order_id())
+            })
             .map(|o| o.side().as_i64() * o.quantity().value() as i64)
             .sum::<i64>()
             + self
                 .working
                 .values()
-                .filter(|o| &o.instrument() == instrument)
+                .filter(|o| {
+                    &o.instrument() == instrument && !self.pending_cancels.contains(&o.order_id())
+                })
                 .map(|o| o.side().as_i64() * o.state().leaves().value() as i64)
                 .sum::<i64>()
     }
@@ -299,13 +308,13 @@ impl Oms {
             return;
         };
 
-        // We have already checked that it's there and cancel is successful
-        let _ = self.pending_cancels.remove(id);
-
         if !success {
             tracing::warn!(id=?id, succ=?success, "cancel response failed");
             return;
         }
+
+        // We have already checked that it's there and cancel is successful
+        let _ = self.pending_cancels.remove(id);
 
         // Now we need to get rid of that order in unacked or working
         let order = self
