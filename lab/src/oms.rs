@@ -132,31 +132,6 @@ impl Oms {
         }
     }
 
-    fn desired_orders_qty(&self, orders: &[Order<New>]) -> i64 {
-        orders
-            .iter()
-            .map(|o| o.side().as_i64() * o.quantity().value() as i64)
-            .sum()
-    }
-
-    fn leaves_qty(&self, instrument: &Instrument) -> i64 {
-        self.unacked
-            .values()
-            .filter(|o| {
-                &o.instrument() == instrument && !self.pending_cancels.contains(&o.order_id())
-            })
-            .map(|o| o.side().as_i64() * o.quantity().value() as i64)
-            .sum::<i64>()
-            + self
-                .working
-                .values()
-                .filter(|o| {
-                    &o.instrument() == instrument && !self.pending_cancels.contains(&o.order_id())
-                })
-                .map(|o| o.side().as_i64() * o.state().leaves().value() as i64)
-                .sum::<i64>()
-    }
-
     /// Sends desired not-market orders to the OMS and Executor.
     fn send_desired_orders<S: EventSource, R: Rms>(
         &mut self,

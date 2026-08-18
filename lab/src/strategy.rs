@@ -32,4 +32,12 @@ impl Desired {
     pub fn set_desired_position(&mut self, desired_position: Position) {
         self.desired_position = desired_position;
     }
+
+    pub fn set_desired_orders(&mut self, desired_orders: Vec<Order<New>>) {
+        self.desired_orders = desired_orders;
+    }
+
+    pub fn add_desired_position(&mut self, desired_position: Position) {
+        self.desired_position += desired_position;
+    }
 }
