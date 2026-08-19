@@ -123,7 +123,7 @@ mod reconcile {
     use std::collections::HashMap;
 
     use crate::{
-        event::{Event, Kind, Request},
+        event::{Event, Kind, RejectReason, Request},
         oms::tests::{build_lmt, check_oms_state, qty},
         rms::NaiveRms,
         strategy::Desired,
@@ -589,5 +589,71 @@ mod reconcile {
         );
         // nothing filled, so the whole quantity is still outstanding
         assert_eq!(cancelled.state().leaves(), lmt_q.qty(), "{:#?}", portfolio);
+    }
+
+    /// Venue rejects a desired order before it is acked.
+    ///
+    /// Expected: order terminates as `Reject` with full leaves, and the reconcile that follows
+    /// does not resend it even though the strategy still desires it.
+    #[test]
+    fn reject_unacked_desired_order() {
+        let (mut oms, mut portfolio, mut sink) = setup();
+        let instrument = spy();
+        let rms = NaiveRms;
+        let mut desired = HashMap::from_iter([(instrument, Desired::new())]);
+
+        let (lmt_q, lmt_s, lmt_p) = (nz_qty("2"), Side::Buy, px("101"));
+        let lmt = build_lmt(instrument, lmt_q, lmt_p, lmt_s);
+        let id_lmt = lmt.order_id();
+        desired
+            .get_mut(&instrument)
+            .expect("should have instrument")
+            .set_desired_orders(vec![lmt]);
+
+        // 1. Send
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 1, "{:#?}", sink.sent);
+        check_oms_state(&oms, 1, 0, 0);
+
+        // 2. Reject arrives before any ack, `Strategy` has not dropped the order yet
+        oms.on_event(
+            &Event::new(
+                0,
+                Kind::<()>::Reject(
+                    id_lmt,
+                    RejectReason::Venue(
+                        "Trading during non-RTH is not allowed for this order type".into(),
+                    ),
+                ),
+            ),
+            &mut portfolio,
+        );
+        // a terminated id must never be resent
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 1, "{:#?}", sink.sent);
+        check_oms_state(&oms, 0, 0, 0);
+
+        assert!(portfolio.fills().is_empty(), "{:#?}", portfolio);
+        assert_eq!(portfolio.orders().len(), 1, "{:#?}", portfolio);
+        let rejected = &portfolio.orders()[*portfolio
+            .orders_idx()
+            .get(&id_lmt)
+            .expect("rejected order should be indexed")];
+        assert_eq!(
+            rejected.state().reason(),
+            TerminationReason::Reject,
+            "{:#?}",
+            portfolio
+        );
+        assert_eq!(rejected.state().leaves(), lmt_q.qty(), "{:#?}", portfolio);
+
+        // 3. `Strategy` drops it and nothing else happens
+        desired
+            .get_mut(&instrument)
+            .expect("should have instrument")
+            .remove_order(id_lmt);
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 1, "{:#?}", sink.sent);
+        check_oms_state(&oms, 0, 0, 0);
     }
 }
