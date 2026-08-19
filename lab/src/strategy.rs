@@ -1,4 +1,7 @@
-use oms::order::{New, Order};
+use oms::{
+    OrderId,
+    order::{New, Order},
+};
 use tradeprim::position::Position;
 
 #[derive(Debug, Default)]
@@ -39,5 +42,13 @@ impl Desired {
 
     pub fn add_desired_position(&mut self, desired_position: Position) {
         self.desired_position += desired_position;
+    }
+
+    pub fn contains_order(&self, order_id: OrderId) -> bool {
+        self.desired_orders.iter().any(|o| o.order_id() == order_id)
+    }
+
+    pub fn remove_order(&mut self, order_id: OrderId) {
+        self.desired_orders.retain(|o| o.order_id() != order_id);
     }
 }

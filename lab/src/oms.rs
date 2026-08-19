@@ -15,7 +15,7 @@ use crate::{
     strategy::Desired,
 };
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Oms {
     unacked: HashMap<OrderId, Order<New>>,
     working: HashMap<OrderId, Order<Working>>,
@@ -33,6 +33,10 @@ impl Oms {
             working,
             pending_cancels,
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.unacked.is_empty() && self.working.is_empty() && self.pending_cancels.is_empty()
     }
 
     pub fn on_event<R>(&mut self, event: &Event<R>, pf: &mut Portfolio) {
@@ -141,10 +145,14 @@ impl Oms {
         sink: &mut S,
     ) {
         for instrument_desired in desired.values() {
-            // Take all desired + prot_desired orders
             for order in instrument_desired.des_ords().iter() {
                 let order = *order;
                 let id = &order.order_id();
+
+                if pf.orders_idx().contains_key(id) {
+                    tracing::error!(order_id = ?id, "desired order already terminated — strategy failed to clear it");
+                    continue;
+                }
 
                 if self.unacked.contains_key(id) || self.working.contains_key(id) {
                     continue;
@@ -303,3 +311,6 @@ impl Oms {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

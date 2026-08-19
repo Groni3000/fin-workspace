@@ -8,6 +8,7 @@ use oms::{
 };
 use tradeprim::position::Position;
 
+#[derive(Debug)]
 pub struct Portfolio {
     positions: HashMap<Instrument, Position>,
     fills: Vec<Fill>,
