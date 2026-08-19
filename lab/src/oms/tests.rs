@@ -119,7 +119,7 @@ fn check_oms_state(
     );
 }
 
-mod tests {
+mod reconcile {
     use std::collections::HashMap;
 
     use crate::{
@@ -509,5 +509,85 @@ mod tests {
             "{:?}",
             portfolio
         );
+    }
+
+    /// Desired order acked, then dropped by the strategy.
+    ///
+    /// Expected: one cancel regardless of how many reconciles run, order stays live until the
+    /// venue confirms, terminates as `Cancel` with the whole quantity still outstanding.
+    #[test]
+    fn cancel_acked_desired_order() {
+        let (mut oms, mut portfolio, mut sink) = setup();
+        let instrument = spy();
+        let rms = NaiveRms;
+        let mut desired = HashMap::from_iter([(instrument, Desired::new())]);
+        let mut mock_ts = 0;
+
+        let (lmt_q, lmt_s, lmt_p) = (nz_qty("2"), Side::Buy, px("101"));
+        let lmt = build_lmt(instrument, lmt_q, lmt_p, lmt_s);
+        let id_lmt = lmt.order_id();
+        desired
+            .get_mut(&instrument)
+            .expect("should have instrument")
+            .set_desired_orders(vec![lmt]);
+
+        // 1. Send
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 1, "{:#?}", sink.sent);
+        assert_matches!(sink.sent[0], Request::SendOrder(order) if part_eq(&order, &lmt));
+        check_oms_state(&oms, 1, 0, 0);
+
+        // 2. Ack arrived
+        oms.on_event(
+            &Event::new(mock_ts, Kind::<()>::Ack(id_lmt)),
+            &mut portfolio,
+        );
+        mock_ts += 1;
+        // reconcile is no-op
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 1, "{:#?}", sink.sent);
+        check_oms_state(&oms, 0, 1, 0);
+
+        // 3. `Strategy` no longer wants the order
+        desired
+            .get_mut(&instrument)
+            .expect("should have instrument")
+            .remove_order(id_lmt);
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
+        assert_matches!(sink.sent[1], Request::CancelOrder(id) if id == id_lmt);
+        // order is live until the venue confirms
+        check_oms_state(&oms, 0, 1, 1);
+
+        // 4. Further reconciles must not re-request the cancel
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
+        check_oms_state(&oms, 0, 1, 1);
+
+        // 5. Venue confirms the cancel
+        oms.on_event(
+            &Event::new(mock_ts, Kind::<()>::CancelResponse(id_lmt, true)),
+            &mut portfolio,
+        );
+        // reconcile is no-op
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
+        check_oms_state(&oms, 0, 0, 0);
+
+        assert!(portfolio.fills().is_empty(), "{:#?}", portfolio);
+        assert_eq!(portfolio.orders().len(), 1, "{:#?}", portfolio);
+        let cancelled = &portfolio.orders()[*portfolio
+            .orders_idx()
+            .get(&id_lmt)
+            .expect("cancelled order should be indexed")];
+        assert_eq!(
+            cancelled.state().reason(),
+            TerminationReason::Cancel,
+            "{:#?}",
+            portfolio
+        );
+        // nothing filled, so the whole quantity is still outstanding
+        assert_eq!(cancelled.state().leaves(), lmt_q.qty(), "{:#?}", portfolio);
     }
 }
