@@ -871,4 +871,100 @@ mod reconcile {
             portfolio
         );
     }
+
+    /// Venue refuses the cancel: "too late". The order reached a terminal state first.
+    ///
+    /// Mainly occures when we send an order and then immediately cancel it, but venue has already filled
+    /// it before the cancel arrives.
+    ///
+    /// Expected idea: even when we get `CancelResponse(id, false)`, we keep it in pending cancels assuming
+    /// that the only way it can happen - an order is filled.
+    ///
+    /// Why we assume this? Well... The only way to build an order - is to use OrderBuilder. Order does not
+    /// expose OrderId and that id is immutable. We cut off the possibility of a custom OrderId being used.
+    /// Therfore we don't expect any type of Venue response such as `OrderIsNotFound` or something like this.
+    ///
+    /// Yet... It's possible to send order, send cancel and get order is not found when sending order failed/took longer to deliver...
+    /// TODO: I need to think about this...
+    #[test]
+    fn cancel_refused_because_the_order_was_already_filling() {
+        let (mut oms, mut portfolio, mut sink) = setup();
+        let instrument = spy();
+        let rms = NaiveRms;
+        let mut desired = HashMap::from_iter([(instrument, Desired::new())]);
+        let mut mock_ts = 0;
+
+        let q = nz_qty("2");
+        let lmt = build_lmt(instrument, q, px("101"), Side::Buy);
+        let id_lmt = lmt.order_id();
+        desired
+            .get_mut(&instrument)
+            .expect("should have instrument")
+            .set_desired_orders(vec![lmt]);
+
+        // 1. Send
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 1, "{:#?}", sink.sent);
+        check_oms_state(&oms, 1, 0, 0);
+
+        // 2. Ack arrived
+        oms.on_event(
+            &Event::new(mock_ts, Kind::<()>::Ack(id_lmt)),
+            &mut portfolio,
+        );
+        mock_ts += 1;
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 1, "{:#?}", sink.sent);
+        check_oms_state(&oms, 0, 1, 0);
+
+        // 3. `Strategy` drops the order
+        desired
+            .get_mut(&instrument)
+            .expect("should have instrument")
+            .remove_order(id_lmt);
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
+        assert_matches!(sink.sent[1], Request::CancelOrder(id) if id == id_lmt);
+        check_oms_state(&oms, 0, 1, 1);
+
+        // 4. Too late: the order had already filled when the venue read the request
+        oms.on_event(
+            &Event::new(mock_ts, Kind::<()>::CancelResponse(id_lmt, false)),
+            &mut portfolio,
+        );
+        mock_ts += 1;
+        // a `false` is terminal, never retried, however many events go by
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
+        // the order is still on our books: only the fill can resolve it
+        check_oms_state(&oms, 0, 1, 1);
+
+        // 5. The fill the venue was talking about arrives
+        let fill = build_fill(&lmt.into_working(), q, px("101"));
+        oms.on_event(&Event::new(mock_ts, Kind::<()>::Fill(fill)), &mut portfolio);
+        desired
+            .get_mut(&instrument)
+            .expect("should have instrument")
+            .add_desired_position(fill.as_position());
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
+        // the terminating fill drains `pending_cancels` too
+        check_oms_state(&oms, 0, 0, 0);
+
+        assert_eq!(portfolio.fills().len(), 1, "{:#?}", portfolio);
+        assert_eq!(portfolio.orders().len(), 1, "{:#?}", portfolio);
+        let filled = &portfolio.orders()[*portfolio
+            .orders_idx()
+            .get(&id_lmt)
+            .expect("filled order should be indexed")];
+        // the cancel lost the race: the order is Filled, not Cancel
+        assert_eq!(
+            filled.state().reason(),
+            TerminationReason::Filled,
+            "{:#?}",
+            portfolio
+        );
+        assert_eq!(filled.state().leaves(), Quantity::ZERO, "{:#?}", portfolio);
+    }
 }
