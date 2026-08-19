@@ -661,6 +661,13 @@ mod reconcile {
     ///
     /// Expected: the whole reported quantity moves the position, the order terminates as
     /// `Overfilled`, and a strategy that self-corrects `dp` by the *fill* leaves nothing to do.
+    ///
+    /// TLDR:
+    ///
+    ///  Only Strategy decides how to act on overfill of desired order.
+    ///  For example: standard actions like it this test - accept it (with a warning in a log).
+    ///  Or, it can look that there was an overfill and correct desired position by CORRECT amount
+    ///  and Oms will correct position by Market order.
     #[test]
     fn overfill_of_desired_order() {
         let (mut oms, mut portfolio, mut sink) = setup();
@@ -697,7 +704,7 @@ mod reconcile {
         let fill = build_fill(&lmt.into_working(), nz_qty("3"), lmt_p);
         // Oms reacts to it
         oms.on_event(&Event::new(mock_ts, Kind::<()>::Fill(fill)), &mut portfolio);
-        // `Strategy` corrects `dp` by what actually filled, not by the order quantity
+        // Assume that `Strategy` policy is: correct `dp` by what actually filled, not by the order quantity
         let d = desired
             .get_mut(&instrument)
             .expect("should have instrument");
@@ -731,6 +738,135 @@ mod reconcile {
         assert_eq!(
             overfilled.state().leaves(),
             Quantity::ZERO,
+            "{:#?}",
+            portfolio
+        );
+    }
+
+    /// Venue overfills the market order the OMS sent for `dp`.
+    ///
+    /// Expected: no strategy action at all - the next reconcile sees
+    /// `rp` past it and files the opposite market order for the excess.
+    #[test]
+    fn overfill_of_desired_position_self_corrects() {
+        let (mut oms, mut portfolio, mut sink) = setup();
+        let instrument = spy();
+        let rms = NaiveRms;
+        let mut desired = HashMap::from_iter([(instrument, Desired::new())]);
+        let mut mock_ts = 0;
+
+        // Desire a position
+        let q = nz_qty("16");
+        desired
+            .get_mut(&instrument)
+            .expect("should have instrument")
+            .set_desired_position(Position::Long(q));
+
+        // 1. Send
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 1, "{:#?}", sink.sent);
+        assert_matches!(sink.sent[0], Request::SendOrder(order) if part_eq(&order, &build_mkt(instrument, q, Side::Buy)));
+        check_oms_state(&oms, 1, 0, 0);
+
+        let mkt_order_new = match sink.sent[0] {
+            Request::SendOrder(o) => o,
+            _ => unreachable!(),
+        };
+        let id_mkt = mkt_order_new.order_id();
+
+        // 2. Ack arrived
+        oms.on_event(
+            &Event::new(mock_ts, Kind::<()>::Ack(id_mkt)),
+            &mut portfolio,
+        );
+        mock_ts += 1;
+        // reconcile is no-op
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 1, "{:#?}", sink.sent);
+        check_oms_state(&oms, 0, 1, 0);
+
+        // 3. Eighteen fill against an order for sixteen
+        let fill = build_fill(&mkt_order_new.into_working(), nz_qty("18"), px("100"));
+        oms.on_event(&Event::new(mock_ts, Kind::<()>::Fill(fill)), &mut portfolio);
+        mock_ts += 1;
+        // `Strategy` does nothing: a market order never moved `dp`
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+
+        // m = 16 - (0 + 18) = -2
+        assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
+        let expected_correction = build_mkt(instrument, nz_qty("2"), Side::Sell);
+        assert_matches!(sink.sent[1], Request::SendOrder(order) if part_eq(&order, &expected_correction));
+        // overfilled order is gone, correction is unacked
+        check_oms_state(&oms, 1, 0, 0);
+
+        assert_eq!(portfolio.fills().len(), 1, "{:#?}", portfolio);
+        assert_eq!(
+            portfolio.position(&instrument),
+            &fill.as_position(),
+            "{:#?}",
+            portfolio.position(&instrument)
+        );
+        assert_eq!(portfolio.orders().len(), 1, "{:#?}", portfolio);
+        let overfilled = &portfolio.orders()[*portfolio
+            .orders_idx()
+            .get(&id_mkt)
+            .expect("order should be in terminated")];
+        assert_eq!(
+            overfilled.state().reason(),
+            TerminationReason::Overfilled,
+            "{:#?}",
+            portfolio
+        );
+        assert_eq!(
+            overfilled.state().leaves(),
+            Quantity::ZERO,
+            "{:#?}",
+            portfolio
+        );
+
+        let correction_new = match sink.sent[1] {
+            Request::SendOrder(o) => o,
+            _ => unreachable!(),
+        };
+        let id_correction = correction_new.order_id();
+
+        // 4. Ack of the correction arrived
+        oms.on_event(
+            &Event::new(mock_ts, Kind::<()>::Ack(id_correction)),
+            &mut portfolio,
+        );
+        mock_ts += 1;
+        // in-flight correction must not be sent twice: m = 16 - (-2 + 18) = 0
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
+        check_oms_state(&oms, 0, 1, 0);
+
+        // 5. Correction fills
+        let fill_correction = build_fill(&correction_new.into_working(), nz_qty("2"), px("100"));
+        oms.on_event(
+            &Event::new(mock_ts, Kind::<()>::Fill(fill_correction)),
+            &mut portfolio,
+        );
+        // reconcile is no-op: rp is back on dp
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
+        check_oms_state(&oms, 0, 0, 0);
+
+        assert_eq!(portfolio.fills().len(), 2, "{:#?}", portfolio);
+        assert_eq!(
+            portfolio.position(&instrument),
+            &Position::Long(q),
+            "{:#?}",
+            portfolio.position(&instrument)
+        );
+        assert_eq!(portfolio.orders().len(), 2, "{:#?}", portfolio);
+        let corrected = &portfolio.orders()[*portfolio
+            .orders_idx()
+            .get(&id_correction)
+            .expect("correction order should be indexed")];
+        assert_eq!(
+            corrected.state().reason(),
+            TerminationReason::Filled,
             "{:#?}",
             portfolio
         );
