@@ -63,7 +63,7 @@ impl MarketStopExecutor {
     /// Schedules acknowledgment.
     pub fn push<M>(&mut self, order: Order<New>, timestamp: i64, scheduler: &mut Scheduler<'_, M>) {
         match order.order_type() {
-            OrderType::Market | OrderType::Stop(_) => {}
+            OrderType::Market | OrderType::Stop(_) | OrderType::Limit(_) => {}
             _ => {
                 self.reject(
                     order.order_id(),
@@ -158,6 +158,20 @@ impl MarketStopExecutor {
                             return true;
                         }
                         *stp_price.min(&md_record.open())
+                    }
+                },
+                OrderType::Limit(limit_price) => match order.side() {
+                    Side::Buy => {
+                        if md_record.low() > *limit_price {
+                            return true;
+                        }
+                        *limit_price.min(&md_record.open())
+                    }
+                    Side::Sell => {
+                        if md_record.high() < *limit_price {
+                            return true;
+                        }
+                        *limit_price.max(&md_record.open())
                     }
                 },
                 _ => unreachable!("Not supported order type: {}", order.order_type()),
