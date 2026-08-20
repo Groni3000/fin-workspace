@@ -1,5 +1,5 @@
 pub mod market_only;
-pub mod mkt_stp;
+pub mod mkt_stp_lmt;
 
 use crate::{
     event::{Event, Kind, Request, Scheduler},
@@ -9,7 +9,7 @@ use crate::{
     // Once I'm confident enough that those executors are basically supersets of previous,
     // more simple ones, I can entirely drop predecessors or leave them as is because they
     // may flag more clearly strategy intention to the user.
-    executors::{market_only::MarketExecutor, mkt_stp::MarketStopLimitExecutor},
+    executors::{market_only::MarketExecutor, mkt_stp_lmt::MarketStopLimitExecutor},
     market_data::{Candle, Instrumented},
 };
 
