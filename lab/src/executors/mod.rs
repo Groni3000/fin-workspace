@@ -9,7 +9,7 @@ use crate::{
     // Once I'm confident enough that those executors are basically supersets of previous,
     // more simple ones, I can entirely drop predecessors or leave them as is because they
     // may flag more clearly strategy intention to the user.
-    executors::{market_only::MarketExecutor, mkt_stp::MarketStopExecutor},
+    executors::{market_only::MarketExecutor, mkt_stp::MarketStopLimitExecutor},
     market_data::{Candle, Instrumented},
 };
 
@@ -53,7 +53,7 @@ impl Executor for MarketExecutor {
         }
     }
 }
-impl Executor for MarketStopExecutor {
+impl Executor for MarketStopLimitExecutor {
     fn on_event<M: Candle + Instrumented>(
         &mut self,
         event: &Event<M>,

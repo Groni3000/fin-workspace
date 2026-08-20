@@ -17,7 +17,7 @@ use crate::{
 ///     * Accepts market+stop orders only
 ///     * Every fill is fully executed
 ///     * Constant ack/fill/cancel/reject latency
-pub struct MarketStopExecutor {
+pub struct MarketStopLimitExecutor {
     /// Executor got an order, yet it's not tradable yet. May be rejected.
     pending_orders: HashMap<OrderId, Order<New>>,
     /// Executor is trying to fill these orders.
@@ -28,7 +28,7 @@ pub struct MarketStopExecutor {
     reject_latency: u64,
 }
 
-impl MarketStopExecutor {
+impl MarketStopLimitExecutor {
     pub fn new(
         ack_latency: u64,
         fill_latency: u64,
@@ -53,7 +53,7 @@ impl MarketStopExecutor {
 }
 
 // --- Scheduling operations
-impl MarketStopExecutor {
+impl MarketStopLimitExecutor {
     /// Pushes a market or stop order to the executor.
     ///
     /// Rejects the order if:
@@ -202,7 +202,7 @@ impl MarketStopExecutor {
 }
 
 // --- Reactions implementations
-impl MarketStopExecutor {
+impl MarketStopLimitExecutor {
     /// On arrival of an acknowledgment, moves the order to the working orders.
     pub fn on_ack(&mut self, order_id: &OrderId) {
         if let Some(order) = self.pending_orders.remove(order_id) {
