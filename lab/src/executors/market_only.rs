@@ -195,4 +195,7 @@ impl MarketExecutor {
 
     /// No-op, - venue has already cancelled an order
     pub fn on_cancel(&mut self, _order_id: &OrderId, _ok: &bool) {}
+
+    /// No-op, - venue has already expired an order
+    pub fn on_expire(&mut self, _order_id: &OrderId) {}
 }

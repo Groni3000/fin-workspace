@@ -1,5 +1,6 @@
 use std::{cmp::Reverse, collections::BinaryHeap};
 
+use instrid::instruments::Instrument;
 use oms::{
     OrderId,
     fill::Fill,
@@ -120,6 +121,7 @@ pub enum Kind<R> {
     Fill(Fill),
     Reject(OrderId, RejectReason),
     CancelResponse(OrderId, bool),
+    Expired(OrderId, Instrument),
     // Timer(TimerKind),
     // Operator(Command),
 }

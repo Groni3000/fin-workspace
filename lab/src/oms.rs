@@ -53,6 +53,7 @@ impl Oms {
             Kind::CancelResponse(id, success) => {
                 self.on_cancel_response(id, success, pf);
             }
+            Kind::Expired(order_id, _instrument) => self.on_expire(order_id, pf),
             Kind::MarketData(_) => {
                 // This oms is not concerned with market data
             }
@@ -134,6 +135,22 @@ impl Oms {
             // Position still moved, we just have no order to attribute it to.
             None => tracing::warn!(order_id = ?fill.order_id(), "fill for unknown order"),
         }
+    }
+
+    /// Remove expired order from every map and push it to the portfolio in terminated state.
+    fn on_expire(&mut self, order_id: &OrderId, pf: &mut Portfolio) {
+        // First of all - delete from cancels - it's already cancelled by venue
+        self.pending_cancels.remove(order_id);
+
+        // most likely it's in working
+        if let Some(order) = self.working.remove(order_id) {
+            pf.push_order(order.into_expired());
+            return;
+        };
+        if let Some(order) = self.unacked.remove(order_id) {
+            pf.push_order(order.into_working().into_expired());
+            return;
+        };
     }
 
     /// Sends desired not-market orders to the OMS and Executor.

@@ -38,6 +38,7 @@ impl Executor for MarketExecutor {
             Kind::Reject(order_id, reason) => self.on_reject(order_id, reason),
             Kind::CancelResponse(order_id, ok) => self.on_cancel(order_id, ok),
             Kind::FeedError(_) => {}
+            Kind::Expired(order_id, _instrument) => self.on_expire(order_id),
         }
     }
     fn on_request<M>(
@@ -66,6 +67,7 @@ impl Executor for MarketStopLimitExecutor {
             Kind::Reject(order_id, reason) => self.on_reject(order_id, reason),
             Kind::CancelResponse(order_id, ok) => self.on_cancel(order_id, ok),
             Kind::FeedError(_) => {}
+            Kind::Expired(order_id, _instrument) => self.on_expire(order_id),
         }
     }
     fn on_request<M>(

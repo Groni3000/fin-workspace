@@ -4,7 +4,7 @@ use chrono::DateTime;
 use oms::{
     OrderId,
     fill::Fill,
-    order::{New, Order, OrderType, Working},
+    order::{New, Order, OrderType, TimeInForce, Working},
 };
 use tradeprim::{Side, price::Price};
 
@@ -140,6 +140,13 @@ impl MarketStopLimitExecutor {
         scheduler: &mut Scheduler<'_, M>,
     ) {
         self.working_orders.retain(|order| {
+            if Self::is_expired(order, timestamp) {
+                scheduler.push(
+                    timestamp + self.cancel_latency as i64,
+                    Kind::Expired(order.order_id(), order.instrument()),
+                );
+                return false;
+            }
             // Guards
             if order.instrument() != md_record.instrument() {
                 return true;
@@ -183,6 +190,17 @@ impl MarketStopLimitExecutor {
 
             false
         });
+    }
+
+    fn is_expired<T>(order: &Order<T>, ts: i64) -> bool {
+        match order.time_in_force() {
+            TimeInForce::Day => false,
+            TimeInForce::FillOrKill => false,
+            TimeInForce::ImmediateOrCancel => false,
+            TimeInForce::GoodTillCancel => false,
+            TimeInForce::GoodTillDate(date) => false,
+            TimeInForce::GoodTillDatetime(datetime) => false,
+        }
     }
 
     fn get_fill_to_fully_fill_the_order(
@@ -242,4 +260,7 @@ impl MarketStopLimitExecutor {
 
     /// No-op, - venue has already cancelled an order
     pub fn on_cancel(&mut self, _order_id: &OrderId, _ok: &bool) {}
+
+    /// No-op, - venue has already expired an order
+    pub fn on_expire(&mut self, _order_id: &OrderId) {}
 }
