@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 
 use chrono::DateTime;
 use instrid::instruments::Instrument;
@@ -50,6 +50,20 @@ impl MarketStopLimitExecutor {
 
     pub fn working_orders(&self) -> &HashMap<Instrument, Vec<Order<Working>>> {
         &self.working_orders
+    }
+
+    /// Drops the order from its instrument's book, dropping the book itself when it empties.
+    fn drop_working(&mut self, instrument: Instrument, order_id: OrderId) -> bool {
+        let Entry::Occupied(mut working_orders) = self.working_orders.entry(instrument) else {
+            return false;
+        };
+        let n = working_orders.get().len();
+        working_orders.get_mut().retain(|o| o.order_id() != order_id);
+        let dropped = working_orders.get().len() != n;
+        if working_orders.get().is_empty() {
+            working_orders.remove();
+        }
+        dropped
     }
 }
 
@@ -107,16 +121,7 @@ impl MarketStopLimitExecutor {
         scheduler: &mut Scheduler<'_, M>,
     ) {
         let existed = self.pending_orders.remove(&order_id).is_some();
-        let existed = existed || {
-            match self.working_orders.get_mut(&instrument) {
-                Some(working_orders) => {
-                    let n = working_orders.len();
-                    working_orders.retain(|o| o.order_id() != order_id);
-                    working_orders.len() != n
-                }
-                None => false,
-            }
-        };
+        let existed = existed || self.drop_working(instrument, order_id);
         scheduler.push(
             timestamp + self.cancel_latency as i64,
             Kind::CancelResponse(order_id, existed),
@@ -147,10 +152,10 @@ impl MarketStopLimitExecutor {
         scheduler: &mut Scheduler<'_, M>,
     ) {
         let instrument = md_record.instrument();
-        let Some(working_orders) = self.working_orders.get_mut(&instrument) else {
+        let Entry::Occupied(mut working_orders) = self.working_orders.entry(instrument) else {
             return;
         };
-        working_orders.retain(|order| {
+        working_orders.get_mut().retain(|order| {
             // Guards
             let fill_price = match order.order_type() {
                 OrderType::Market => md_record.last_price(),
@@ -191,6 +196,10 @@ impl MarketStopLimitExecutor {
 
             false
         });
+
+        if working_orders.get().is_empty() {
+            working_orders.remove();
+        }
     }
 
     fn get_fill_to_fully_fill_the_order(
@@ -223,10 +232,7 @@ impl MarketStopLimitExecutor {
 
     /// On arrival of a Fill, remove order from working orders.
     pub fn on_fill(&mut self, fill: &Fill) {
-        let Some(working_orders) = self.working_orders.get_mut(&fill.instrument()) else {
-            return;
-        };
-        working_orders.retain(|order| order.order_id() != fill.order_id());
+        self.drop_working(fill.instrument(), fill.order_id());
     }
 
     pub fn on_reject(&mut self, order_id: &OrderId, reason: &RejectReason) {
