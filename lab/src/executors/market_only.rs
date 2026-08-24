@@ -99,8 +99,8 @@ impl MarketExecutor {
     /// Schedules cancellation of an order by its id.
     pub fn cancel<M>(
         &mut self,
-        order_id: OrderId,
         instrument: Instrument,
+        order_id: OrderId,
         timestamp: i64,
         scheduler: &mut Scheduler<'_, M>,
     ) {
@@ -176,10 +176,10 @@ impl MarketExecutor {
 
     /// On arrival of a Fill, remove order from working orders.
     pub fn on_fill(&mut self, fill: &Fill) {
-        let Some(wo) = self.working_orders.get_mut(&fill.instrument()) else {
+        let Some(working_orders) = self.working_orders.get_mut(&fill.instrument()) else {
             return;
         };
-        wo.retain(|order| order.order_id() != fill.order_id());
+        working_orders.retain(|order| order.order_id() != fill.order_id());
     }
 
     pub fn on_reject(&mut self, order_id: &OrderId, reason: &RejectReason) {

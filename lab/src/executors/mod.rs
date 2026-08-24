@@ -38,7 +38,7 @@ impl Executor for MarketExecutor {
             Kind::Reject(order_id, reason) => self.on_reject(order_id, reason),
             Kind::CancelResponse(order_id, ok) => self.on_cancel(order_id, ok),
             Kind::FeedError(_) => {}
-            Kind::Expired(order_id, _instrument) => self.on_expire(order_id),
+            Kind::Expired(_instrument, order_id) => self.on_expire(order_id),
         }
     }
     fn on_request<M>(
@@ -50,7 +50,7 @@ impl Executor for MarketExecutor {
         match request {
             Request::SendOrder(order) => self.push(order, timestamp, scheduler),
             Request::CancelOrder(instrument, order_id) => {
-                self.cancel(order_id, instrument, timestamp, scheduler)
+                self.cancel(instrument, order_id, timestamp, scheduler)
             }
             Request::Snapshot => {}
         }
@@ -69,7 +69,7 @@ impl Executor for MarketStopLimitExecutor {
             Kind::Reject(order_id, reason) => self.on_reject(order_id, reason),
             Kind::CancelResponse(order_id, ok) => self.on_cancel(order_id, ok),
             Kind::FeedError(_) => {}
-            Kind::Expired(order_id, _instrument) => self.on_expire(order_id),
+            Kind::Expired(_instrument, order_id) => self.on_expire(order_id),
         }
     }
     fn on_request<M>(
@@ -81,7 +81,7 @@ impl Executor for MarketStopLimitExecutor {
         match request {
             Request::SendOrder(order) => self.push(order, timestamp, scheduler),
             Request::CancelOrder(instrument, order_id) => {
-                self.cancel(order_id, instrument, timestamp, scheduler)
+                self.cancel(instrument, order_id, timestamp, scheduler)
             }
             Request::Snapshot => {}
         }

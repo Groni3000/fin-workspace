@@ -101,18 +101,18 @@ impl MarketStopLimitExecutor {
     /// Cancels order and schedules cancellation message arrival of an order by its id.
     pub fn cancel<M>(
         &mut self,
-        order_id: OrderId,
         instrument: Instrument,
+        order_id: OrderId,
         timestamp: i64,
         scheduler: &mut Scheduler<'_, M>,
     ) {
         let existed = self.pending_orders.remove(&order_id).is_some();
         let existed = existed || {
             match self.working_orders.get_mut(&instrument) {
-                Some(wo) => {
-                    let n = wo.len();
-                    wo.retain(|o| o.order_id() != order_id);
-                    wo.len() != n
+                Some(working_orders) => {
+                    let n = working_orders.len();
+                    working_orders.retain(|o| o.order_id() != order_id);
+                    working_orders.len() != n
                 }
                 None => false,
             }
@@ -146,11 +146,11 @@ impl MarketStopLimitExecutor {
         timestamp: i64,
         scheduler: &mut Scheduler<'_, M>,
     ) {
-        let instr = md_record.instrument();
-        let Some(wo) = self.working_orders.get_mut(&instr) else {
+        let instrument = md_record.instrument();
+        let Some(working_orders) = self.working_orders.get_mut(&instrument) else {
             return;
         };
-        wo.retain(|order| {
+        working_orders.retain(|order| {
             // Guards
             let fill_price = match order.order_type() {
                 OrderType::Market => md_record.last_price(),
@@ -223,11 +223,10 @@ impl MarketStopLimitExecutor {
 
     /// On arrival of a Fill, remove order from working orders.
     pub fn on_fill(&mut self, fill: &Fill) {
-        let order_id = fill.order_id();
-        let instr = fill.instrument();
-        if let Some(wo) = self.working_orders.get_mut(&instr) {
-            wo.retain(|order| order.order_id() != order_id);
-        }
+        let Some(working_orders) = self.working_orders.get_mut(&fill.instrument()) else {
+            return;
+        };
+        working_orders.retain(|order| order.order_id() != fill.order_id());
     }
 
     pub fn on_reject(&mut self, order_id: &OrderId, reason: &RejectReason) {

@@ -53,7 +53,7 @@ impl Oms {
             Kind::CancelResponse(id, success) => {
                 self.on_cancel_response(id, success, pf);
             }
-            Kind::Expired(order_id, _instrument) => self.on_expire(order_id, pf),
+            Kind::Expired(_instrument, order_id) => self.on_expire(order_id, pf),
             Kind::MarketData(_) => {
                 // This oms is not concerned with market data
             }

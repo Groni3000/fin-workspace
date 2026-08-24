@@ -121,7 +121,7 @@ pub enum Kind<R> {
     Fill(Fill),
     Reject(OrderId, RejectReason),
     CancelResponse(OrderId, bool),
-    Expired(OrderId, Instrument),
+    Expired(Instrument, OrderId),
     // Timer(TimerKind),
     // Operator(Command),
 }

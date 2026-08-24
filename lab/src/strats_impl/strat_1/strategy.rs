@@ -144,7 +144,7 @@ impl<E: EndOfTrading> Strategy<E> {
             Kind::CancelResponse(_order_id, false) => {
                 // This strategy does not require specific actions of CancelResponse.
             }
-            Kind::Expired(_order_id, _instrument) => {
+            Kind::Expired(_instrument, _order_id) => {
                 // This strategy does not require specific actions of Expire.
             }
             Kind::FeedError(_err) => {
