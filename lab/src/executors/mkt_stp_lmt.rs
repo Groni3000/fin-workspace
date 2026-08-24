@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
 use chrono::DateTime;
+use instrid::instruments::Instrument;
 use oms::{
     OrderId,
     fill::Fill,
-    order::{New, Order, OrderType, TimeInForce, Working},
+    order::{New, Order, OrderType, Working},
 };
 use tradeprim::{Side, price::Price};
 
@@ -21,7 +22,7 @@ pub struct MarketStopLimitExecutor {
     /// Executor got an order, yet it's not tradable yet. May be rejected.
     pending_orders: HashMap<OrderId, Order<New>>,
     /// Executor is trying to fill these orders.
-    working_orders: Vec<Order<Working>>,
+    working_orders: HashMap<Instrument, Vec<Order<Working>>>,
     ack_latency: u64,
     fill_latency: u64,
     cancel_latency: u64,
@@ -36,7 +37,7 @@ impl MarketStopLimitExecutor {
         reject_latency: u64,
     ) -> Self {
         let pending_orders = HashMap::new();
-        let working_orders = Vec::new();
+        let working_orders = HashMap::new();
         Self {
             pending_orders,
             working_orders,
@@ -47,7 +48,7 @@ impl MarketStopLimitExecutor {
         }
     }
 
-    pub fn working_orders(&self) -> &[Order<Working>] {
+    pub fn working_orders(&self) -> &HashMap<Instrument, Vec<Order<Working>>> {
         &self.working_orders
     }
 }
@@ -101,14 +102,20 @@ impl MarketStopLimitExecutor {
     pub fn cancel<M>(
         &mut self,
         order_id: OrderId,
+        instrument: Instrument,
         timestamp: i64,
         scheduler: &mut Scheduler<'_, M>,
     ) {
         let existed = self.pending_orders.remove(&order_id).is_some();
         let existed = existed || {
-            let n = self.working_orders.len();
-            self.working_orders.retain(|o| o.order_id() != order_id);
-            self.working_orders.len() != n
+            match self.working_orders.get_mut(&instrument) {
+                Some(wo) => {
+                    let n = wo.len();
+                    wo.retain(|o| o.order_id() != order_id);
+                    wo.len() != n
+                }
+                None => false,
+            }
         };
         scheduler.push(
             timestamp + self.cancel_latency as i64,
@@ -139,18 +146,12 @@ impl MarketStopLimitExecutor {
         timestamp: i64,
         scheduler: &mut Scheduler<'_, M>,
     ) {
-        self.working_orders.retain(|order| {
-            if Self::is_expired(order, timestamp) {
-                scheduler.push(
-                    timestamp + self.cancel_latency as i64,
-                    Kind::Expired(order.order_id(), order.instrument()),
-                );
-                return false;
-            }
+        let instr = md_record.instrument();
+        let Some(wo) = self.working_orders.get_mut(&instr) else {
+            return;
+        };
+        wo.retain(|order| {
             // Guards
-            if order.instrument() != md_record.instrument() {
-                return true;
-            }
             let fill_price = match order.order_type() {
                 OrderType::Market => md_record.last_price(),
                 OrderType::Stop(stp_price) => match order.side() {
@@ -192,17 +193,6 @@ impl MarketStopLimitExecutor {
         });
     }
 
-    fn is_expired<T>(order: &Order<T>, ts: i64) -> bool {
-        match order.time_in_force() {
-            TimeInForce::Day => false,
-            TimeInForce::FillOrKill => false,
-            TimeInForce::ImmediateOrCancel => false,
-            TimeInForce::GoodTillCancel => false,
-            TimeInForce::GoodTillDate(date) => false,
-            TimeInForce::GoodTillDatetime(datetime) => false,
-        }
-    }
-
     fn get_fill_to_fully_fill_the_order(
         timestamp: i64,
         order: &Order<Working>,
@@ -224,15 +214,20 @@ impl MarketStopLimitExecutor {
     /// On arrival of an acknowledgment, moves the order to the working orders.
     pub fn on_ack(&mut self, order_id: &OrderId) {
         if let Some(order) = self.pending_orders.remove(order_id) {
-            self.working_orders.push(order.into_working());
+            self.working_orders
+                .entry(order.instrument())
+                .or_default()
+                .push(order.into_working());
         }
     }
 
     /// On arrival of a Fill, remove order from working orders.
     pub fn on_fill(&mut self, fill: &Fill) {
         let order_id = fill.order_id();
-        self.working_orders
-            .retain(|order| order.order_id() != order_id);
+        let instr = fill.instrument();
+        if let Some(wo) = self.working_orders.get_mut(&instr) {
+            wo.retain(|order| order.order_id() != order_id);
+        }
     }
 
     pub fn on_reject(&mut self, order_id: &OrderId, reason: &RejectReason) {

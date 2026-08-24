@@ -278,23 +278,23 @@ impl Oms {
             .flat_map(|d| d.des_ords().iter().map(|o| o.order_id()))
             .collect();
 
-        // all unack+working orders
+        // all unack+working (order_id, instrument, orders)
         let live = self
             .unacked
             .values()
-            .map(|o| (o.order_id(), *o.order_type()))
+            .map(|o| (o.order_id(), o.instrument(), *o.order_type()))
             .chain(
                 self.working
                     .values()
-                    .map(|o| (o.order_id(), *o.order_type())),
+                    .map(|o| (o.order_id(), o.instrument(), *o.order_type())),
             );
 
-        for (id, ty) in live.collect::<Vec<_>>() {
+        for (id, instr, ty) in live {
             // Market orders are never desired. Skip or we cancel them.
             if ty == OrderType::Market || wanted.contains(&id) || !self.pending_cancels.insert(id) {
                 continue;
             }
-            sink.submit(Request::CancelOrder(id));
+            sink.submit(Request::CancelOrder(instr, id));
         }
     }
 

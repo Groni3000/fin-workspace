@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::DateTime;
+use instrid::instruments::Instrument;
 use oms::{
     OrderId,
     fill::Fill,
@@ -20,7 +21,7 @@ pub struct MarketExecutor {
     /// Executor got an order, yet it's not tradable yet. May be rejected.
     pending_orders: HashMap<OrderId, Order<New>>,
     /// Executor is trying to fill these orders.
-    working_orders: Vec<Order<Working>>,
+    working_orders: HashMap<Instrument, Vec<Order<Working>>>,
     ack_latency: u64,
     fill_latency: u64,
     cancel_latency: u64,
@@ -36,7 +37,7 @@ impl MarketExecutor {
     ) -> Self {
         Self {
             pending_orders: HashMap::new(),
-            working_orders: Vec::new(),
+            working_orders: HashMap::new(),
             ack_latency,
             fill_latency,
             cancel_latency,
@@ -48,7 +49,7 @@ impl MarketExecutor {
         &self.pending_orders
     }
 
-    pub fn working_orders(&self) -> &[Order<Working>] {
+    pub fn working_orders(&self) -> &HashMap<Instrument, Vec<Order<Working>>> {
         &self.working_orders
     }
 }
@@ -99,14 +100,20 @@ impl MarketExecutor {
     pub fn cancel<M>(
         &mut self,
         order_id: OrderId,
+        instrument: Instrument,
         timestamp: i64,
         scheduler: &mut Scheduler<'_, M>,
     ) {
         let existed = self.pending_orders.remove(&order_id).is_some();
         let existed = existed || {
-            let n = self.working_orders.len();
-            self.working_orders.retain(|o| o.order_id() != order_id);
-            self.working_orders.len() != n
+            match self.working_orders.get_mut(&instrument) {
+                Some(working_orders) => {
+                    let n = working_orders.len();
+                    working_orders.retain(|o| o.order_id() != order_id);
+                    working_orders.len() != n
+                }
+                None => false,
+            }
         };
         scheduler.push(
             timestamp + self.cancel_latency as i64,
@@ -136,10 +143,11 @@ impl MarketExecutor {
         timestamp: i64,
         scheduler: &mut Scheduler<'_, M>,
     ) {
-        self.working_orders.retain(|order| {
-            if order.instrument() != md_record.instrument() {
-                return true;
-            }
+        let instrument = md_record.instrument();
+        let Some(working_orders) = self.working_orders.get_mut(&instrument) else {
+            return;
+        };
+        working_orders.retain(|order| {
             let fill = Fill::new(
                 order.order_id(),
                 DateTime::from_timestamp_nanos(timestamp),
@@ -159,15 +167,19 @@ impl MarketExecutor {
     /// On arrival of an acknowledgment, moves the order to the working orders.
     pub fn on_ack(&mut self, order_id: &OrderId) {
         if let Some(order) = self.pending_orders.remove(order_id) {
-            self.working_orders.push(order.into_working());
+            self.working_orders
+                .entry(order.instrument())
+                .or_default()
+                .push(order.into_working());
         }
     }
 
     /// On arrival of a Fill, remove order from working orders.
     pub fn on_fill(&mut self, fill: &Fill) {
-        let order_id = fill.order_id();
-        self.working_orders
-            .retain(|order| order.order_id() != order_id);
+        let Some(wo) = self.working_orders.get_mut(&fill.instrument()) else {
+            return;
+        };
+        wo.retain(|order| order.order_id() != fill.order_id());
     }
 
     pub fn on_reject(&mut self, order_id: &OrderId, reason: &RejectReason) {

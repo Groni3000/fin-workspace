@@ -49,7 +49,9 @@ impl Executor for MarketExecutor {
     ) {
         match request {
             Request::SendOrder(order) => self.push(order, timestamp, scheduler),
-            Request::CancelOrder(order_id) => self.cancel(order_id, timestamp, scheduler),
+            Request::CancelOrder(instrument, order_id) => {
+                self.cancel(order_id, instrument, timestamp, scheduler)
+            }
             Request::Snapshot => {}
         }
     }
@@ -78,7 +80,9 @@ impl Executor for MarketStopLimitExecutor {
     ) {
         match request {
             Request::SendOrder(order) => self.push(order, timestamp, scheduler),
-            Request::CancelOrder(order_id) => self.cancel(order_id, timestamp, scheduler),
+            Request::CancelOrder(instrument, order_id) => {
+                self.cancel(order_id, instrument, timestamp, scheduler)
+            }
             Request::Snapshot => {}
         }
     }

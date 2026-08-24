@@ -555,7 +555,7 @@ mod reconcile {
             .remove_order(id_lmt);
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
         assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
-        assert_matches!(sink.sent[1], Request::CancelOrder(id) if id == id_lmt);
+        assert_matches!(sink.sent[1], Request::CancelOrder(instr, id) if instr == instrument && id == id_lmt);
         // order is live until the venue confirms
         check_oms_state(&oms, 0, 1, 1);
 
@@ -924,7 +924,7 @@ mod reconcile {
             .remove_order(id_lmt);
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
         assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
-        assert_matches!(sink.sent[1], Request::CancelOrder(id) if id == id_lmt);
+        assert_matches!(sink.sent[1], Request::CancelOrder(instr, id) if instrument == instr && id == id_lmt);
         check_oms_state(&oms, 0, 1, 1);
 
         // 4. Too late: the order had already filled when the venue read the request

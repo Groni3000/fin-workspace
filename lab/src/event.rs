@@ -137,7 +137,7 @@ pub enum RejectReason {
 #[derive(Debug)]
 pub enum Request {
     SendOrder(Order<New>),
-    CancelOrder(OrderId),
+    CancelOrder(Instrument, OrderId),
     /// (Timer, fire at ts)
     // StartTimer(TimerKind, i64),
     // CancelTimer(TimerKind),
