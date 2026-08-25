@@ -1,6 +1,6 @@
 use crate::{SMA, TR};
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Parameters {
     tr_parameters: TR::Parameters,
     sma_parameters: SMA::Parameters,
@@ -23,6 +23,7 @@ impl Parameters {
     }
 }
 
+#[derive(Debug)]
 pub struct Indicator {
     tr_indicator: TR::Indicator,
     rolling_sma: SMA::Indicator,

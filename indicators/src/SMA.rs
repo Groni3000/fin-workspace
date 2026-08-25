@@ -38,6 +38,7 @@ impl Parameters {
 /// * `period` - The window size for the SMA.
 /// * `values` - Deque holding the recent prices in the window.
 /// * `sum` - Running sum of the values in the window.
+#[derive(Debug)]
 pub struct Indicator {
     parameters: Parameters,
     values: VecDeque<f64>,

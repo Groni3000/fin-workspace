@@ -1,4 +1,4 @@
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Parameters {}
 
 /// TR indicator does not have parameters.
@@ -18,6 +18,7 @@ impl Parameters {
 ///     - (low - previous_close).abs()
 ///
 /// Note: If even one price is invalid (NAN/inf) => indicator resets.
+#[derive(Debug)]
 pub struct Indicator {
     previous_close: f64,
 }

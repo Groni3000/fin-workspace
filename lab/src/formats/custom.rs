@@ -253,7 +253,9 @@ impl<T: DeserializeOwned + Symboled> Iterator for CustomDatabentoConsumerMd<T> {
             }
             match self.consumer.poll(Duration::from_millis(500)) {
                 Some(Ok(msg)) => {
-                    if msg.offset() == self.high_watermark - 1 {
+                    // `>=`, not `==`: a control record or a gap at that exact offset
+                    // would otherwise never match and the replay would poll forever.
+                    if msg.offset() >= self.high_watermark - 1 {
                         return None;
                     };
                     let record = match msg.payload_view::<str>() {
