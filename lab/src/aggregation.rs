@@ -272,7 +272,7 @@ impl SessionAggregator {
         self.candle.take()
     }
 
-    fn within_session(&self, t: NaiveTime) -> bool {
+    pub fn within_session(&self, t: NaiveTime) -> bool {
         match self.session_type {
             SessionType::OneDay => self.start_time <= t && t < self.end_time,
             SessionType::Overnight => t >= self.start_time || t < self.end_time,

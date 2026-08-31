@@ -14,6 +14,7 @@ impl Parameters {
     }
 }
 
+#[derive(Debug)]
 pub struct Indicator {
     parameters: Parameters,
     last_price: Option<f64>,

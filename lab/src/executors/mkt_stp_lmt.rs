@@ -58,7 +58,9 @@ impl MarketStopLimitExecutor {
             return false;
         };
         let n = working_orders.get().len();
-        working_orders.get_mut().retain(|o| o.order_id() != order_id);
+        working_orders
+            .get_mut()
+            .retain(|o| o.order_id() != order_id);
         let dropped = working_orders.get().len() != n;
         if working_orders.get().is_empty() {
             working_orders.remove();
@@ -158,7 +160,7 @@ impl MarketStopLimitExecutor {
         working_orders.get_mut().retain(|order| {
             // Guards
             let fill_price = match order.order_type() {
-                OrderType::Market => md_record.last_price(),
+                OrderType::Market => md_record.open(),
                 OrderType::Stop(stp_price) => match order.side() {
                     Side::Buy => {
                         if md_record.high() < *stp_price {

@@ -10,12 +10,13 @@ use oms::{
 
 use crate::{
     event::{Kind, RejectReason, Scheduler},
-    market_data::{Instrumented, RelevantPrice},
+    market_data::{Candle, Instrumented},
 };
 
 /// Simplest executor:
 ///     * Accepts market orders only
-///     * Every fill is fully executed at the last known price
+///     * Every fill is fully executed at the *open* of the first record after the order works,
+///       not its close. The lower frequency (1s -> 1m -> ...) the worse to use *close*.
 ///     * Constant ack/fill/cancel/reject latency
 pub struct MarketExecutor {
     /// Executor got an order, yet it's not tradable yet. May be rejected.
@@ -59,7 +60,9 @@ impl MarketExecutor {
             return false;
         };
         let n = working_orders.get().len();
-        working_orders.get_mut().retain(|o| o.order_id() != order_id);
+        working_orders
+            .get_mut()
+            .retain(|o| o.order_id() != order_id);
         let dropped = working_orders.get().len() != n;
         if working_orders.get().is_empty() {
             working_orders.remove();
@@ -141,8 +144,8 @@ impl MarketExecutor {
     }
 
     /// For a given instrument from market data record,
-    /// schedule a full fill for every order in working orders.
-    pub fn on_record<M: RelevantPrice + Instrumented>(
+    /// schedule a full fill at its open for every order in working orders.
+    pub fn on_record<M: Candle + Instrumented>(
         &mut self,
         md_record: &M,
         timestamp: i64,
@@ -159,7 +162,7 @@ impl MarketExecutor {
                 order.instrument(),
                 order.side(),
                 order.quantity(),
-                md_record.last_price(),
+                md_record.open(),
             );
             scheduler.push(timestamp + self.fill_latency as i64, Kind::Fill(fill));
             false
