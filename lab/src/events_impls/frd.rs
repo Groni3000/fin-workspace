@@ -4,28 +4,31 @@ use chrono::{DateTime, TimeDelta, Utc};
 
 use crate::{
     event::{Event, EventSource, Kind, Request, Scheduled, Scheduler},
-    executor::SingleInstrumentOnlyMarketExecutor,
+    executors::Executor,
     formats::{Tagged, frd::FrdCandle},
     market_data::{FrdFutChainMdReader, Timestamped},
 };
 
-pub struct FrdEventQueue<'a> {
+pub struct FrdEventQueue<'a, E>
+where
+    E: Executor,
+{
     now: i64,
     seq: u64,
     md: Peekable<FrdFutChainMdReader<'a>>,
     heap: BinaryHeap<Reverse<Scheduled<Tagged<FrdCandle>>>>,
-    exec: SingleInstrumentOnlyMarketExecutor,
+    exec: E,
 }
 
-impl<'a> FrdEventQueue<'a> {
-    pub fn new(now: i64, seq: u64, md: Peekable<FrdFutChainMdReader<'a>>) -> Self {
+impl<'a, E: Executor> FrdEventQueue<'a, E> {
+    pub fn new(now: i64, seq: u64, md: Peekable<FrdFutChainMdReader<'a>>, exec: E) -> Self {
         let heap = BinaryHeap::new();
         Self {
             now,
             seq,
             md,
             heap,
-            exec: SingleInstrumentOnlyMarketExecutor::new(250_000_000, 3_000_000_000),
+            exec,
         }
     }
 
@@ -42,7 +45,7 @@ impl<'a> FrdEventQueue<'a> {
     }
 }
 
-impl<'a> EventSource for FrdEventQueue<'a> {
+impl<'a, E: Executor> EventSource for FrdEventQueue<'a, E> {
     type Record = Tagged<FrdCandle>;
 
     fn next_event(&mut self) -> Option<Event<Self::Record>> {
@@ -110,14 +113,8 @@ impl<'a> EventSource for FrdEventQueue<'a> {
     }
 
     fn submit(&mut self, req: Request) {
-        match req {
-            Request::SendOrder(order) => {
-                let mut scheduler = Scheduler::new(&mut self.heap, &mut self.seq);
-                self.exec.push(order, self.now, &mut scheduler);
-            }
-            Request::CancelOrder(_order_id) => {}
-            Request::Snapshot => {}
-        }
+        let mut scheduler = Scheduler::new(&mut self.heap, &mut self.seq);
+        self.exec.on_request(self.now, req, &mut scheduler);
     }
 }
 

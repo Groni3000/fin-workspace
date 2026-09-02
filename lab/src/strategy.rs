@@ -8,9 +8,6 @@ use tradeprim::position::Position;
 pub struct Desired {
     desired_position: Position,
     desired_orders: Vec<Order<New>>,
-    desired_protected_position: Position,
-    desired_protective_orders: Vec<Order<New>>,
-    desired_cancels: Vec<OrderId>,
 }
 
 impl Desired {
@@ -26,14 +23,6 @@ impl Desired {
         &self.desired_orders
     }
 
-    pub fn dpp(&self) -> &Position {
-        &self.desired_protected_position
-    }
-
-    pub fn des_prot_ords(&self) -> &Vec<Order<New>> {
-        &self.desired_protective_orders
-    }
-
     pub fn dp_mut(&mut self) -> &mut Position {
         &mut self.desired_position
     }
@@ -42,11 +31,24 @@ impl Desired {
         &mut self.desired_orders
     }
 
-    pub fn desired_cancels(&self) -> &[OrderId] {
-        &self.desired_cancels
+    /// Sets (overwrites) the desired position to the given position.
+    pub fn set_desired_position(&mut self, desired_position: Position) {
+        self.desired_position = desired_position;
     }
 
-    pub fn desired_cancels_mut(&mut self) -> &mut Vec<OrderId> {
-        &mut self.desired_cancels
+    pub fn set_desired_orders(&mut self, desired_orders: Vec<Order<New>>) {
+        self.desired_orders = desired_orders;
+    }
+
+    pub fn add_desired_position(&mut self, desired_position: Position) {
+        self.desired_position += desired_position;
+    }
+
+    pub fn contains_order(&self, order_id: OrderId) -> bool {
+        self.desired_orders.iter().any(|o| o.order_id() == order_id)
+    }
+
+    pub fn remove_order(&mut self, order_id: OrderId) {
+        self.desired_orders.retain(|o| o.order_id() != order_id);
     }
 }

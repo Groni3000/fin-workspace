@@ -10,6 +10,41 @@ from C source, so it needs `cmake` and a C toolchain):
 cargo run -p lab --features kafka --bin kafka_check
 ```
 
+## Design idea
+
+We have two worlds: internal, external. External sends events to internal. Internal
+sends requests to external. External consumes requests and emits new events.
+
+In other words: we have a pipe that produces events (market data, order status updates, account snapshots,...)
+and a consumer of those events that can make requests for some events (like account snapshot).
+
+So, the idea is: on each event update real exposure, then let strategy decide what it desires,
+reconcile. And repeat in a loop.
+
+## Current state
+
+```rust
+while let Some(event) = queue.next_event() { // queue - external events
+    clock.set(event.ts()); // Simulated clock
+
+    oms.on_event(&event, &mut pf); // Update real exposure
+    strategy.on_event(&event, &pf); // Strategy shapes its own desired state
+
+    oms.reconcile(strategy.desired(), &pf, &rms, &mut queue); // Reconcile desired state with actual exposure
+}
+```
+
+Code above was used in backtests. Live trading is yet to be battle-tested, though the benefit is enourmous -
+strategy code is the same both for backtest and live trading.
+
+The `oms` needs adapters to transform our internal representation of instruments, orders, how we track them into
+the "outside" world.
+
+So, long story short:
+
+- Adapter - write once, plug in into Oms, reuse in other strategies. Just the idea, not ready for now.
+- Strategy - every strategy is semi-unique (something beyond config settings), but the general idea is to write its own desired state.
+
 ## Entities
 
 - **Strategy** - owns `(desired_position, desired_orders)` per symbol. `desired_position` -

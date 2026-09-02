@@ -8,6 +8,7 @@ use oms::{
 };
 use tradeprim::position::Position;
 
+#[derive(Debug)]
 pub struct Portfolio {
     positions: HashMap<Instrument, Position>,
     fills: Vec<Fill>,
@@ -26,6 +27,7 @@ impl Portfolio {
     }
 
     pub fn push_order(&mut self, order: Order<Terminated>) {
+        self.orders_idx.insert(order.order_id(), self.orders.len());
         self.orders.push(order);
     }
 

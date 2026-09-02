@@ -2,7 +2,7 @@ pub mod aggregation;
 pub mod event;
 pub mod event_loop;
 pub mod events_impls;
-pub mod executor;
+pub mod executors;
 pub mod formats;
 pub mod market_data;
 pub mod oms;

@@ -53,6 +53,7 @@ pub enum TerminationReason {
     Filled,
     Reject,
     RiskReject,
+    Expired,
     /// Filled beyond the requested quantity. Nothing left to fill, so the order terminates.
     Overfilled,
 }
@@ -216,6 +217,14 @@ impl Order<Working> {
             reason: TerminationReason::Reject,
         })
     }
+
+    pub fn into_expired(self) -> Order<Terminated> {
+        let leaves_qty = self.state().leaves;
+        self.set_state(Terminated {
+            leaves: leaves_qty,
+            reason: TerminationReason::Expired,
+        })
+    }
 }
 
 impl Order<Terminated> {
@@ -229,7 +238,8 @@ impl Order<Terminated> {
             }
             TerminationReason::Filled
             | TerminationReason::Cancel
-            | TerminationReason::Overfilled => {}
+            | TerminationReason::Overfilled
+            | TerminationReason::Expired => {}
         }
         // Cancels can be partially filled.
         let qty = (self.quantity().qty() - self.state().leaves())

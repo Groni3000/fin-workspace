@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use instrid::instruments::Instrument;
 use oms::{
     OrderId,
     fill::Fill,
-    order::{FillOutcome, New, Order, OrderBuilder, Working},
+    order::{FillOutcome, New, Order, OrderBuilder, OrderType, Working},
 };
 use tradeprim::{Side, quantity::Quantity};
 
@@ -15,17 +15,28 @@ use crate::{
     strategy::Desired,
 };
 
+#[derive(Default, Debug)]
 pub struct Oms {
     unacked: HashMap<OrderId, Order<New>>,
     working: HashMap<OrderId, Order<Working>>,
+    pending_cancels: HashSet<OrderId>,
 }
 
 impl Oms {
     pub fn new(
         unacked: HashMap<OrderId, Order<New>>,
         working: HashMap<OrderId, Order<Working>>,
+        pending_cancels: HashSet<OrderId>,
     ) -> Self {
-        Self { unacked, working }
+        Self {
+            unacked,
+            working,
+            pending_cancels,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.unacked.is_empty() && self.working.is_empty() && self.pending_cancels.is_empty()
     }
 
     pub fn on_event<R>(&mut self, event: &Event<R>, pf: &mut Portfolio) {
@@ -36,15 +47,13 @@ impl Oms {
             Kind::Fill(f) => {
                 self.on_fill(f, pf);
             }
-            Kind::Reject(id) => {
+            Kind::Reject(id, _reason) => {
                 self.on_reject(id, pf);
             }
-            Kind::CancelResponse(_, false) => {
-                // this oms is not concerned with response to cancels
+            Kind::CancelResponse(id, success) => {
+                self.on_cancel_response(id, success, pf);
             }
-            Kind::CancelResponse(_, true) => {
-                // this oms is not concerned with response to cancels
-            }
+            Kind::Expired(_instrument, order_id) => self.on_expire(order_id, pf),
             Kind::MarketData(_) => {
                 // This oms is not concerned with market data
             }
@@ -66,7 +75,10 @@ impl Oms {
             .or_else(|| self.working.remove(order_id));
 
         match order {
-            Some(o) => pf.push_order(o.into_rejected()),
+            Some(o) => {
+                self.pending_cancels.remove(&o.order_id());
+                pf.push_order(o.into_rejected());
+            }
             None => tracing::warn!(order_id = ?order_id, "reject for unknown order"),
         }
     }
@@ -107,6 +119,7 @@ impl Oms {
                 FillOutcome::Filled(terminated) => {
                     // push to portfolio
                     pf.push_order(terminated);
+                    self.pending_cancels.remove(&fill.order_id());
                 }
                 FillOutcome::Partial(working) => {
                     // return order to working
@@ -116,6 +129,7 @@ impl Oms {
                     // Order is terminated: it can never fill again. The excess is already in `pf`.
                     tracing::error!(order_id = ?fill.order_id(), excess = %excess.qty(), "overfill");
                     pf.push_order(terminated);
+                    self.pending_cancels.remove(&fill.order_id());
                 }
             },
             // Position still moved, we just have no order to attribute it to.
@@ -123,25 +137,19 @@ impl Oms {
         }
     }
 
-    fn desired_orders_qty(&self, orders: &[Order<New>]) -> i64 {
-        orders
-            .iter()
-            .map(|o| o.side().as_i64() * o.quantity().value() as i64)
-            .sum()
-    }
+    /// Remove expired order from every map and push it to the portfolio in terminated state.
+    fn on_expire(&mut self, order_id: &OrderId, pf: &mut Portfolio) {
+        // First of all - delete from cancels - it's already cancelled by venue
+        self.pending_cancels.remove(order_id);
 
-    fn leaves_qty(&self, instrument: &Instrument) -> i64 {
-        self.unacked
-            .values()
-            .filter(|o| &o.instrument() == instrument)
-            .map(|o| o.side().as_i64() * o.quantity().value() as i64)
-            .sum::<i64>()
-            + self
-                .working
-                .values()
-                .filter(|o| &o.instrument() == instrument)
-                .map(|o| o.side().as_i64() * o.state().leaves().value() as i64)
-                .sum::<i64>()
+        // most likely it's in working
+        if let Some(order) = self.working.remove(order_id) {
+            pf.push_order(order.into_expired());
+            return;
+        };
+        if let Some(order) = self.unacked.remove(order_id) {
+            pf.push_order(order.into_working().into_expired());
+        }
     }
 
     /// Sends desired not-market orders to the OMS and Executor.
@@ -153,9 +161,14 @@ impl Oms {
         sink: &mut S,
     ) {
         for instrument_desired in desired.values() {
-            for order in instrument_desired.des_ords() {
+            for order in instrument_desired.des_ords().iter() {
                 let order = *order;
                 let id = &order.order_id();
+
+                if pf.orders_idx().contains_key(id) {
+                    tracing::error!(order_id = ?id, "desired order already terminated — strategy failed to clear it");
+                    continue;
+                }
 
                 if self.unacked.contains_key(id) || self.working.contains_key(id) {
                     continue;
@@ -183,12 +196,26 @@ impl Oms {
         sink: &mut S,
     ) {
         for (instr, want) in desired {
-            // Clamp the level, not the delta: clamping `m` would creep past the limit each pass.
-            let dp = rms.clamp_position(instr, *want.dp(), pf).as_i64();
-            let do_q = self.desired_orders_qty(want.des_ords());
-            let wo = self.leaves_qty(instr);
-            let rp = pf.position(instr).as_i64();
-            let m = dp + do_q - wo - rp;
+            let dp_raw = rms.clamp_position(instr, *want.dp(), pf);
+            let rp_raw = pf.position(instr);
+
+            let dp = dp_raw.as_i64();
+            let mkt_wo_l_q = self
+                .unacked
+                .values()
+                .filter(|o| &o.instrument() == instr && o.order_type() == &OrderType::Market)
+                .map(|o| o.side().as_i64() * o.quantity().value() as i64)
+                .sum::<i64>()
+                + self
+                    .working
+                    .values()
+                    .filter(|o| &o.instrument() == instr && o.order_type() == &OrderType::Market)
+                    .map(|o| o.side().as_i64() * o.state().leaves().value() as i64)
+                    .sum::<i64>();
+            let rp = rp_raw.as_i64();
+
+            let m = dp - (mkt_wo_l_q + rp);
+            // let _ = dbg!(dp, mkt_wo_l_q, rp, m);
             // skip case
             if m == 0 {
                 continue;
@@ -212,8 +239,6 @@ impl Oms {
                 side = ?side,
                 qty = %order.quantity().qty(),
                 dp = %Quantity::display_raw(dp),
-                do_q = %Quantity::display_raw(do_q),
-                wo = %Quantity::display_raw(wo),
                 rp = %Quantity::display_raw(rp),
                 m = %Quantity::display_raw(m),
                 "send market order"
@@ -234,9 +259,74 @@ impl Oms {
         if !rms.trading_allowed(pf) {
             return;
         }
+        self.cancel_undesired(desired, sink);
         self.send_desired_orders(desired, pf, rms, sink);
 
         // MUST BE CALLED LAST
         self.send_market_orders(desired, pf, rms, sink);
     }
+
+    fn cancel_undesired<S: EventSource>(
+        &mut self,
+        desired: &HashMap<Instrument, Desired>,
+        sink: &mut S,
+    ) {
+        // all desired orders
+        let wanted: HashSet<OrderId> = desired
+            .values()
+            .flat_map(|d| d.des_ords().iter().map(|o| o.order_id()))
+            .collect();
+
+        // all unack+working (order_id, instrument, orders)
+        let live = self
+            .unacked
+            .values()
+            .map(|o| (o.order_id(), o.instrument(), *o.order_type()))
+            .chain(
+                self.working
+                    .values()
+                    .map(|o| (o.order_id(), o.instrument(), *o.order_type())),
+            );
+
+        for (id, instr, ty) in live {
+            // Market orders are never desired. Skip or we cancel them.
+            if ty == OrderType::Market || wanted.contains(&id) || !self.pending_cancels.insert(id) {
+                continue;
+            }
+            sink.submit(Request::CancelOrder(instr, id));
+        }
+    }
+
+    fn on_cancel_response(&mut self, id: &OrderId, success: &bool, pf: &mut Portfolio) {
+        if !self.pending_cancels.contains(id) {
+            tracing::warn!(id=?id, succ=?success, "cancel response not found in pending cancels");
+            return;
+        };
+
+        if !success {
+            tracing::warn!(id=?id, succ=?success, "cancel response failed");
+            return;
+        }
+
+        // We have already checked that it's there and cancel is successful
+        let _ = self.pending_cancels.remove(id);
+
+        // Now we need to get rid of that order in unacked or working
+        let order = self
+            .unacked
+            .remove(id)
+            .map(Order::into_working)
+            // If order was in working
+            .or_else(|| self.working.remove(id));
+
+        match order {
+            Some(working) => pf.push_order(working.into_cancelled()),
+            None => {
+                tracing::warn!(id=?id, "could not find order for a successful cancel");
+            }
+        }
+    }
 }
+
+#[cfg(test)]
+mod tests;
