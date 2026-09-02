@@ -42,8 +42,6 @@ impl Indicator {
     pub fn update(&mut self, high_price: f64, low_price: f64, close_price: f64) -> f64 {
         let tr_value = self.tr_indicator.update(high_price, low_price, close_price);
 
-        
-
         self.rolling_sma.update(tr_value)
     }
 
