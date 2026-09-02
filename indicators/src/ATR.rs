@@ -35,16 +35,16 @@ impl Indicator {
         Indicator {
             tr_indicator: TR::Indicator::new(parameters.tr_parameters),
             rolling_sma: SMA::Indicator::new(parameters.sma_parameters),
-            parameters: parameters,
+            parameters,
         }
     }
 
     pub fn update(&mut self, high_price: f64, low_price: f64, close_price: f64) -> f64 {
         let tr_value = self.tr_indicator.update(high_price, low_price, close_price);
 
-        let sma_value = self.rolling_sma.update(tr_value);
+        
 
-        sma_value
+        self.rolling_sma.update(tr_value)
     }
 
     pub fn parameters(&self) -> &Parameters {

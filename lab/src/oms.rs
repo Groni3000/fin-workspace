@@ -149,8 +149,7 @@ impl Oms {
         };
         if let Some(order) = self.unacked.remove(order_id) {
             pf.push_order(order.into_working().into_expired());
-            return;
-        };
+        }
     }
 
     /// Sends desired not-market orders to the OMS and Executor.

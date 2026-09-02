@@ -10,6 +10,12 @@ impl Parameters {
     }
 }
 
+impl Default for Parameters {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// `True Range` indicator (TR)
 ///
 /// The maximum of 3 values:
