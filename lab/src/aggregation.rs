@@ -208,6 +208,10 @@ impl CandleAggregator {
             _ => self.candle.replace(Bar::seed(bucket, c)),
         }
     }
+
+    pub fn interval(&self) -> i64 {
+        self.interval
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
