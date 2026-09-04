@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc, serde::ts_nanoseconds};
+use foldhash::HashMap;
 use instrid::instruments::Instrument;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -10,7 +11,6 @@ use crate::market_data::{Candle, RelevantPrice, Timestamped};
 use crate::{formats::Tagged, market_data::Symboled};
 
 use std::{
-    collections::HashMap,
     fmt::Display,
     marker::PhantomData,
     str::Utf8Error,

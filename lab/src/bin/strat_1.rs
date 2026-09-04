@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     path::Path,
     str::FromStr,
     sync::{
@@ -10,6 +9,7 @@ use std::{
 };
 
 use chrono::Datelike;
+use foldhash::{HashMap, HashMapExt};
 use futchain::{FutChain, ListedTenors};
 use instrid::instruments::{FuturesContract, Instrument};
 use lab::{

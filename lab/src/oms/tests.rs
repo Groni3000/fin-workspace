@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use foldhash::{HashMap, HashSet};
 
 use crate::{
     event::{Event, EventSource, Request},
@@ -120,7 +120,7 @@ fn check_oms_state(
 }
 
 mod reconcile {
-    use std::collections::HashMap;
+    use foldhash::HashMap;
 
     use crate::{
         event::{Event, Kind, RejectReason, Request},

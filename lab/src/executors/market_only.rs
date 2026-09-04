@@ -1,4 +1,6 @@
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::hash_map::Entry;
+
+use foldhash::{HashMap, HashMapExt};
 
 use chrono::DateTime;
 use instrid::instruments::Instrument;

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use foldhash::{HashMap, HashMapExt};
 
 use chrono::{DateTime, Datelike, NaiveDate, NaiveTime};
 use chrono_tz::Tz;

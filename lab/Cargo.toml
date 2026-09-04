@@ -18,6 +18,7 @@ oms = { path = "../oms" }
 # `release_max_level_info` compiles trace!/debug! out entirely in release builds.
 tracing = { version = "0.1", features = ["release_max_level_info"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+foldhash = "0.2.0"
 
 
 [features]

@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     path::Path,
     str::FromStr,
     sync::{
@@ -8,6 +7,7 @@ use std::{
     },
 };
 
+use foldhash::HashMap;
 use futchain::{FutChain, ListedTenors};
 use instrid::{asset::Asset, instruments::FuturesContract, mic::Mic, tenor::Tenor};
 
