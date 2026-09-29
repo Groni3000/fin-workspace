@@ -233,6 +233,11 @@ impl Oms {
             .verify()
             .unwrap()
             .build();
+
+            if !rms.approve_order(&order, pf) {
+                continue;
+            }
+
             tracing::info!(
                 order_id = ?order.order_id(),
                 instrument = %instr,

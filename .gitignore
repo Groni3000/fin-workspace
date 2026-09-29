@@ -17,6 +17,7 @@ NOTES.md
 
 # Data
 lab/data/files/futures/frd/*.txt
+lab/data/files/futures/frd_session/*.txt
 
 # Some testing
 comptime_test
