@@ -29,7 +29,7 @@ things_to_fix
 # Profiler
 profile.json.gz
 analysis/
-lab/data/files/futures/frd
+lab/data/files/futures/*
 lab/logs/
 diagrams/
 indicators/old_tests/tests/
