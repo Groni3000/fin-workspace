@@ -14,23 +14,6 @@ pub struct Event<R> {
     kind: Kind<R>,
 }
 
-// impl<R> PartialEq for Event<R> {
-//     fn eq(&self, o: &Self) -> bool {
-//         self.ts == o.ts && self.seq == o.seq
-//     }
-// }
-// impl<R> Eq for Event<R> {}
-// impl<R> Ord for Event<R> {
-//     fn cmp(&self, o: &Self) -> std::cmp::Ordering {
-//         (self.ts, self.seq).cmp(&(o.ts, o.seq))
-//     }
-// }
-// impl<R> PartialOrd for Event<R> {
-//     fn partial_cmp(&self, o: &Self) -> Option<std::cmp::Ordering> {
-//         Some(self.cmp(o))
-//     }
-// }
-
 impl<R> Event<R> {
     pub fn new(ts: i64, kind: Kind<R>) -> Self {
         Self { ts, kind }

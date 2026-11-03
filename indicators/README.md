@@ -43,7 +43,7 @@ Yet it made parameters instantiation very bloated...
 ```rust
 use indicators::{RSI, SMA};
 
-let mut rsi = RSI::Indicator::new(&RSI::Parameters::new(SMA::Parameters::new(3).expect("period must be correct")));
+let mut rsi = RSI::Indicator::new(RSI::Parameters::new(SMA::Parameters::new(3).expect("period must be correct")));
 // prices: 100.0, 102.0, 101.0, 103.0, 104.0
 // expected output: f64::NAN, f64::NAN, f64::NAN, 80, 75
 let mut rsi_value = rsi.update(100.0);
