@@ -39,12 +39,9 @@ jobs:
 
       # Doctests run here instead: the README examples need `serde`, and this
       # skips `lab`, whose `kafka` feature would compile librdkafka from C.
+      # `--workspace` so a new crate's doctests can't be forgotten in a list.
       - name: Test (all features, incl. doctests)
-        run: cargo test -p instrid -p tradeprim -p futchain --all-features
-
-      # The config where dead code hides — `cl_future` is unreachable here.
-      - name: Test (no default features)
-        run: cargo test -p instrid -p tradeprim --no-default-features --all-targets
+        run: cargo test --workspace --exclude lab --all-features
 
       # Lint and format are platform-independent — running them twice would
       # just burn Windows minutes, which bill at 2x.
@@ -54,7 +51,7 @@ jobs:
 
       - name: Clippy (all features)
         if: runner.os == 'Linux'
-        run: cargo clippy -p instrid -p tradeprim -p futchain --all-targets --all-features -- -D warnings
+        run: cargo clippy --workspace --exclude lab --all-targets --all-features -- -D warnings
 
       - name: Format
         if: runner.os == 'Linux'
