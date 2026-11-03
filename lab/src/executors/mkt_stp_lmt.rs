@@ -11,10 +11,9 @@ use oms::{
 };
 use tradeprim::{Side, price::Price};
 
-use crate::{
-    event::{Kind, RejectReason, Scheduler},
-    market_data::{Candle, Instrumented},
-};
+use mdata::{Candle, Instrumented};
+
+use crate::event::{Kind, RejectReason, Scheduler};
 
 /// Natural extension of `MarketExecutor`:
 ///     * Accepts market+stop orders only

@@ -7,8 +7,7 @@ use serde::de::DeserializeOwned;
 use crate::formats::de_price_f64;
 use tradeprim::price::Price;
 
-use crate::market_data::{Candle, RelevantPrice, Timestamped};
-use crate::{formats::Tagged, market_data::Symboled};
+use mdata::{Candle, RelevantPrice, Symboled, Tagged, Timestamped};
 
 use std::{
     fmt::Display,
@@ -29,7 +28,6 @@ use rdkafka::{
 };
 
 // #[cfg(feature = "kafka")]
-// use crate::market_data::MarketData;
 
 // --------------
 // --- Record ---

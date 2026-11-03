@@ -13,9 +13,10 @@ use instrid::{asset::Asset, instruments::FuturesContract, mic::Mic, tenor::Tenor
 
 use lab::{
     formats::custom::{CustomDatabentoAggregatedCandle, CustomDatabentoConsumerMd, KafkaSettings},
-    market_data::{Candle, FrdFutChainMdReader, FrdMdError},
+    market_data::{FrdFutChainMdReader, FrdMdError},
     process_md,
 };
+use mdata::Candle;
 use tradeprim::currency::Currency;
 
 enum Source {

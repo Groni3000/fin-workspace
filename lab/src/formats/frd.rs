@@ -5,7 +5,7 @@ use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use tradeprim::price::{ParsePriceError, Price};
 
-use crate::market_data::{Candle, RelevantPrice, Timestamped};
+use mdata::{Candle, RelevantPrice, Timestamped};
 
 #[derive(Serialize, Deserialize)]
 pub struct RawFrdCandle<'a> {

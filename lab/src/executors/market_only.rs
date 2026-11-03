@@ -10,10 +10,9 @@ use oms::{
     order::{New, Order, OrderType, Working},
 };
 
-use crate::{
-    event::{Kind, RejectReason, Scheduler},
-    market_data::{Candle, Instrumented},
-};
+use mdata::{Candle, Instrumented};
+
+use crate::event::{Kind, RejectReason, Scheduler};
 
 /// Simplest executor:
 ///     * Accepts market orders only

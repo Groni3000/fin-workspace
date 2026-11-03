@@ -1,0 +1,11 @@
+[package]
+name = "mdata"
+version = "0.1.0"
+edition = "2024"
+description = "Market-data record traits and instrument tagging"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+chrono = "0.4.44"
+instrid = { path = "../instrid" }
+tradeprim = { path = "../tradeprim" }

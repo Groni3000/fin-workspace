@@ -5,7 +5,7 @@ use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use tradeprim::price::Price;
 
-use crate::market_data::{Candle, RelevantPrice, Timestamped};
+use mdata::{Candle, RelevantPrice, Timestamped};
 
 /// Aggregated OHLCV. `ts` is the bucket start.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

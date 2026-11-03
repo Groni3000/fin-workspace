@@ -5,9 +5,10 @@ use chrono::{DateTime, TimeDelta, Utc};
 use crate::{
     event::{Event, EventSource, Kind, Request, Scheduled, Scheduler},
     executors::Executor,
-    formats::{Tagged, frd::FrdCandle},
-    market_data::{FrdFutChainMdReader, Timestamped},
+    formats::frd::FrdCandle,
+    market_data::FrdFutChainMdReader,
 };
+use mdata::{Tagged, Timestamped};
 
 pub struct FrdEventQueue<'a, E>
 where

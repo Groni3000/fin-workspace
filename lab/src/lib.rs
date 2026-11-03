@@ -14,7 +14,7 @@ pub mod telemetry;
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, Offset, TimeZone, Utc};
 use chrono_tz::Tz;
 
-use crate::market_data::{Candle, MarketData};
+use mdata::{Candle, MarketData};
 
 /// === PROCESS MARKET DATA
 pub fn process_md<T>(market_data: &mut T) -> Result<(u64, Option<T::Record>), T::Error>

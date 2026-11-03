@@ -1,7 +1,7 @@
 use crate::formats::de_price_f64;
-use crate::market_data::{Candle, RelevantPrice, Symboled, Timestamped};
 use chrono::serde::ts_nanoseconds;
 use chrono::{DateTime, Utc};
+use mdata::{Candle, RelevantPrice, Symboled, Timestamped};
 use serde::Deserialize;
 use tradeprim::price::Price;
 

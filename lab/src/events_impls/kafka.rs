@@ -6,9 +6,9 @@ use serde::de::DeserializeOwned;
 use crate::{
     event::{Event, EventSource, Kind, Request, Scheduled, Scheduler},
     executors::Executor,
-    formats::{Tagged, custom::CustomDatabentoConsumerMd},
-    market_data::{Candle, Symboled, Timestamped},
+    formats::custom::CustomDatabentoConsumerMd,
 };
+use mdata::{Candle, Symboled, Tagged, Timestamped};
 
 pub struct KafkaEventQueue<T, E>
 where

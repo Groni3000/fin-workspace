@@ -1,6 +1,8 @@
 pub mod market_only;
 pub mod mkt_stp_lmt;
 
+use mdata::{Candle, Instrumented};
+
 use crate::{
     event::{Event, Kind, Request, Scheduler},
     // Each executor concrete impl *should be* a superset of previous one.
@@ -10,7 +12,6 @@ use crate::{
     // more simple ones, I can entirely drop predecessors or leave them as is because they
     // may flag more clearly strategy intention to the user.
     executors::{market_only::MarketExecutor, mkt_stp_lmt::MarketStopLimitExecutor},
-    market_data::{Candle, Instrumented},
 };
 
 // TODO: generic Latency models for executors

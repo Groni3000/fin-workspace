@@ -4,13 +4,13 @@ use chrono::{DateTime, Datelike, NaiveDate, NaiveTime};
 use chrono_tz::Tz;
 use futchain::{FutChain, eot::EndOfTrading};
 use instrid::instruments::{FuturesContract, Instrument};
+use mdata::{Candle, Instrumented, RelevantPrice, Timestamped};
 use oms::fill::Fill;
 use tradeprim::{position::Position, price::Price, quantity::Quantity};
 
 use crate::{
     aggregation::SessionAggregator,
     event::{Event, Kind},
-    market_data::{Candle, Instrumented, RelevantPrice, Timestamped},
     portfolio::Portfolio,
     strategy::Desired,
     strats_impl::strat_1::config::Config,
