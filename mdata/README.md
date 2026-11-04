@@ -74,5 +74,5 @@ let trade = Trade {
 let tagged = Tagged::new(spy, trade);
 assert_eq!(tagged.instrument(), spy);
 assert_eq!(tagged.last_price(), Price::from_str_unchecked("512.25"));
-let _ = describe(&tagged);
+assert_eq!(describe(&tagged), "Stock:Equity|SPY/Currency|USD@ARCX(USD) @ 512.25");
 ```

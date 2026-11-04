@@ -14,7 +14,7 @@ use futchain::{FutChain, ListedTenors};
 use instrid::instruments::{FuturesContract, Instrument};
 use lab::{
     event::EventSource,
-    events_impls::{frd::FrdEventQueue, kafka::KafkaEventQueue},
+    events_impls::sim::SimQueue,
     executors::market_only::MarketExecutor,
     formats::{
         custom::{CustomDatabentoAggregatedCandle, CustomDatabentoConsumerMd, KafkaSettings},
@@ -49,14 +49,10 @@ fn main() {
     };
     match source_from_args() {
         Source::FrdFiles => {
-            let md = init_files_md(&listing, init_futures_contract)
-                .unwrap()
-                .peekable();
+            let md = init_files_md(&listing, init_futures_contract).unwrap();
             let mut pf = Portfolio::new();
             let mut oms = Oms::default();
-            let mut event_queue = FrdEventQueue::new(
-                0,
-                0,
+            let mut event_queue = SimQueue::new(
                 md,
                 MarketExecutor::new(
                     Duration::from_millis(250).as_nanos() as u64,
@@ -95,12 +91,10 @@ fn main() {
             ctrlc::set_handler(move || handler_flag.store(true, Ordering::Relaxed))
                 .expect("failed to set Ctrl-C handler");
 
-            let md = init_kafka_md(shutdown, init_futures_contract, &listing).peekable();
+            let md = init_kafka_md(shutdown, init_futures_contract, &listing);
             let mut pf = Portfolio::new();
             let mut oms = Oms::default();
-            let mut event_queue = KafkaEventQueue::new(
-                0,
-                0,
+            let mut event_queue = SimQueue::new(
                 md,
                 MarketExecutor::new(
                     Duration::from_millis(250).as_nanos() as u64,
@@ -147,12 +141,10 @@ fn main() {
             ctrlc::set_handler(move || handler_flag.store(true, Ordering::Relaxed))
                 .expect("failed to set Ctrl-C handler");
 
-            let md = init_kafka_merged_md(shutdown, init_futures_contract, &listing).peekable();
+            let md = init_kafka_merged_md(shutdown, init_futures_contract, &listing);
             let mut pf = Portfolio::new();
             let mut oms = Oms::default();
-            let mut event_queue = KafkaEventQueue::new(
-                0,
-                0,
+            let mut event_queue = SimQueue::new(
                 md,
                 MarketExecutor::new(
                     Duration::from_millis(250).as_nanos() as u64,

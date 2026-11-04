@@ -78,6 +78,8 @@ mod tests {
         h: Price,
         l: Price,
         c: Price,
+        /// Distinct from `c`: a `last_price` wired to `close()` must not pass.
+        last: Price,
         v: u64,
     }
 
@@ -88,7 +90,7 @@ mod tests {
     }
     impl RelevantPrice for Bar {
         fn last_price(&self) -> Price {
-            self.c
+            self.last
         }
     }
     impl Candle for Bar {
@@ -126,13 +128,14 @@ mod tests {
             h: Price::from_str_unchecked("4"),
             l: Price::from_str_unchecked("0.5"),
             c: Price::from_str_unchecked("2"),
+            last: Price::from_str_unchecked("3"),
             v: 7,
         };
         let tagged = Tagged::new(spy(), bar);
 
         assert_eq!(tagged.instrument(), spy());
         assert_eq!(tagged.timestamp(), bar.ts);
-        assert_eq!(tagged.last_price(), bar.c);
+        assert_eq!(tagged.last_price(), bar.last);
         assert_eq!(tagged.open(), bar.o);
         assert_eq!(tagged.high(), bar.h);
         assert_eq!(tagged.low(), bar.l);
