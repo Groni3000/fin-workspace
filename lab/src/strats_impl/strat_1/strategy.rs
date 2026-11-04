@@ -8,11 +8,10 @@ use mdata::{Candle, Instrumented, RelevantPrice, Timestamped};
 use oms::fill::Fill;
 use tradeprim::{position::Position, price::Price, quantity::Quantity};
 
+use engine::event::{Event, Kind};
+
 use crate::{
-    aggregation::SessionAggregator,
-    event::{Event, Kind},
-    portfolio::Portfolio,
-    strategy::Desired,
+    aggregation::SessionAggregator, portfolio::Portfolio, strategy::Desired,
     strats_impl::strat_1::config::Config,
 };
 

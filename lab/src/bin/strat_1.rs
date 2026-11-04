@@ -9,13 +9,15 @@ use std::{
 };
 
 use chrono::Datelike;
+use engine::{
+    event::EventSource,
+    sim::{MarketExecutor, SimQueue},
+    telemetry::{self, SimClock},
+};
 use foldhash::{HashMap, HashMapExt};
 use futchain::{FutChain, ListedTenors};
 use instrid::instruments::{FuturesContract, Instrument};
 use lab::{
-    event::EventSource,
-    events_impls::sim::SimQueue,
-    executors::market_only::MarketExecutor,
     formats::{
         custom::{CustomDatabentoAggregatedCandle, CustomDatabentoConsumerMd, KafkaSettings},
         merged_custom_kafka::MergedCandle,
@@ -25,7 +27,6 @@ use lab::{
     portfolio::Portfolio,
     rms::{HaltedRms, MaxPositionRms, NaiveRms, Rms},
     strats_impl::strat_1::{config::Config, strategy::Strategy},
-    telemetry::{self, SimClock},
 };
 use tradeprim::{
     position::{NonZeroQuantity, Position},

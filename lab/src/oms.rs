@@ -8,12 +8,9 @@ use oms::{
 };
 use tradeprim::{Side, quantity::Quantity};
 
-use crate::{
-    event::{Event, EventSource, Kind, Request},
-    portfolio::Portfolio,
-    rms::Rms,
-    strategy::Desired,
-};
+use engine::event::{Event, EventSource, Kind, Request};
+
+use crate::{portfolio::Portfolio, rms::Rms, strategy::Desired};
 
 #[derive(Default, Debug)]
 pub struct Oms {

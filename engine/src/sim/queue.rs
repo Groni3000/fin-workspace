@@ -4,7 +4,7 @@ use mdata::{Candle, Instrumented, MarketData, Timestamped};
 
 use crate::{
     event::{Event, EventSource, Kind, Request, Scheduled, Scheduler},
-    executors::Executor,
+    executor::Executor,
 };
 
 /// Backtest event queue: one market-data stream merged with what a simulated

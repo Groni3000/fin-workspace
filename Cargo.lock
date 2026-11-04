@@ -170,6 +170,15 @@ dependencies = [
 [[package]]
 name = "engine"
 version = "0.1.0"
+dependencies = [
+ "chrono",
+ "foldhash",
+ "instrid",
+ "mdata",
+ "oms",
+ "tracing-subscriber",
+ "tradeprim",
+]
 
 [[package]]
 name = "equivalent"
@@ -357,6 +366,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "ctrlc",
+ "engine",
  "foldhash",
  "futchain",
  "instrid",
@@ -366,7 +376,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
- "tracing-subscriber",
  "tradeprim",
 ]
 

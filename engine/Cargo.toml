@@ -2,5 +2,14 @@
 name = "engine"
 version = "0.1.0"
 edition = "2024"
+description = "Event queue, executors and runtime plumbing for backtests and live trading"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
+chrono = "0.4.44"
+foldhash = "0.2.0"
+instrid = { path = "../instrid" }
+mdata = { path = "../mdata" }
+oms = { path = "../oms" }
+tradeprim = { path = "../tradeprim" }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }

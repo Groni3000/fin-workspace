@@ -1,7 +1,4 @@
 pub mod aggregation;
-pub mod event;
-pub mod events_impls;
-pub mod executors;
 pub mod formats;
 pub mod market_data;
 pub mod oms;
@@ -9,7 +6,6 @@ pub mod portfolio;
 pub mod rms;
 pub mod strategy;
 pub mod strats_impl;
-pub mod telemetry;
 
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, Offset, TimeZone, Utc};
 use chrono_tz::Tz;

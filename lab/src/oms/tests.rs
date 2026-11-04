@@ -1,11 +1,8 @@
 use foldhash::{HashMap, HashSet};
 
-use crate::{
-    event::{Event, EventSource, Request},
-    oms::Oms,
-    portfolio::Portfolio,
-};
+use crate::{oms::Oms, portfolio::Portfolio};
 use chrono::DateTime;
+use engine::event::{Event, EventSource, Request};
 use instrid::{
     asset::{Asset, AssetClass},
     instruments::{Instrument, Stock},
@@ -122,8 +119,9 @@ fn check_oms_state(
 mod reconcile {
     use foldhash::HashMap;
 
+    use engine::event::{Event, Kind, RejectReason, Request};
+
     use crate::{
-        event::{Event, Kind, RejectReason, Request},
         oms::tests::{build_lmt, check_oms_state, qty},
         rms::NaiveRms,
         strategy::Desired,

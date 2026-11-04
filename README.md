@@ -52,6 +52,14 @@ Capability traits for a market-data record (`Timestamped`, `RelevantPrice`,
 `Tagged<R>`, which attaches an `Instrument` to a record that doesn't carry one.
 Consumers ask for the capabilities they need, so any format plugs in.
 
+### [`engine`](./engine) — events, queues and executors
+
+The runtime around a strategy. `Event`/`Kind`/`Request` and the `EventSource`
+trait, the `Executor` trait, and the backtest pieces: `SimQueue` (merges a
+market-data stream with what a simulated executor schedules) and the
+`MarketExecutor`/`MarketStopLimitExecutor` simulators. Also `SimClock` for
+logging in simulated time.
+
 ### [`oms`](./oms) — order management system
 
 This crate will be a thin communication-layer between Strategy and Executor.
@@ -62,6 +70,7 @@ This crate will be a thin communication-layer between Strategy and Executor.
 ```bash
 cargo test --workspace --all-features   # everything, including README doctests
 cargo test -p futchain                  # one crate
+cargo run -p engine --example market_order
 cargo run -p futchain --example find_active_contract
 cargo run -p futchain --example historical_roll_schedule
 cargo run -p instrid --example typed_groupby

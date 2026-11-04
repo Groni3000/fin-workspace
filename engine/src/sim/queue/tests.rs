@@ -1,10 +1,12 @@
-use chrono::DateTime;
+use std::fmt;
+
+use chrono::{DateTime, Utc};
 use instrid::{
     asset::{Asset, AssetClass},
     instruments::{Instrument, Stock},
     mic::Mic,
 };
-use mdata::{Candle, Instrumented, Tagged};
+use mdata::{Candle, Instrumented, RelevantPrice, Tagged, Timestamped};
 use oms::{
     OrderId,
     order::{New, Order, OrderBuilder},
@@ -14,13 +16,60 @@ use tradeprim::{Side, currency::Currency, price::Price, quantity::Quantity};
 use super::SimQueue;
 use crate::{
     event::{Event, EventSource, Kind, Request, Scheduler},
-    executors::Executor,
-    formats::frd::FrdCandle,
-    market_data::FrdMdError,
+    executor::Executor,
 };
 
-type Record = Tagged<FrdCandle>;
-type Stream = std::vec::IntoIter<Result<Record, FrdMdError>>;
+/// The smallest record the queue accepts: a timestamp and one price for o/h/l/c.
+#[derive(Debug, Clone, Copy)]
+struct Bar {
+    ts: DateTime<Utc>,
+    px: Price,
+}
+
+impl Timestamped for Bar {
+    fn timestamp(&self) -> DateTime<Utc> {
+        self.ts
+    }
+}
+
+impl RelevantPrice for Bar {
+    fn last_price(&self) -> Price {
+        self.px
+    }
+}
+
+impl Candle for Bar {
+    fn open(&self) -> Price {
+        self.px
+    }
+    fn high(&self) -> Price {
+        self.px
+    }
+    fn low(&self) -> Price {
+        self.px
+    }
+    fn close(&self) -> Price {
+        self.px
+    }
+    fn volume(&self) -> u64 {
+        1
+    }
+}
+
+/// What a broken market-data stream yields instead of a record, e.g. an unparsable row.
+#[derive(Debug)]
+struct FeedFailure(&'static str);
+
+impl fmt::Display for FeedFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "feed failure: {}", self.0)
+    }
+}
+
+impl std::error::Error for FeedFailure {}
+
+type Record = Tagged<Bar>;
+type Stream = std::vec::IntoIter<Result<Record, FeedFailure>>;
 
 /// Mock `Executor`, has two functions:
 ///     - Acks every order after `latency` nanos.
@@ -85,16 +134,18 @@ fn spy() -> Instrument {
     ))
 }
 
-fn bar(ts: i64) -> Result<Record, FrdMdError> {
-    let px = Price::from_str_unchecked("1");
+fn bar(ts: i64) -> Result<Record, FeedFailure> {
     Ok(Tagged::new(
         spy(),
-        FrdCandle::new(DateTime::from_timestamp_nanos(ts), px, px, px, px, 1),
+        Bar {
+            ts: DateTime::from_timestamp_nanos(ts),
+            px: Price::from_str_unchecked("1"),
+        },
     ))
 }
 
-fn feed_error() -> Result<Record, FrdMdError> {
-    Err(FrdMdError::Io(std::io::Error::other("boom")))
+fn feed_error(what: &'static str) -> Result<Record, FeedFailure> {
+    Err(FeedFailure(what))
 }
 
 fn order() -> Order<New> {
@@ -105,7 +156,7 @@ fn order() -> Order<New> {
         .build()
 }
 
-fn queue(md: Vec<Result<Record, FrdMdError>>, latency: i64) -> SimQueue<Stream, MockExec> {
+fn queue(md: Vec<Result<Record, FeedFailure>>, latency: i64) -> SimQueue<Stream, MockExec> {
     SimQueue::new(md.into_iter(), MockExec::new(latency))
 }
 
@@ -190,7 +241,7 @@ fn scheduled_events_still_go_out_after_the_stream_ends() {
 
 #[test]
 fn a_feed_error_goes_out_at_the_current_time() {
-    let mut q = queue(vec![bar(10), feed_error(), bar(20)], 0);
+    let mut q = queue(vec![bar(10), feed_error("row 2 unparsable"), bar(20)], 0);
 
     assert_eq!(
         drain(&mut q),
@@ -199,8 +250,20 @@ fn a_feed_error_goes_out_at_the_current_time() {
 }
 
 #[test]
+fn a_feed_error_carries_the_streams_own_error() {
+    let mut q = queue(vec![bar(10), feed_error("row 2 unparsable")], 0);
+    q.next_event().unwrap(); // md @ 10
+
+    let event = q.next_event().unwrap();
+    let Kind::FeedError(err) = event.kind() else {
+        panic!("expected a feed error, got {event:?}");
+    };
+    assert_eq!(err.to_string(), "feed failure: row 2 unparsable");
+}
+
+#[test]
 fn a_scheduled_event_due_now_goes_before_a_feed_error() {
-    let mut q = queue(vec![bar(10), feed_error()], 0);
+    let mut q = queue(vec![bar(10), feed_error("connection reset")], 0);
     q.next_event().unwrap(); // md @ 10
     q.submit(Request::SendOrder(order())); // ack @ 10
 
@@ -209,7 +272,7 @@ fn a_scheduled_event_due_now_goes_before_a_feed_error() {
 
 #[test]
 fn the_executor_is_shown_every_event_before_it_is_returned() {
-    let mut q = queue(vec![bar(10), feed_error(), bar(20)], 5);
+    let mut q = queue(vec![bar(10), feed_error("row 2 unparsable"), bar(20)], 5);
 
     // Already in `seen` the moment `next_event` returns it: shown before, not after.
     let step = |q: &mut SimQueue<Stream, MockExec>, expected: (i64, &'static str)| {

@@ -15,10 +15,10 @@ futchain = { path = "../futchain" }
 rdkafka = { version = "0.36", features = ["cmake-build"], optional = true }
 ctrlc = { version = "3", optional = true }
 oms = { path = "../oms" }
+engine = { path = "../engine" }
 mdata = { path = "../mdata" }
 # `release_max_level_info` compiles trace!/debug! out entirely in release builds.
 tracing = { version = "0.1", features = ["release_max_level_info"] }
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 foldhash = "0.2.0"
 
 
