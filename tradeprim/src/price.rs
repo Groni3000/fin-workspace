@@ -7,9 +7,9 @@ use std::{fmt::Display, num::ParseIntError, str::FromStr};
 /// Has fixed scale and max value.
 ///
 /// Initially, I thought to do something like this:
-/// - Price - Price -> PriceDelta<i64>
-/// - Price * Quantity<u64> -> Notional<i128?>
-/// - Price / Price -> f64
+/// - `Price - Price -> PriceDelta<i64>`
+/// - `Price * Quantity<u64> -> Notional<i128?>`
+/// - `Price / Price -> f64`
 /// - Price + Price -> NotImplemented (no sense?)
 ///
 /// But for now, no math operations are implemented.

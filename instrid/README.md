@@ -17,19 +17,19 @@ granularities, and most type systems blur them into one:
 
 `instrid` keeps both visible in the type system:
 
-- [`Asset`] - represents the entity: (`name + AssetClass`)
-- [`TradedInstrument`] - represents what we buy/sell (`base: Asset`), what is used to
+- `Asset` - represents the entity: (`name + AssetClass`)
+- `TradedInstrument` - represents what we buy/sell (`base: Asset`), what is used to
   quote base (`price_quotation: Asset`), where it is traded (`mic: Mic`) and what it
   settles in (`settlement_currency: Currency`).
 - [`Stock`, `FuturesContract`, `OptionContract`] - concrete implementations of each trading instrument type.
-- [`Instrument`] - enum of concrete implementations
+- `Instrument` - enum of concrete implementations
   (useful for gathering all instrument types together).
 
 These are small: `Stock` is 56 bytes, `FuturesContract` 64, `OptionContract` 72.
 `Instrument` is 72 bytes — the tag fits in existing padding.
 
 `Mic` is 4 bytes: just the code. The full ISO 10383 record is a separate
-160-byte [`MicIso`], fetched from the registry only when you actually want the
+160-byte `MicIso`, fetched from the registry only when you actually want the
 country, status or description — none of which belong in a hot loop.
 
 Every value in this library lives on the stack and is `Copy`. The only heap
@@ -218,7 +218,7 @@ So, instead of having this whole registry at compile time with all types, it was
 as pure static bytes. The registry is constructed once (that one heap allocation)
 during first MIC lookup. All subsequent lookups are pure hashmap lookups.
 
-That registry stores [`MicIso`] — the full 160-byte ISO record. `Mic`, the
+That registry stores `MicIso` — the full 160-byte ISO record. `Mic`, the
 4-byte code, is what instruments actually carry; `Mic::from(mic_iso)` narrows,
 and `mic_iso_by_code` goes the other way when you need the details.
 

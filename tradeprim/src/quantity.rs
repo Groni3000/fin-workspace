@@ -16,10 +16,10 @@ use crate::position::NonZeroQuantity;
 ///
 /// Non-zero number that follows such rules:
 /// ( ✗ means `not implemented`)
-/// ✗ Quantity - Quantity -> QuantityDelta<i64>
-/// ✗ Price * Quantity<u64> -> Notional<i128?>
-/// ✗ Notional<i128> / Quantity<u64> -> Price<i64>
-/// ✗ Quantity<u64> + Quantity<u64> -> Quantity<u64>
+/// ✗ `Quantity - Quantity -> QuantityDelta<i64>`
+/// ✗ `Price * Quantity<u64> -> Notional<i128?>`
+/// ✗ `Notional<i128> / Quantity<u64> -> Price<i64>`
+/// ✗ `Quantity<u64> + Quantity<u64> -> Quantity<u64>`
 ///
 #[derive(Hash, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Quantity {
