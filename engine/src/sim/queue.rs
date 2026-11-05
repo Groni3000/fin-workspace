@@ -5,6 +5,7 @@ use mdata::{Candle, Instrumented, MarketData, Timestamped};
 use crate::{
     event::{Event, EventSource, Kind, Request, Scheduled, Scheduler},
     executor::Executor,
+    merge::{NextRecord, scheduled_first},
 };
 
 /// Backtest event queue: one market-data stream merged with what a simulated
@@ -13,7 +14,7 @@ use crate::{
 /// Works over any [`MarketData`] stream whose records are [`Candle`] +
 /// [`Instrumented`], which is what the simulated executors fill against.
 ///
-/// Ordering rules:
+/// Ordering rules (the first two are [`scheduled_first`]'s):
 /// - the earliest timestamp goes first;
 /// - on a tie, the scheduled event goes before the market data, so an ack or fill
 ///   reaches the strategy before the candle that comes at the same time;
@@ -76,22 +77,20 @@ where
 
     fn next_event(&mut self) -> Option<Event<Self::Record>> {
         // peek at both: md and scheduled events
-        let md_ts = match self.md.peek() {
-            Some(Ok(record)) => Some(nanos(record)),
-            Some(Err(_)) => Some(self.now),
-            None => None,
+        let next_record = match self.md.peek() {
+            Some(Ok(record)) => NextRecord::At(nanos(record)),
+            // A feed error goes out at the current time.
+            Some(Err(_)) => NextRecord::At(self.now),
+            None => NextRecord::End,
         };
         let heap_ts = self.heap.peek().map(|next| next.0.event().ts());
 
-        let scheduled_first = match (heap_ts, md_ts) {
-            (None, None) => return None,
-            (Some(heap_ts), Some(md_ts)) => heap_ts <= md_ts,
-            (Some(_), None) => true,
-            (None, Some(_)) => false,
-        };
+        if heap_ts.is_none() && next_record == NextRecord::End {
+            return None;
+        }
 
         // event extraction
-        let event = if scheduled_first {
+        let event = if scheduled_first(heap_ts, next_record) {
             let event = self.heap.pop().expect("just peeked").0.as_event();
             assert!(
                 event.ts() >= self.now,

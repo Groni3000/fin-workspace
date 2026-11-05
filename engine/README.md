@@ -8,6 +8,7 @@ executors that turn requests into acks and fills. Built on
 |---|---|
 | `event` | `Event`, `Kind`, `Request`, `RejectReason`, `EventSource`, and `Scheduled`/`Scheduler` for events due in the future |
 | `executor` | the `Executor` trait: whatever fills, cancels and rejects orders, simulated or live |
+| `merge` | the one rule for merging feed records with scheduled events: `scheduled_first` and `NextRecord` |
 | `sim` | backtest-only pieces: `SimQueue`, `MarketExecutor`, `MarketStopLimitExecutor` |
 | `telemetry` | `SimClock`, which stamps log lines with simulated time, and `init`/`init_json` to install a logger with it |
 | `utils` | helpers for strategies, such as `dt_trigger::DateTimeTrigger` |
