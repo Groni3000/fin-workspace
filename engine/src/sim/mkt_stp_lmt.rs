@@ -19,7 +19,7 @@ use crate::{
 };
 
 /// Natural extension of `MarketExecutor`:
-///     * Accepts market+stop orders only
+///     * Accepts market, stop and limit orders only
 ///     * Every fill is fully executed
 ///     * Constant ack/fill/cancel/reject latency
 pub struct MarketStopLimitExecutor {
@@ -52,6 +52,10 @@ impl MarketStopLimitExecutor {
         }
     }
 
+    pub fn pending_orders(&self) -> &HashMap<OrderId, Order<New>> {
+        &self.pending_orders
+    }
+
     pub fn working_orders(&self) -> &HashMap<Instrument, Vec<Order<Working>>> {
         &self.working_orders
     }
@@ -75,10 +79,10 @@ impl MarketStopLimitExecutor {
 
 // --- Scheduling operations
 impl MarketStopLimitExecutor {
-    /// Pushes a market or stop order to the executor.
+    /// Pushes a market, stop or limit order to the executor.
     ///
     /// Rejects the order if:
-    ///     - it is not a market/stop order.
+    ///     - it is not a market/stop/limit order.
     ///     - it's already in unacknowledged orders
     ///
     /// Schedules acknowledgment.
@@ -149,8 +153,9 @@ impl MarketStopLimitExecutor {
     }
 
     /// Fills every working order for this record's instrument: market orders at
-    /// the last price, triggered stops at their trigger, worsened to the bar's
-    /// open when the bar gapped through the trigger price.
+    /// the bar's open, triggered stops at their trigger, worsened to the bar's
+    /// open when the bar gapped through the trigger price, and reached limits at
+    /// their limit, improved to the bar's open when the bar opened beyond it.
     pub fn on_record<M: Candle + Instrumented>(
         &mut self,
         md_record: &M,

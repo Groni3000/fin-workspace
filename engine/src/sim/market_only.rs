@@ -256,3 +256,6 @@ impl Executor for MarketExecutor {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

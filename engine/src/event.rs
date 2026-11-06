@@ -27,7 +27,7 @@ impl<R> Event<R> {
         &self.kind
     }
 
-    /// Moves the kind out, droppint timestamp
+    /// Moves the kind out, dropping the timestamp.
     pub fn into_kind(self) -> Kind<R> {
         self.kind
     }
