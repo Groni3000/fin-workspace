@@ -26,6 +26,11 @@ impl<R> Event<R> {
     pub fn kind(&self) -> &Kind<R> {
         &self.kind
     }
+
+    /// Moves the kind out, droppint timestamp
+    pub fn into_kind(self) -> Kind<R> {
+        self.kind
+    }
 }
 
 pub struct Scheduled<R> {
@@ -126,3 +131,6 @@ pub enum Request {
     // CancelTimer(TimerKind),
     Snapshot,
 }
+
+#[cfg(test)]
+mod tests;
