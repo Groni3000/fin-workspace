@@ -1,6 +1,8 @@
 use mdata::{Candle, Instrumented};
 
-use crate::event::{Event, Request, Scheduler};
+use oms::protocol::Request;
+
+use crate::event::{Event, Scheduler};
 
 // TODO: generic Latency models for executors
 

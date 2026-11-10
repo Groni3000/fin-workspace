@@ -5,10 +5,11 @@ use oms::{
     OrderId,
     fill::Fill,
     order::{FillOutcome, New, Order, OrderBuilder, OrderType, Working},
+    protocol::{ExecEvent, Request},
 };
 use tradeprim::{Side, quantity::Quantity};
 
-use engine::event::{Event, EventSource, Kind, Request};
+use engine::event::{Event, EventSource, Kind};
 
 use crate::{portfolio::Portfolio, rms::Rms, strategy::Desired};
 
@@ -38,19 +39,21 @@ impl Oms {
 
     pub fn on_event<R>(&mut self, event: &Event<R>, pf: &mut Portfolio) {
         match event.kind() {
-            Kind::Ack(id) => {
-                self.on_ack(id);
-            }
-            Kind::Fill(f) => {
-                self.on_fill(f, pf);
-            }
-            Kind::Reject(id, _reason) => {
-                self.on_reject(id, pf);
-            }
-            Kind::CancelResponse(id, success) => {
-                self.on_cancel_response(id, success, pf);
-            }
-            Kind::Expired(_instrument, order_id) => self.on_expire(order_id, pf),
+            Kind::Exec(exec) => match exec {
+                ExecEvent::Ack(id) => {
+                    self.on_ack(id);
+                }
+                ExecEvent::Fill(f) => {
+                    self.on_fill(f, pf);
+                }
+                ExecEvent::Reject(id, _reason) => {
+                    self.on_reject(id, pf);
+                }
+                ExecEvent::CancelResponse(id, success) => {
+                    self.on_cancel_response(id, success, pf);
+                }
+                ExecEvent::Expired(_instrument, order_id) => self.on_expire(order_id, pf),
+            },
             Kind::MarketData(_) => {
                 // This oms is not concerned with market data
             }

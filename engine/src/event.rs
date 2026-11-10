@@ -1,11 +1,6 @@
 use std::{cmp::Reverse, collections::BinaryHeap};
 
-use instrid::instruments::Instrument;
-use oms::{
-    OrderId,
-    fill::Fill,
-    order::{New, Order, OrderType},
-};
+use oms::protocol::{ExecEvent, RequestSink};
 
 #[derive(Debug)]
 pub struct Event<R> {
@@ -95,41 +90,20 @@ impl<'q, R> Scheduler<'q, R> {
     }
 }
 
-pub trait EventSource {
+/// Hands out events in time order and accepts requests.
+pub trait EventSource: RequestSink {
     type Record;
     fn next_event(&mut self) -> Option<Event<Self::Record>>;
-    fn submit(&mut self, req: Request);
 }
 
 #[derive(Debug)]
 pub enum Kind<R> {
     MarketData(R),
+    /// An executor's report about an order.
+    Exec(ExecEvent),
     FeedError(Box<dyn std::error::Error + Send>),
-    Ack(OrderId),
-    Fill(Fill),
-    Reject(OrderId, RejectReason),
-    CancelResponse(OrderId, bool),
-    Expired(Instrument, OrderId),
     // Timer(TimerKind),
     // Operator(Command),
-}
-
-#[derive(Debug)]
-pub enum RejectReason {
-    UnsupportedOrderType(OrderType),
-    DuplicateOrderId,
-    /// Free text for a live trading.
-    Venue(String),
-}
-
-#[derive(Debug)]
-pub enum Request {
-    SendOrder(Order<New>),
-    CancelOrder(Instrument, OrderId),
-    /// (Timer, fire at ts)
-    // StartTimer(TimerKind, i64),
-    // CancelTimer(TimerKind),
-    Snapshot,
 }
 
 #[cfg(test)]

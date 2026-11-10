@@ -1,9 +1,10 @@
 use std::{cmp::Reverse, collections::BinaryHeap, error::Error, iter::Peekable};
 
 use mdata::{Candle, Instrumented, MarketData, Timestamped};
+use oms::protocol::{Request, RequestSink};
 
 use crate::{
-    event::{Event, EventSource, Kind, Request, Scheduled, Scheduler},
+    event::{Event, EventSource, Kind, Scheduled, Scheduler},
     executor::Executor,
     merge::{NextRecord, scheduled_first},
 };
@@ -124,7 +125,10 @@ where
         self.exec.on_event(&event, &mut scheduler);
         Some(event)
     }
+}
 
+/// A request reaches the executor at the current time.
+impl<MD: MarketData, E: Executor> RequestSink for SimQueue<MD, E> {
     fn submit(&mut self, req: Request) {
         let mut scheduler = Scheduler::new(&mut self.heap, &mut self.seq);
         self.exec.on_request(self.now, req, &mut scheduler);

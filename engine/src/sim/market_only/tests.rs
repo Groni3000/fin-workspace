@@ -1,11 +1,14 @@
 //! Tests for invariants of a simplest market executor: [`MarketExecutor`]
 
-use oms::order::OrderType;
+use oms::{
+    order::OrderType,
+    protocol::{ExecEvent, Request},
+};
 use tradeprim::Side;
 
 use super::MarketExecutor;
 use crate::{
-    event::{Kind, Request},
+    event::Kind,
     sim::fixtures::{ACK, CANCEL, FILL, OHLC, REJECT, SEC, bar, events, order, px, run, send, spy},
 };
 
@@ -93,7 +96,7 @@ fn a_cancelled_working_unfilled_order_does_not_fill() {
         start,
         |event| {
             // Right after the ack: the order works, and no bar has come yet.
-            matches!(event.kind(), Kind::Ack(_))
+            matches!(event.kind(), Kind::Exec(ExecEvent::Ack(_)))
                 .then(|| Request::CancelOrder(spy(), orders[0].order_id()))
         },
     );

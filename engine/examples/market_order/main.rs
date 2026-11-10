@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use engine::{
-    event::{Event, EventSource, Kind, Request},
+    event::{Event, EventSource, Kind},
     sim::{MarketExecutor, SimQueue},
 };
 use instrid::{
@@ -11,7 +11,10 @@ use instrid::{
     mic::Mic,
 };
 use mdata::{Candle, RelevantPrice, Tagged, Timestamped};
-use oms::order::{New, Order, OrderBuilder};
+use oms::{
+    order::{New, Order, OrderBuilder},
+    protocol::{ExecEvent, Request, RequestSink},
+};
 use tradeprim::{Side, currency::Currency, price::Price, quantity::Quantity};
 
 const SEC: i64 = 1_000_000_000;
@@ -69,8 +72,8 @@ fn describe(event: &Event<Tagged<Bar>>, ours: &Order<New>) -> String {
     };
     match event.kind() {
         Kind::MarketData(bar) => format!("bar open={} close={}", bar.open(), bar.close()),
-        Kind::Ack(id) => format!("ack ({})", whose(*id)),
-        Kind::Fill(fill) => format!(
+        Kind::Exec(ExecEvent::Ack(id)) => format!("ack ({})", whose(*id)),
+        Kind::Exec(ExecEvent::Fill(fill)) => format!(
             "fill {:?} {} @ {} ({})",
             fill.side(),
             fill.quantity().qty(),

@@ -63,6 +63,8 @@ logging in simulated time.
 ### [`oms`](./oms) — order management system
 
 This crate will be a thin communication-layer between Strategy and Executor.
+For now: `Order` and its states, `Fill`, and `protocol`, the messages between the
+trading side and an executor (`Request` out, `ExecEvent` back, `RequestSink`).
 
 
 ## Working in the workspace

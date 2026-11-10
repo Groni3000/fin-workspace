@@ -10,12 +10,13 @@ use mdata::{Candle, Instrumented, RelevantPrice, Tagged, Timestamped};
 use oms::{
     OrderId,
     order::{New, Order, OrderBuilder},
+    protocol::{ExecEvent, Request, RequestSink},
 };
 use tradeprim::{Side, currency::Currency, price::Price, quantity::Quantity};
 
 use super::SimQueue;
 use crate::{
-    event::{Event, EventSource, Kind, Request, Scheduler},
+    event::{Event, EventSource, Kind, Scheduler},
     executor::Executor,
 };
 
@@ -108,7 +109,10 @@ impl Executor for MockExec {
         scheduler: &mut Scheduler<'_, M>,
     ) {
         if let Request::SendOrder(order) = request {
-            scheduler.push(timestamp + self.latency, Kind::Ack(order.order_id()));
+            scheduler.push(
+                timestamp + self.latency,
+                Kind::Exec(ExecEvent::Ack(order.order_id())),
+            );
         }
     }
 }
@@ -117,11 +121,11 @@ fn label<R>(event: &Event<R>) -> &'static str {
     match event.kind() {
         Kind::MarketData(_) => "md",
         Kind::FeedError(_) => "feed error",
-        Kind::Ack(_) => "ack",
-        Kind::Fill(_) => "fill",
-        Kind::Reject(_, _) => "reject",
-        Kind::CancelResponse(_, _) => "cancel response",
-        Kind::Expired(_, _) => "expired",
+        Kind::Exec(ExecEvent::Ack(_)) => "ack",
+        Kind::Exec(ExecEvent::Fill(_)) => "fill",
+        Kind::Exec(ExecEvent::Reject(_, _)) => "reject",
+        Kind::Exec(ExecEvent::CancelResponse(_, _)) => "cancel response",
+        Kind::Exec(ExecEvent::Expired(_, _)) => "expired",
     }
 }
 
@@ -169,7 +173,7 @@ fn drain(q: &mut SimQueue<Stream, MockExec>) -> Vec<(i64, &'static str)> {
 
 fn ack_id(event: Event<Record>) -> OrderId {
     match event.kind() {
-        Kind::Ack(id) => *id,
+        Kind::Exec(ExecEvent::Ack(id)) => *id,
         _ => panic!("expected an ack, got {event:?}"),
     }
 }

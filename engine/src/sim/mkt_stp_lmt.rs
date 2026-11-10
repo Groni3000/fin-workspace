@@ -8,13 +8,14 @@ use oms::{
     OrderId,
     fill::Fill,
     order::{New, Order, OrderType, Working},
+    protocol::{ExecEvent, RejectReason, Request},
 };
 use tradeprim::{Side, price::Price};
 
 use mdata::{Candle, Instrumented};
 
 use crate::{
-    event::{Event, Kind, RejectReason, Request, Scheduler},
+    event::{Event, Kind, Scheduler},
     executor::Executor,
 };
 
@@ -122,7 +123,10 @@ impl MarketStopLimitExecutor {
         timestamp: i64,
         scheduler: &mut Scheduler<'_, M>,
     ) {
-        scheduler.push(timestamp + self.ack_latency as i64, Kind::Ack(order_id));
+        scheduler.push(
+            timestamp + self.ack_latency as i64,
+            Kind::Exec(ExecEvent::Ack(order_id)),
+        );
     }
 
     /// Cancels order and schedules cancellation message arrival of an order by its id.
@@ -137,7 +141,7 @@ impl MarketStopLimitExecutor {
         let existed = existed || self.drop_working(instrument, order_id);
         scheduler.push(
             timestamp + self.cancel_latency as i64,
-            Kind::CancelResponse(order_id, existed),
+            Kind::Exec(ExecEvent::CancelResponse(order_id, existed)),
         );
     }
 
@@ -151,7 +155,7 @@ impl MarketStopLimitExecutor {
     ) {
         scheduler.push(
             timestamp + self.reject_latency as i64,
-            Kind::Reject(order_id, reason),
+            Kind::Exec(ExecEvent::Reject(order_id, reason)),
         )
     }
 
@@ -206,7 +210,10 @@ impl MarketStopLimitExecutor {
 
             // All guards passed => schedule a fully filled order
             let fill = Self::get_fill_to_fully_fill_the_order(timestamp, order, fill_price);
-            scheduler.push(timestamp + self.fill_latency as i64, Kind::Fill(fill));
+            scheduler.push(
+                timestamp + self.fill_latency as i64,
+                Kind::Exec(ExecEvent::Fill(fill)),
+            );
 
             false
         });
@@ -287,12 +294,14 @@ impl Executor for MarketStopLimitExecutor {
     ) {
         match event.kind() {
             Kind::MarketData(md_record) => self.on_record(md_record, event.ts(), scheduler),
-            Kind::Ack(order_id) => self.on_ack(order_id),
-            Kind::Fill(fill) => self.on_fill(fill),
-            Kind::Reject(order_id, reason) => self.on_reject(order_id, reason),
-            Kind::CancelResponse(order_id, ok) => self.on_cancel(order_id, ok),
+            Kind::Exec(exec) => match exec {
+                ExecEvent::Ack(order_id) => self.on_ack(order_id),
+                ExecEvent::Fill(fill) => self.on_fill(fill),
+                ExecEvent::Reject(order_id, reason) => self.on_reject(order_id, reason),
+                ExecEvent::CancelResponse(order_id, ok) => self.on_cancel(order_id, ok),
+                ExecEvent::Expired(_instrument, order_id) => self.on_expire(order_id),
+            },
             Kind::FeedError(_) => {}
-            Kind::Expired(_instrument, order_id) => self.on_expire(order_id),
         }
     }
     fn on_request<M>(

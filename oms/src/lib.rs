@@ -2,6 +2,7 @@ use uuid::Uuid;
 
 pub mod fill;
 pub mod order;
+pub mod protocol;
 
 pub mod prelude {
     pub use crate::OrderId;

@@ -2,12 +2,15 @@
 
 use std::{cmp::Reverse, collections::BinaryHeap};
 
-use oms::order::OrderType;
+use oms::{
+    order::OrderType,
+    protocol::{ExecEvent, Request},
+};
 use tradeprim::Side;
 
 use super::MarketStopLimitExecutor;
 use crate::{
-    event::{Kind, Request, Scheduler},
+    event::{Kind, Scheduler},
     sim::fixtures::{
         ACK, CANCEL, FILL, OHLC, REJECT, Record, SEC, bar, events, order, px, qqq, run, send, spy,
     },
@@ -251,7 +254,7 @@ fn a_cancelled_working_unfilled_order_does_not_fill() {
         start,
         |event| {
             // Right after the ack: the order works, and no bar has come yet.
-            matches!(event.kind(), Kind::Ack(_))
+            matches!(event.kind(), Kind::Exec(ExecEvent::Ack(_)))
                 .then(|| Request::CancelOrder(spy(), orders[0].order_id()))
         },
     );

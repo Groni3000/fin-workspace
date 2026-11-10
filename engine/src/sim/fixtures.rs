@@ -10,12 +10,15 @@ use instrid::{
     mic::Mic,
 };
 use mdata::{Candle, RelevantPrice, Tagged, Timestamped};
-use oms::order::{New, Order, OrderBuilder, OrderType};
+use oms::{
+    order::{New, Order, OrderBuilder, OrderType},
+    protocol::{ExecEvent, RejectReason, Request, RequestSink},
+};
 use tradeprim::{Side, currency::Currency, price::Price, quantity::Quantity};
 
 use super::SimQueue;
 use crate::{
-    event::{Event, EventSource, Kind, RejectReason, Request},
+    event::{Event, EventSource, Kind},
     executor::Executor,
 };
 
@@ -169,15 +172,15 @@ fn describe(event: &Event<Record>, orders: &[Order<New>]) -> String {
     };
     match event.kind() {
         Kind::MarketData(_) => "bar".to_string(),
-        Kind::Ack(id) => format!("ack {}", name(*id)),
-        Kind::Fill(fill) => format!(
+        Kind::Exec(ExecEvent::Ack(id)) => format!("ack {}", name(*id)),
+        Kind::Exec(ExecEvent::Fill(fill)) => format!(
             "fill {} {:?} {} @ {}",
             name(fill.order_id()),
             fill.side(),
             fill.quantity().qty(),
             fill.price()
         ),
-        Kind::Reject(id, reason) => {
+        Kind::Exec(ExecEvent::Reject(id, reason)) => {
             let reason = match reason {
                 RejectReason::UnsupportedOrderType(_) => "unsupported order type",
                 RejectReason::DuplicateOrderId => "duplicate order id",
@@ -185,7 +188,7 @@ fn describe(event: &Event<Record>, orders: &[Order<New>]) -> String {
             };
             format!("reject {} {reason}", name(*id))
         }
-        Kind::CancelResponse(id, ok) => format!("cancel {} {ok}", name(*id)),
+        Kind::Exec(ExecEvent::CancelResponse(id, ok)) => format!("cancel {} {ok}", name(*id)),
         other => format!("{other:?}"),
     }
 }

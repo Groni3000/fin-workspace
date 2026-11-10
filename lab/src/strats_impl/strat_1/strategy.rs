@@ -5,7 +5,7 @@ use chrono_tz::Tz;
 use futchain::{FutChain, eot::EndOfTrading};
 use instrid::instruments::{FuturesContract, Instrument};
 use mdata::{Candle, Instrumented, RelevantPrice, Timestamped};
-use oms::fill::Fill;
+use oms::{fill::Fill, protocol::ExecEvent};
 use tradeprim::{position::Position, price::Price, quantity::Quantity};
 
 use engine::event::{Event, Kind};
@@ -131,27 +131,29 @@ impl<E: EndOfTrading> Strategy<E> {
     {
         match event.kind() {
             Kind::MarketData(md) => self.process_md(md),
-            Kind::Ack(_order_id) => {
-                // This strategy does not require specific actions of Ack.
-            }
-            Kind::Reject(_order_id, _reason) => {
-                // This strategy does not require specific actions of Reject.
-            }
-            Kind::CancelResponse(_order_id, true) => {
-                // This strategy does not require specific actions of CancelResponse.
-            }
-            Kind::CancelResponse(_order_id, false) => {
-                // This strategy does not require specific actions of CancelResponse.
-            }
-            Kind::Expired(_instrument, _order_id) => {
-                // This strategy does not require specific actions of Expire.
-            }
+            Kind::Exec(exec) => match exec {
+                ExecEvent::Ack(_order_id) => {
+                    // This strategy does not require specific actions of Ack.
+                }
+                ExecEvent::Reject(_order_id, _reason) => {
+                    // This strategy does not require specific actions of Reject.
+                }
+                ExecEvent::CancelResponse(_order_id, true) => {
+                    // This strategy does not require specific actions of CancelResponse.
+                }
+                ExecEvent::CancelResponse(_order_id, false) => {
+                    // This strategy does not require specific actions of CancelResponse.
+                }
+                ExecEvent::Expired(_instrument, _order_id) => {
+                    // This strategy does not require specific actions of Expire.
+                }
+                ExecEvent::Fill(fill) => {
+                    // This strategy does not require specific actions of Fill.
+                    self.on_fill(fill, pf);
+                }
+            },
             Kind::FeedError(_err) => {
                 // This strategy does not require specific actions of FeedError.
-            }
-            Kind::Fill(fill) => {
-                // This strategy does not require specific actions of Fill.
-                self.on_fill(fill, pf);
             }
         }
     }
