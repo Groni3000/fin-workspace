@@ -256,7 +256,10 @@ mod reconcile {
         );
     }
 
-    /// Send market, partial fill, no new orders expected, final fill, oms transferred order to portfolio.
+    /// Both order types at once: a desired position of 16 (sent as a market order) and a
+    /// desired buy limit for 2. Each gets a partial fill, then a full one, and no new orders are
+    /// sent along the way. The strategy moves `dp` by every limit fill and drops the limit once
+    /// it's filled. Both orders end in the portfolio as `Filled`.
     ///
     /// Real oms, portfolio, naive rms, part of strategy (most likely future trait)
     ///
@@ -643,7 +646,7 @@ mod reconcile {
     /// TLDR:
     ///
     ///  Only Strategy decides how to act on overfill of desired order.
-    ///  For example: standard actions like it this test - accept it (with a warning in a log).
+    ///  For example, the standard action, as in this test: accept it (with a warning in a log).
     ///  Or, it can look that there was an overfill and correct desired position by CORRECT amount
     ///  and Oms will correct position by Market order.
     #[test]
@@ -756,7 +759,8 @@ mod reconcile {
         // 3. Eighteen fill against an order for sixteen
         let fill = build_fill(&mkt_order_new.into_working(), nz_qty("18"), px("100"));
         oms.on_exec(&ExecEvent::Fill(fill), &mut portfolio);
-        // `Strategy` does nothing: a market order never moved `dp`
+        // `Strategy` does nothing: a market order never moved `dp`. So `dp` is still 16 while
+        // the portfolio holds 18, and this reconcile self-corrects with a market sell for 2.
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
 
         // m = 16 - (0 + 18) = -2
