@@ -22,6 +22,19 @@ pub enum ExecEvent {
     Expired(Instrument, OrderId),
 }
 
+impl ExecEvent {
+    /// The order this event is about. Every event is about exactly one order.
+    pub fn order_id(&self) -> OrderId {
+        match self {
+            ExecEvent::Ack(id)
+            | ExecEvent::Reject(id, _)
+            | ExecEvent::CancelResponse(id, _)
+            | ExecEvent::Expired(_, id) => *id,
+            ExecEvent::Fill(fill) => fill.order_id(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum RejectReason {
     UnsupportedOrderType(OrderType),
@@ -46,3 +59,6 @@ pub enum Request {
 pub trait RequestSink {
     fn submit(&mut self, req: Request);
 }
+
+#[cfg(test)]
+mod tests;
