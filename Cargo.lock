@@ -512,8 +512,10 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "chrono-tz",
+ "foldhash",
  "instrid",
  "proptest",
+ "tracing",
  "tradeprim",
  "uuid",
 ]

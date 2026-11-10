@@ -5,15 +5,12 @@ use chrono_tz::Tz;
 use futchain::{FutChain, eot::EndOfTrading};
 use instrid::instruments::{FuturesContract, Instrument};
 use mdata::{Candle, Instrumented, RelevantPrice, Timestamped};
-use oms::{fill::Fill, protocol::ExecEvent};
+use oms::{desired::Desired, fill::Fill, portfolio::Portfolio, protocol::ExecEvent};
 use tradeprim::{position::Position, price::Price, quantity::Quantity};
 
 use engine::event::{Event, Kind};
 
-use crate::{
-    aggregation::SessionAggregator, portfolio::Portfolio, strategy::Desired,
-    strats_impl::strat_1::config::Config,
-};
+use crate::{aggregation::SessionAggregator, strats_impl::strat_1::config::Config};
 
 /// Why the strategy decided to flatten. Emitted with the `exit` event for the trade ledger.
 #[derive(Debug, Clone, Copy)]

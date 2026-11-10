@@ -1,8 +1,12 @@
 use uuid::Uuid;
 
+pub mod desired;
 pub mod fill;
+pub mod manager;
 pub mod order;
+pub mod portfolio;
 pub mod protocol;
+pub mod rms;
 
 pub mod prelude {
     pub use crate::OrderId;

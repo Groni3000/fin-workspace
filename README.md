@@ -54,17 +54,19 @@ Consumers ask for the capabilities they need, so any format plugs in.
 
 ### [`engine`](./engine) — events, queues and executors
 
-The runtime around a strategy. `Event`/`Kind`/`Request` and the `EventSource`
-trait, the `Executor` trait, and the backtest pieces: `SimQueue` (merges a
+The runtime around a strategy. `Event`/`Kind` and the `EventSource` trait, the `Executor` trait, and the backtest pieces: `SimQueue` (merges a
 market-data stream with what a simulated executor schedules) and the
 `MarketExecutor`/`MarketStopLimitExecutor` simulators. Also `SimClock` for
 logging in simulated time.
 
 ### [`oms`](./oms) — order management system
 
-This crate will be a thin communication-layer between Strategy and Executor.
-For now: `Order` and its states, `Fill`, and `protocol`, the messages between the
-trading side and an executor (`Request` out, `ExecEvent` back, `RequestSink`).
+The trading side between a strategy and an executor. `Order` and its states,
+`Fill`, and `protocol`, the messages to and from an executor (`Request` out,
+`ExecEvent` back, `RequestSink`). On top of them: `manager::Oms` turns what the
+strategy wants (`desired::Desired`) into requests and tracks every order it sent,
+`portfolio::Portfolio` holds positions and fills, and `rms::Rms` can block or
+clamp what gets sent.
 
 
 ## Working in the workspace

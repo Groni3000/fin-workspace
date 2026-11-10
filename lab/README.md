@@ -27,7 +27,9 @@ reconcile. And repeat in a loop.
 while let Some(event) = queue.next_event() { // queue - external events
     clock.set(event.ts()); // Simulated clock
 
-    oms.on_event(&event, &mut pf); // Update real exposure
+    if let Kind::Exec(exec) = event.kind() {
+        oms.on_exec(exec, &mut pf); // Update real exposure
+    }
     strategy.on_event(&event, &pf); // Strategy shapes its own desired state
 
     oms.reconcile(strategy.desired(), &pf, &rms, &mut queue); // Reconcile desired state with actual exposure

@@ -1,22 +1,23 @@
 use foldhash::{HashMap, HashSet};
 
-use crate::{oms::Oms, portfolio::Portfolio};
+use crate::{
+    fill::Fill,
+    manager::Oms,
+    order::{New, Order, OrderBuilder, OrderType, Working},
+    portfolio::Portfolio,
+    protocol::{Request, RequestSink},
+};
 use chrono::DateTime;
-use engine::event::{Event, EventSource};
 use instrid::{
     asset::{Asset, AssetClass},
     instruments::{Instrument, Stock},
     mic::Mic,
 };
-use oms::{
-    fill::Fill,
-    order::{New, Order, OrderBuilder, OrderType, Working},
-    protocol::{Request, RequestSink},
-};
 use tradeprim::{
     Side, currency::Currency, position::NonZeroQuantity, price::Price, quantity::Quantity,
 };
 
+/// Records every sent request.
 #[derive(Default)]
 struct TestSink {
     sent: Vec<Request>,
@@ -31,14 +32,6 @@ impl TestSink {
 impl RequestSink for TestSink {
     fn submit(&mut self, req: Request) {
         self.sent.push(req);
-    }
-}
-
-/// Only because `Oms::reconcile` still asks for an `EventSource`.
-impl EventSource for TestSink {
-    type Record = ();
-    fn next_event(&mut self) -> Option<Event<()>> {
-        None
     }
 }
 
@@ -124,15 +117,13 @@ fn check_oms_state(
 mod reconcile {
     use foldhash::HashMap;
 
-    use engine::event::{Event, Kind};
-    use oms::protocol::{ExecEvent, RejectReason, Request};
-
     use crate::{
-        oms::tests::{build_lmt, check_oms_state, qty},
+        desired::Desired,
+        manager::tests::{build_lmt, check_oms_state, qty},
+        order::{OrderType, TerminationReason},
+        protocol::{ExecEvent, RejectReason, Request},
         rms::NaiveRms,
-        strategy::Desired,
     };
-    use oms::order::{OrderType, TerminationReason};
     use tradeprim::{Side, position::Position, quantity::Quantity};
 
     use super::{build_fill, build_mkt, nz_qty, part_eq, px, setup, spy};
@@ -193,17 +184,17 @@ mod reconcile {
         check_oms_state(&oms, 1, 0, 0);
 
         // 3. Ack arrived
-        let ack_event = Event::new(0, Kind::<()>::Exec(ExecEvent::Ack(id)));
-        oms.on_event(&ack_event, &mut portfolio);
-        // on_event shoud move order to working, removing from unacked
+        let ack_event = ExecEvent::Ack(id);
+        oms.on_exec(&ack_event, &mut portfolio);
+        // on_exec shoud move order to working, removing from unacked
         check_oms_state(&oms, 0, 1, 0);
 
         // 4. Partial fill arrived
         let fill_q = nz_qty("10");
         let fill_px = px("100");
         let fill = build_fill(&order_new.into_working(), fill_q, fill_px);
-        let fill_event = Event::new(1, Kind::<()>::Exec(ExecEvent::Fill(fill)));
-        oms.on_event(&fill_event, &mut portfolio);
+        let fill_event = ExecEvent::Fill(fill);
+        oms.on_exec(&fill_event, &mut portfolio);
 
         // oms should have pushed fill into the portfolio
         assert!(
@@ -232,8 +223,8 @@ mod reconcile {
         let fill_q = nz_qty("6");
         let fill_px = px("100");
         let fill = build_fill(&order_new.into_working(), fill_q, fill_px);
-        let fill_event = Event::new(2, Kind::<()>::Exec(ExecEvent::Fill(fill)));
-        oms.on_event(&fill_event, &mut portfolio);
+        let fill_event = ExecEvent::Fill(fill);
+        oms.on_exec(&fill_event, &mut portfolio);
 
         // Final asserts: oms should be empty, portfolio should have all fills and a terminated order
         check_oms_state(&oms, 0, 0, 0);
@@ -276,7 +267,6 @@ mod reconcile {
         let instrument = spy();
         let rms = NaiveRms;
         let mut desired = HashMap::from_iter([(instrument, Desired::new())]);
-        let mut mock_ts = 0;
 
         // Desire a position
         let q = nz_qty("16");
@@ -324,10 +314,9 @@ mod reconcile {
         check_oms_state(&oms, 2, 0, 0);
 
         // 3. Ack arrived
-        let ack_event = Event::new(mock_ts, Kind::<()>::Exec(ExecEvent::Ack(id_mkt)));
-        mock_ts += 1;
-        oms.on_event(&ack_event, &mut portfolio);
-        // on_event shoud move order to working, removing from unacked
+        let ack_event = ExecEvent::Ack(id_mkt);
+        oms.on_exec(&ack_event, &mut portfolio);
+        // on_exec shoud move order to working, removing from unacked
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
         assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
         check_oms_state(&oms, 1, 1, 0);
@@ -336,10 +325,9 @@ mod reconcile {
         let fill_q = nz_qty("10");
         let fill_px = px("100");
         let fill = build_fill(&mkt_order_new.into_working(), fill_q, fill_px);
-        let fill_event = Event::new(mock_ts, Kind::<()>::Exec(ExecEvent::Fill(fill)));
-        mock_ts += 1;
-        // on_event shoud have change leaves of mkt order and mutate position in Portfolio
-        oms.on_event(&fill_event, &mut portfolio);
+        let fill_event = ExecEvent::Fill(fill);
+        // on_exec shoud have change leaves of mkt order and mutate position in Portfolio
+        oms.on_exec(&fill_event, &mut portfolio);
         // reconcile should be no-op
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
         assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
@@ -359,10 +347,9 @@ mod reconcile {
         );
 
         // 5. Ack of LMT arrived
-        let ack_event = Event::new(mock_ts, Kind::<()>::Exec(ExecEvent::Ack(id_lmt)));
-        mock_ts += 1;
-        // on_event moves lmt order to working
-        oms.on_event(&ack_event, &mut portfolio);
+        let ack_event = ExecEvent::Ack(id_lmt);
+        // on_exec moves lmt order to working
+        oms.on_exec(&ack_event, &mut portfolio);
         // reconcile is no-op
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
         assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
@@ -372,10 +359,9 @@ mod reconcile {
         let fill_lmt_q = nz_qty("1");
         let fill_lmt_px = px("101");
         let fill_lmt = build_fill(&lmt_order_new.into_working(), fill_lmt_q, fill_lmt_px);
-        let fill_lmt_event = Event::new(mock_ts, Kind::<()>::Exec(ExecEvent::Fill(fill_lmt)));
-        mock_ts += 1;
-        // on_event mutates `leaves` of lmt order
-        oms.on_event(&fill_lmt_event, &mut portfolio);
+        let fill_lmt_event = ExecEvent::Fill(fill_lmt);
+        // on_exec mutates `leaves` of lmt order
+        oms.on_exec(&fill_lmt_event, &mut portfolio);
         // `Strategy` should change desired position for lmt partial fill before `oms.reconcile`
         desired
             .entry(instrument)
@@ -413,10 +399,9 @@ mod reconcile {
         let fill_lmt_q = nz_qty("1");
         let fill_lmt_px = px("101");
         let fill_lmt = build_fill(&lmt_order_new.into_working(), fill_lmt_q, fill_lmt_px);
-        let fill_lmt_event = Event::new(mock_ts, Kind::<()>::Exec(ExecEvent::Fill(fill_lmt)));
-        mock_ts += 1;
-        // on_event should remove LMT order to portfolio in terminated state
-        oms.on_event(&fill_lmt_event, &mut portfolio);
+        let fill_lmt_event = ExecEvent::Fill(fill_lmt);
+        // on_exec should remove LMT order to portfolio in terminated state
+        oms.on_exec(&fill_lmt_event, &mut portfolio);
         // `Strategy` should change desired position for lmt partial fill before `oms.reconcile`
         desired
             .entry(instrument)
@@ -474,9 +459,9 @@ mod reconcile {
         let fill_q = nz_qty("6");
         let fill_px = px("100");
         let fill = build_fill(&mkt_order_new.into_working(), fill_q, fill_px);
-        let fill_event = Event::new(mock_ts, Kind::<()>::Exec(ExecEvent::Fill(fill)));
-        // on_event should remove MKT order to portfolio in terminated state
-        oms.on_event(&fill_event, &mut portfolio);
+        let fill_event = ExecEvent::Fill(fill);
+        // on_exec should remove MKT order to portfolio in terminated state
+        oms.on_exec(&fill_event, &mut portfolio);
         // reconcile is no-op
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
         assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
@@ -525,7 +510,6 @@ mod reconcile {
         let instrument = spy();
         let rms = NaiveRms;
         let mut desired = HashMap::from_iter([(instrument, Desired::new())]);
-        let mut mock_ts = 0;
 
         let (lmt_q, lmt_s, lmt_p) = (nz_qty("2"), Side::Buy, px("101"));
         let lmt = build_lmt(instrument, lmt_q, lmt_p, lmt_s);
@@ -542,11 +526,7 @@ mod reconcile {
         check_oms_state(&oms, 1, 0, 0);
 
         // 2. Ack arrived
-        oms.on_event(
-            &Event::new(mock_ts, Kind::<()>::Exec(ExecEvent::Ack(id_lmt))),
-            &mut portfolio,
-        );
-        mock_ts += 1;
+        oms.on_exec(&ExecEvent::Ack(id_lmt), &mut portfolio);
         // reconcile is no-op
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
         assert_eq!(sink.sent.len(), 1, "{:#?}", sink.sent);
@@ -570,13 +550,7 @@ mod reconcile {
         check_oms_state(&oms, 0, 1, 1);
 
         // 5. Venue confirms the cancel
-        oms.on_event(
-            &Event::new(
-                mock_ts,
-                Kind::<()>::Exec(ExecEvent::CancelResponse(id_lmt, true)),
-            ),
-            &mut portfolio,
-        );
+        oms.on_exec(&ExecEvent::CancelResponse(id_lmt, true), &mut portfolio);
         // reconcile is no-op
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
         assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
@@ -623,15 +597,12 @@ mod reconcile {
         check_oms_state(&oms, 1, 0, 0);
 
         // 2. Reject arrives before any ack, `Strategy` has not dropped the order yet
-        oms.on_event(
-            &Event::new(
-                0,
-                Kind::<()>::Exec(ExecEvent::Reject(
-                    id_lmt,
-                    RejectReason::Venue(
-                        "Trading during non-RTH is not allowed for this order type".into(),
-                    ),
-                )),
+        oms.on_exec(
+            &ExecEvent::Reject(
+                id_lmt,
+                RejectReason::Venue(
+                    "Trading during non-RTH is not allowed for this order type".into(),
+                ),
             ),
             &mut portfolio,
         );
@@ -681,7 +652,6 @@ mod reconcile {
         let instrument = spy();
         let rms = NaiveRms;
         let mut desired = HashMap::from_iter([(instrument, Desired::new())]);
-        let mut mock_ts = 0;
 
         let (lmt_q, lmt_s, lmt_p) = (nz_qty("2"), Side::Buy, px("101"));
         let lmt = build_lmt(instrument, lmt_q, lmt_p, lmt_s);
@@ -697,11 +667,7 @@ mod reconcile {
         check_oms_state(&oms, 1, 0, 0);
 
         // 2. Ack arrived
-        oms.on_event(
-            &Event::new(mock_ts, Kind::<()>::Exec(ExecEvent::Ack(id_lmt))),
-            &mut portfolio,
-        );
-        mock_ts += 1;
+        oms.on_exec(&ExecEvent::Ack(id_lmt), &mut portfolio);
         // reconcile is no-op
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
         assert_eq!(sink.sent.len(), 1, "{:#?}", sink.sent);
@@ -710,10 +676,7 @@ mod reconcile {
         // 3. Build a fill for larger quantity
         let fill = build_fill(&lmt.into_working(), nz_qty("3"), lmt_p);
         // Oms reacts to it
-        oms.on_event(
-            &Event::new(mock_ts, Kind::<()>::Exec(ExecEvent::Fill(fill))),
-            &mut portfolio,
-        );
+        oms.on_exec(&ExecEvent::Fill(fill), &mut portfolio);
         // Assume that `Strategy` policy is: correct `dp` by what actually filled, not by the order quantity
         let d = desired
             .get_mut(&instrument)
@@ -763,7 +726,6 @@ mod reconcile {
         let instrument = spy();
         let rms = NaiveRms;
         let mut desired = HashMap::from_iter([(instrument, Desired::new())]);
-        let mut mock_ts = 0;
 
         // Desire a position
         let q = nz_qty("16");
@@ -785,11 +747,7 @@ mod reconcile {
         let id_mkt = mkt_order_new.order_id();
 
         // 2. Ack arrived
-        oms.on_event(
-            &Event::new(mock_ts, Kind::<()>::Exec(ExecEvent::Ack(id_mkt))),
-            &mut portfolio,
-        );
-        mock_ts += 1;
+        oms.on_exec(&ExecEvent::Ack(id_mkt), &mut portfolio);
         // reconcile is no-op
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
         assert_eq!(sink.sent.len(), 1, "{:#?}", sink.sent);
@@ -797,11 +755,7 @@ mod reconcile {
 
         // 3. Eighteen fill against an order for sixteen
         let fill = build_fill(&mkt_order_new.into_working(), nz_qty("18"), px("100"));
-        oms.on_event(
-            &Event::new(mock_ts, Kind::<()>::Exec(ExecEvent::Fill(fill))),
-            &mut portfolio,
-        );
-        mock_ts += 1;
+        oms.on_exec(&ExecEvent::Fill(fill), &mut portfolio);
         // `Strategy` does nothing: a market order never moved `dp`
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
 
@@ -844,11 +798,7 @@ mod reconcile {
         let id_correction = correction_new.order_id();
 
         // 4. Ack of the correction arrived
-        oms.on_event(
-            &Event::new(mock_ts, Kind::<()>::Exec(ExecEvent::Ack(id_correction))),
-            &mut portfolio,
-        );
-        mock_ts += 1;
+        oms.on_exec(&ExecEvent::Ack(id_correction), &mut portfolio);
         // in-flight correction must not be sent twice: m = 16 - (-2 + 18) = 0
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
         assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
@@ -856,10 +806,7 @@ mod reconcile {
 
         // 5. Correction fills
         let fill_correction = build_fill(&correction_new.into_working(), nz_qty("2"), px("100"));
-        oms.on_event(
-            &Event::new(mock_ts, Kind::<()>::Exec(ExecEvent::Fill(fill_correction))),
-            &mut portfolio,
-        );
+        oms.on_exec(&ExecEvent::Fill(fill_correction), &mut portfolio);
         // reconcile is no-op: rp is back on dp
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
         assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
@@ -905,7 +852,6 @@ mod reconcile {
         let instrument = spy();
         let rms = NaiveRms;
         let mut desired = HashMap::from_iter([(instrument, Desired::new())]);
-        let mut mock_ts = 0;
 
         let q = nz_qty("2");
         let lmt = build_lmt(instrument, q, px("101"), Side::Buy);
@@ -921,11 +867,7 @@ mod reconcile {
         check_oms_state(&oms, 1, 0, 0);
 
         // 2. Ack arrived
-        oms.on_event(
-            &Event::new(mock_ts, Kind::<()>::Exec(ExecEvent::Ack(id_lmt))),
-            &mut portfolio,
-        );
-        mock_ts += 1;
+        oms.on_exec(&ExecEvent::Ack(id_lmt), &mut portfolio);
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
         assert_eq!(sink.sent.len(), 1, "{:#?}", sink.sent);
         check_oms_state(&oms, 0, 1, 0);
@@ -941,14 +883,7 @@ mod reconcile {
         check_oms_state(&oms, 0, 1, 1);
 
         // 4. Too late: the order had already filled when the venue read the request
-        oms.on_event(
-            &Event::new(
-                mock_ts,
-                Kind::<()>::Exec(ExecEvent::CancelResponse(id_lmt, false)),
-            ),
-            &mut portfolio,
-        );
-        mock_ts += 1;
+        oms.on_exec(&ExecEvent::CancelResponse(id_lmt, false), &mut portfolio);
         // a `false` is terminal, never retried, however many events go by
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
@@ -958,10 +893,7 @@ mod reconcile {
 
         // 5. The fill the venue was talking about arrives
         let fill = build_fill(&lmt.into_working(), q, px("101"));
-        oms.on_event(
-            &Event::new(mock_ts, Kind::<()>::Exec(ExecEvent::Fill(fill))),
-            &mut portfolio,
-        );
+        oms.on_exec(&ExecEvent::Fill(fill), &mut portfolio);
         desired
             .get_mut(&instrument)
             .expect("should have instrument")

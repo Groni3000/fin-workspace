@@ -1,17 +1,17 @@
 use foldhash::{HashMap, HashSet};
 
 use instrid::instruments::Instrument;
-use oms::{
-    OrderId,
-    fill::Fill,
-    order::{FillOutcome, New, Order, OrderBuilder, OrderType, Working},
-    protocol::{ExecEvent, Request},
-};
 use tradeprim::{Side, quantity::Quantity};
 
-use engine::event::{Event, EventSource, Kind};
-
-use crate::{portfolio::Portfolio, rms::Rms, strategy::Desired};
+use crate::{
+    OrderId,
+    desired::Desired,
+    fill::Fill,
+    order::{FillOutcome, New, Order, OrderBuilder, OrderType, Working},
+    portfolio::Portfolio,
+    protocol::{ExecEvent, Request, RequestSink},
+    rms::Rms,
+};
 
 #[derive(Default, Debug)]
 pub struct Oms {
@@ -37,29 +37,22 @@ impl Oms {
         self.unacked.is_empty() && self.working.is_empty() && self.pending_cancels.is_empty()
     }
 
-    pub fn on_event<R>(&mut self, event: &Event<R>, pf: &mut Portfolio) {
-        match event.kind() {
-            Kind::Exec(exec) => match exec {
-                ExecEvent::Ack(id) => {
-                    self.on_ack(id);
-                }
-                ExecEvent::Fill(f) => {
-                    self.on_fill(f, pf);
-                }
-                ExecEvent::Reject(id, _reason) => {
-                    self.on_reject(id, pf);
-                }
-                ExecEvent::CancelResponse(id, success) => {
-                    self.on_cancel_response(id, success, pf);
-                }
-                ExecEvent::Expired(_instrument, order_id) => self.on_expire(order_id, pf),
-            },
-            Kind::MarketData(_) => {
-                // This oms is not concerned with market data
+    /// Applies what the executor reported about an order.
+    pub fn on_exec(&mut self, event: &ExecEvent, pf: &mut Portfolio) {
+        match event {
+            ExecEvent::Ack(id) => {
+                self.on_ack(id);
             }
-            Kind::FeedError(_) => {
-                // This oms is not concerned with feed errors
+            ExecEvent::Fill(f) => {
+                self.on_fill(f, pf);
             }
+            ExecEvent::Reject(id, _reason) => {
+                self.on_reject(id, pf);
+            }
+            ExecEvent::CancelResponse(id, success) => {
+                self.on_cancel_response(id, success, pf);
+            }
+            ExecEvent::Expired(_instrument, order_id) => self.on_expire(order_id, pf),
         }
     }
 
@@ -153,7 +146,7 @@ impl Oms {
     }
 
     /// Sends desired not-market orders to the OMS and Executor.
-    fn send_desired_orders<S: EventSource, R: Rms>(
+    fn send_desired_orders<S: RequestSink, R: Rms>(
         &mut self,
         desired: &HashMap<Instrument, Desired>,
         pf: &Portfolio,
@@ -188,7 +181,7 @@ impl Oms {
     ///
     /// Must be called the last:
     ///     **all manipulations with desired state and OMS state must be done before this.**
-    fn send_market_orders<S: EventSource, R: Rms>(
+    fn send_market_orders<S: RequestSink, R: Rms>(
         &mut self,
         desired: &HashMap<Instrument, Desired>,
         pf: &Portfolio,
@@ -254,7 +247,7 @@ impl Oms {
     }
 
     /// Compare desired state to actual state and send orders to close the gap.
-    pub fn reconcile<S: EventSource, R: Rms>(
+    pub fn reconcile<S: RequestSink, R: Rms>(
         &mut self,
         desired: &HashMap<Instrument, Desired>,
         pf: &Portfolio,
@@ -271,7 +264,7 @@ impl Oms {
         self.send_market_orders(desired, pf, rms, sink);
     }
 
-    fn cancel_undesired<S: EventSource>(
+    fn cancel_undesired<S: RequestSink>(
         &mut self,
         desired: &HashMap<Instrument, Desired>,
         sink: &mut S,

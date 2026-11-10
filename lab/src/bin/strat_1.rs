@@ -10,7 +10,7 @@ use std::{
 
 use chrono::Datelike;
 use engine::{
-    event::EventSource,
+    event::{EventSource, Kind},
     sim::{MarketExecutor, SimQueue},
     telemetry::{self, SimClock},
 };
@@ -23,10 +23,12 @@ use lab::{
         merged_custom_kafka::MergedCandle,
     },
     market_data::{FrdFutChainMdReader, FrdMdError},
-    oms::Oms,
+    strats_impl::strat_1::{config::Config, strategy::Strategy},
+};
+use oms::{
+    manager::Oms,
     portfolio::Portfolio,
     rms::{HaltedRms, MaxPositionRms, NaiveRms, Rms},
-    strats_impl::strat_1::{config::Config, strategy::Strategy},
 };
 use tradeprim::{
     position::{NonZeroQuantity, Position},
@@ -68,7 +70,9 @@ fn main() {
             while let Some(event) = event_queue.next_event() {
                 clock.set(event.ts());
 
-                oms.on_event(&event, &mut pf);
+                if let Kind::Exec(exec) = event.kind() {
+                    oms.on_exec(exec, &mut pf);
+                }
                 strategy.on_event(&event, &pf);
 
                 oms.reconcile(strategy.desired(), &pf, &rms, &mut event_queue);
@@ -118,7 +122,9 @@ fn main() {
                 }
                 i += 1;
 
-                oms.on_event(&event, &mut pf);
+                if let Kind::Exec(exec) = event.kind() {
+                    oms.on_exec(exec, &mut pf);
+                }
                 strategy.on_event(&event, &pf);
 
                 oms.reconcile(strategy.desired(), &pf, &rms, &mut event_queue);
@@ -168,7 +174,9 @@ fn main() {
                 }
                 i += 1;
 
-                oms.on_event(&event, &mut pf);
+                if let Kind::Exec(exec) = event.kind() {
+                    oms.on_exec(exec, &mut pf);
+                }
                 strategy.on_event(&event, &pf);
 
                 oms.reconcile(strategy.desired(), &pf, &rms, &mut event_queue);
