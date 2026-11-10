@@ -256,25 +256,15 @@ impl MarketStopLimitExecutor {
         self.drop_working(fill.instrument(), fill.order_id());
     }
 
+    /// A venue reject drops the order if it's still pending, and ignores an id it doesn't know
+    /// (e.g. a live order that never went through this simulator), like the other handlers.
     pub fn on_reject(&mut self, order_id: &OrderId, reason: &RejectReason) {
         match reason {
-            // Never was in pending orders
-            RejectReason::UnsupportedOrderType(_ord_type) => {
-                return;
-            }
-            // Never was in pending orders
-            RejectReason::DuplicateOrderId => {
-                return;
-            }
-            // Live reason
-            RejectReason::Venue(_str_reason) => {}
-        }
-        match self.pending_orders.remove(order_id) {
-            // Successfully removed from pending_orders, no need to remove from working_orders
-            Some(_) => {}
-            // Order was not found in pending_orders
-            None => {
-                unreachable!("Order not found in pending_orders: {:?}", order_id)
+            // Never added to pending. For a duplicate, the pending id is the original order,
+            // which must keep working.
+            RejectReason::UnsupportedOrderType(_) | RejectReason::DuplicateOrderId => {}
+            RejectReason::Venue(_) => {
+                self.pending_orders.remove(order_id);
             }
         }
     }

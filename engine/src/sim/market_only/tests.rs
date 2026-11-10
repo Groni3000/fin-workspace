@@ -1,15 +1,19 @@
 //! Tests for invariants of a simplest market executor: [`MarketExecutor`]
 
+use std::{cmp::Reverse, collections::BinaryHeap};
+
 use oms::{
     order::OrderType,
-    protocol::{ExecEvent, Request},
+    protocol::{ExecEvent, RejectReason, Request},
 };
 use tradeprim::Side;
 
 use super::MarketExecutor;
 use crate::{
-    event::Kind,
-    sim::fixtures::{ACK, CANCEL, FILL, OHLC, REJECT, SEC, bar, events, order, px, run, send, spy},
+    event::{Kind, Scheduler},
+    sim::fixtures::{
+        ACK, CANCEL, FILL, OHLC, REJECT, Record, SEC, bar, events, order, px, run, send, spy,
+    },
 };
 
 /// Creates a simple market executor with fixed latencies.
@@ -109,4 +113,66 @@ fn a_cancelled_working_unfilled_order_does_not_fill() {
             (60 * SEC, "bar"),
         ])
     );
+}
+
+/// A venue reject for an order this simulator never saw (e.g. a live order) changes nothing,
+/// and doesn't panic.
+///
+/// Simulated executor invariant only
+#[test]
+fn a_venue_reject_for_an_unknown_order_is_ignored() {
+    let mut exec = executor();
+    let mut heap = BinaryHeap::<Reverse<_>>::new();
+    let mut seq = 0;
+    let pending = order(spy(), Side::Buy, OrderType::Market);
+    let unknown = order(spy(), Side::Buy, OrderType::Market);
+    exec.push::<Record>(pending, 0, &mut Scheduler::new(&mut heap, &mut seq));
+
+    exec.on_reject(
+        &unknown.order_id(),
+        &RejectReason::Venue("rejected".to_string()),
+    );
+
+    let still_pending: Vec<_> = exec.pending_orders().keys().copied().collect();
+    assert_eq!(still_pending, [pending.order_id()]);
+    assert!(exec.working_orders().is_empty());
+}
+
+/// A venue reject of a pending order removes it, so its ack doesn't make it work.
+///
+/// Simulated executor invariant only
+#[test]
+fn a_venue_rejected_pending_order_never_works() {
+    let mut exec = executor();
+    let mut heap = BinaryHeap::<Reverse<_>>::new();
+    let mut seq = 0;
+    let order = order(spy(), Side::Buy, OrderType::Market);
+    let id = order.order_id();
+    exec.push::<Record>(order, 0, &mut Scheduler::new(&mut heap, &mut seq));
+
+    exec.on_reject(&id, &RejectReason::Venue("rejected".to_string()));
+    exec.on_ack(&id);
+
+    assert!(exec.pending_orders().is_empty());
+    assert!(exec.working_orders().is_empty());
+}
+
+/// The reject of a duplicate names the original order's id: the original stays pending.
+/// (In `a_duplicate_of_a_pending_order_is_rejected` the original is acked before the reject
+/// arrives, so it doesn't cover this.)
+///
+/// Simulated executor invariant only
+#[test]
+fn a_duplicate_reject_keeps_the_original_pending() {
+    let mut exec = executor();
+    let mut heap = BinaryHeap::<Reverse<_>>::new();
+    let mut seq = 0;
+    let order = order(spy(), Side::Buy, OrderType::Market);
+    let id = order.order_id();
+    exec.push::<Record>(order, 0, &mut Scheduler::new(&mut heap, &mut seq));
+
+    exec.on_reject(&id, &RejectReason::DuplicateOrderId);
+
+    let still_pending: Vec<_> = exec.pending_orders().keys().copied().collect();
+    assert_eq!(still_pending, [id]);
 }
