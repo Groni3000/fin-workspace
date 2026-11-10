@@ -18,6 +18,9 @@ use crate::{
     executor::Executor,
 };
 
+/// **Not ready for use:** time in force is ignored, so no order ever expires, not even
+/// `Day` orders.
+///
 /// Natural extension of `MarketExecutor`:
 ///     * Accepts market, stop and limit orders only
 ///     * Every fill is fully executed
@@ -307,3 +310,6 @@ impl Executor for MarketStopLimitExecutor {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

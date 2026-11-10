@@ -7,10 +7,13 @@
 //! more simple ones, I can entirely drop predecessors or leave them as is because they
 //! may flag more clearly strategy intention to the user.
 
+#[cfg(test)]
+mod fixtures;
 mod market_only;
 mod mkt_stp_lmt;
 mod queue;
 
 pub use market_only::MarketExecutor;
+// Not ready for use: time in force is ignored, so no order ever expires, not even `Day` orders.
 pub use mkt_stp_lmt::MarketStopLimitExecutor;
 pub use queue::SimQueue;
