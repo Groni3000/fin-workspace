@@ -7,7 +7,6 @@ edition = "2024"
 instrid = { path = "../instrid" }
 tradeprim = { path = "../tradeprim" }
 chrono = { version = "0.4", features = ["serde"] }
-chrono-tz = { version = "0.10.4" }
 uuid = { version = "1.24.0", features = ["v7"] }
 foldhash = "0.2.0"
 tracing = "0.1"

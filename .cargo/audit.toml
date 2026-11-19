@@ -1,0 +1,13 @@
+# `cargo audit` settings, also used by CI (`.github/workflows/audit.yml`).
+#
+# To let a vulnerability through that has no fixed version yet, add its ID here with the date
+# and why it's acceptable for now, e.g.:
+#
+#   ignore = [
+#       # libz-sys, only via lab's `kafka` feature; no fixed version yet (2026-11-19).
+#       "RUSTSEC-2026-0544",
+#   ]
+#
+# Remove the entry once a fix is out.
+[advisories]
+ignore = []

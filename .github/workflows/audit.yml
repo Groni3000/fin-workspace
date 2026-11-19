@@ -1,0 +1,41 @@
+name: Audit
+
+# Known vulnerabilities in the locked dependencies (RustSec advisory database).
+#
+# Only vulnerabilities fail the run. "Unmaintained" and "unsound" advisories are printed as
+# warnings and pass. A vulnerability that can't be fixed in time is ignored by ID in
+# `.cargo/audit.toml`, with a dated reason, so it doesn't block merges; every other new one
+# still fails.
+#
+# The database changes without any code change, so this also runs on a schedule: a new
+# advisory shows up here before it turns an unrelated PR red.
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    # Mondays, 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit
+        run: cargo audit
