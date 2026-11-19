@@ -8,6 +8,7 @@ order protocol: `ExecEvent`, `Request`, `RejectReason`, `RequestSink`).
 | Module | What's in it |
 |---|---|
 | `event` | `Event`, `Kind` (market data, an executor's `ExecEvent`, or a feed error), `EventSource`, and `Scheduled`/`Scheduler` for events due in the future |
+| `event_loop` | `run`: the one loop that drives a `Traded` strategy through a queue (clock, OMS, strategy, reconcile, per event) |
 | `executor` | the `Executor` trait: whatever fills, cancels and rejects orders, simulated or live |
 | `merge` | the one rule for merging feed records with scheduled events: `scheduled_first` and `NextRecord` |
 | `sim` | backtest-only pieces: `SimQueue`, `MarketExecutor`, `MarketStopLimitExecutor` |

@@ -10,7 +10,7 @@ use std::{
 
 use chrono::Datelike;
 use engine::{
-    event::{EventSource, Kind},
+    event_loop::run,
     sim::{MarketExecutor, SimQueue},
     telemetry::{self, SimClock},
 };
@@ -50,8 +50,8 @@ fn main() {
     match source_from_args() {
         Source::FrdFiles => {
             let md = init_files_md(&listing, init_futures_contract).unwrap();
-            let mut pf = Portfolio::new();
-            let mut oms = Oms::default();
+            let pf = Portfolio::new();
+            let oms = Oms::default();
             let mut event_queue = SimQueue::new(
                 md,
                 MarketExecutor::new(
@@ -64,16 +64,7 @@ fn main() {
             let rms = rms_from_args();
 
             tracing::info!(strategy = strategy.id(), "backtest start");
-            while let Some(event) = event_queue.next_event() {
-                clock.set(event.ts());
-
-                if let Kind::Exec(exec) = event.kind() {
-                    oms.on_exec(exec, &mut pf);
-                }
-                strategy.on_event(&event, &pf);
-
-                oms.reconcile(strategy.desired(), &pf, &rms, &mut event_queue);
-            }
+            let (_oms, pf) = run(&mut event_queue, &mut strategy, oms, pf, &rms, &clock);
             let final_positions = pf
                 .positions()
                 .iter()
@@ -94,8 +85,8 @@ fn main() {
                 .expect("failed to set Ctrl-C handler");
 
             let md = init_kafka_md(shutdown, init_futures_contract, &listing);
-            let mut pf = Portfolio::new();
-            let mut oms = Oms::default();
+            let pf = Portfolio::new();
+            let oms = Oms::default();
             let mut event_queue = SimQueue::new(
                 md,
                 MarketExecutor::new(
@@ -107,25 +98,8 @@ fn main() {
             );
             let rms = rms_from_args();
 
-            let mut i = 0;
-            while let Some(event) = event_queue.next_event() {
-                clock.set(event.ts());
-                if i == 0 {
-                    tracing::info!(strategy = strategy.id(), "backtest start");
-                }
-                if i % 1000 == 0 {
-                    tracing::info!("processed {} events", i);
-                    tracing::info!("this event: {:?}", &event);
-                }
-                i += 1;
-
-                if let Kind::Exec(exec) = event.kind() {
-                    oms.on_exec(exec, &mut pf);
-                }
-                strategy.on_event(&event, &pf);
-
-                oms.reconcile(strategy.desired(), &pf, &rms, &mut event_queue);
-            }
+            tracing::info!(strategy = strategy.id(), "backtest start");
+            let (_oms, pf) = run(&mut event_queue, &mut strategy, oms, pf, &rms, &clock);
             let final_positions = pf
                 .positions()
                 .iter()
@@ -146,8 +120,8 @@ fn main() {
                 .expect("failed to set Ctrl-C handler");
 
             let md = init_kafka_merged_md(shutdown, init_futures_contract, &listing);
-            let mut pf = Portfolio::new();
-            let mut oms = Oms::default();
+            let pf = Portfolio::new();
+            let oms = Oms::default();
             let mut event_queue = SimQueue::new(
                 md,
                 MarketExecutor::new(
@@ -159,25 +133,8 @@ fn main() {
             );
             let rms = rms_from_args();
 
-            let mut i = 0;
-            while let Some(event) = event_queue.next_event() {
-                clock.set(event.ts());
-                if i == 0 {
-                    tracing::info!(strategy = strategy.id(), "backtest start");
-                }
-                if i % 1000 == 0 {
-                    tracing::info!("processed {} events", i);
-                    tracing::info!("this event: {:?}", &event);
-                }
-                i += 1;
-
-                if let Kind::Exec(exec) = event.kind() {
-                    oms.on_exec(exec, &mut pf);
-                }
-                strategy.on_event(&event, &pf);
-
-                oms.reconcile(strategy.desired(), &pf, &rms, &mut event_queue);
-            }
+            tracing::info!(strategy = strategy.id(), "backtest start");
+            let (_oms, pf) = run(&mut event_queue, &mut strategy, oms, pf, &rms, &clock);
             let final_positions = pf
                 .positions()
                 .iter()
