@@ -8,7 +8,10 @@ use mdata::{Candle, Instrumented, RelevantPrice, Timestamped};
 use oms::{desired::Desired, fill::Fill, portfolio::Portfolio, protocol::ExecEvent};
 use tradeprim::{position::Position, price::Price, quantity::Quantity};
 
-use engine::event::{Event, Kind};
+use engine::{
+    event::{Event, Kind},
+    strategy::Traded,
+};
 
 use crate::{aggregation::SessionAggregator, strats_impl::strat_1::config::Config};
 
@@ -87,6 +90,19 @@ impl State {
                 chrono_tz::America::Chicago,
             ),
         }
+    }
+}
+
+impl<E: EndOfTrading, R> Traded<R> for Strategy<E>
+where
+    R: Timestamped + Instrumented + Candle,
+{
+    fn on_event(&mut self, event: &Event<R>, pf: &Portfolio) {
+        Strategy::on_event(self, event, pf);
+    }
+
+    fn desired(&self) -> &HashMap<Instrument, Desired> {
+        Strategy::desired(self)
     }
 }
 

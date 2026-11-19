@@ -4,5 +4,6 @@ pub mod event;
 pub mod executor;
 pub mod merge;
 pub mod sim;
+pub mod strategy;
 pub mod telemetry;
 pub mod utils;
