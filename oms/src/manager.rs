@@ -4,7 +4,7 @@ use instrid::instruments::Instrument;
 use tradeprim::{Side, quantity::Quantity};
 
 use crate::{
-    OrderId,
+    EXEC_TARGET, OrderId,
     desired::Desired,
     fill::Fill,
     order::{FillOutcome, New, Order, OrderBuilder, OrderType, Working},
@@ -57,7 +57,7 @@ impl Oms {
     }
 
     fn on_reject(&mut self, order_id: &OrderId, pf: &mut Portfolio) {
-        tracing::warn!(order_id = ?order_id, "reject");
+        tracing::warn!(target: EXEC_TARGET, order_id = ?order_id, "reject");
         // Rejected order may be in both unacked or working.
         //
         // Just push it to the portfolio as is.
@@ -72,19 +72,21 @@ impl Oms {
                 self.pending_cancels.remove(&o.order_id());
                 pf.push_order(o.into_rejected());
             }
-            None => tracing::warn!(order_id = ?order_id, "reject for unknown order"),
+            None => {
+                tracing::warn!(target: EXEC_TARGET, order_id = ?order_id, "reject for unknown order")
+            }
         }
     }
 
     /// remove from unacked and insert into working, converting state to `Working`
     fn on_ack(&mut self, order_id: &OrderId) {
         if let Some(order) = self.unacked.remove(order_id) {
-            tracing::debug!(order_id = ?order_id, side = ?order.side(), qty = %order.quantity().qty(), "ack");
+            tracing::info!(target: EXEC_TARGET, order_id = ?order_id, side = ?order.side(), qty = %order.quantity().qty(), "ack");
             self.working.insert(*order_id, order.into_working());
         } else {
             // There may be case where Ack arrives after Fill (which means order can be in working).
             if !self.working.contains_key(order_id) {
-                tracing::warn!(order_id = ?order_id, "ack for unknown order");
+                tracing::warn!(target: EXEC_TARGET, order_id = ?order_id, "ack for unknown order");
             }
         }
     }
@@ -92,7 +94,7 @@ impl Oms {
     fn on_fill(&mut self, fill: &Fill, pf: &mut Portfolio) {
         // regardless - push fill - it's reported by executor => it's real
         pf.push_fill(*fill);
-        tracing::info!(
+        tracing::info!(target: EXEC_TARGET,
             order_id = ?fill.order_id(),
             instrument = %fill.instrument(),
             side = ?fill.side(),
@@ -120,13 +122,15 @@ impl Oms {
                 }
                 FillOutcome::Overfill(terminated, excess) => {
                     // Order is terminated: it can never fill again. The excess is already in `pf`.
-                    tracing::error!(order_id = ?fill.order_id(), excess = %excess.qty(), "overfill");
+                    tracing::error!(target: EXEC_TARGET, order_id = ?fill.order_id(), excess = %excess.qty(), "overfill");
                     pf.push_order(terminated);
                     self.pending_cancels.remove(&fill.order_id());
                 }
             },
             // Position still moved, we just have no order to attribute it to.
-            None => tracing::warn!(order_id = ?fill.order_id(), "fill for unknown order"),
+            None => {
+                tracing::warn!(target: EXEC_TARGET, order_id = ?fill.order_id(), "fill for unknown order")
+            }
         }
     }
 
@@ -137,10 +141,12 @@ impl Oms {
 
         // most likely it's in working
         if let Some(order) = self.working.remove(order_id) {
+            tracing::info!(target: EXEC_TARGET, order_id = ?order_id, "expired");
             pf.push_order(order.into_expired());
             return;
         };
         if let Some(order) = self.unacked.remove(order_id) {
+            tracing::info!(target: EXEC_TARGET, order_id = ?order_id, "expired");
             pf.push_order(order.into_working().into_expired());
         }
     }
@@ -159,7 +165,7 @@ impl Oms {
                 let id = &order.order_id();
 
                 if pf.orders_idx().contains_key(id) {
-                    tracing::error!(order_id = ?id, "desired order already terminated — strategy failed to clear it");
+                    tracing::error!(target: EXEC_TARGET, order_id = ?id, "desired order already terminated — strategy failed to clear it");
                     continue;
                 }
 
@@ -170,7 +176,7 @@ impl Oms {
                     continue;
                 }
 
-                tracing::debug!(order_id = ?id, side = ?order.side(), qty = %order.quantity().qty(), "send desired order");
+                tracing::info!(target: EXEC_TARGET, order_id = ?id, side = ?order.side(), qty = %order.quantity().qty(), "send desired order");
                 self.unacked.insert(*id, order); // Add to OMS state
                 sink.submit(Request::SendOrder(order)); // OMS -> Executor
             }
@@ -231,7 +237,7 @@ impl Oms {
                 continue;
             }
 
-            tracing::info!(
+            tracing::info!(target: EXEC_TARGET,
                 order_id = ?order.order_id(),
                 instrument = %instr,
                 side = ?side,
@@ -291,18 +297,19 @@ impl Oms {
             if ty == OrderType::Market || wanted.contains(&id) || !self.pending_cancels.insert(id) {
                 continue;
             }
+            tracing::info!(target: EXEC_TARGET, order_id = ?id, instrument = %instr, "send cancel");
             sink.submit(Request::CancelOrder(instr, id));
         }
     }
 
     fn on_cancel_response(&mut self, id: &OrderId, success: &bool, pf: &mut Portfolio) {
         if !self.pending_cancels.contains(id) {
-            tracing::warn!(id=?id, succ=?success, "cancel response not found in pending cancels");
+            tracing::warn!(target: EXEC_TARGET, id=?id, succ=?success, "cancel response not found in pending cancels");
             return;
         };
 
         if !success {
-            tracing::warn!(id=?id, succ=?success, "cancel response failed");
+            tracing::warn!(target: EXEC_TARGET, id=?id, succ=?success, "cancel response failed");
             return;
         }
 
@@ -318,9 +325,12 @@ impl Oms {
             .or_else(|| self.working.remove(id));
 
         match order {
-            Some(working) => pf.push_order(working.into_cancelled()),
+            Some(working) => {
+                tracing::info!(target: EXEC_TARGET, order_id = ?id, "cancelled");
+                pf.push_order(working.into_cancelled());
+            }
             None => {
-                tracing::warn!(id=?id, "could not find order for a successful cancel");
+                tracing::warn!(target: EXEC_TARGET, id=?id, "could not find order for a successful cancel");
             }
         }
     }

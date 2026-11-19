@@ -17,5 +17,13 @@ pub mod prelude {
     };
 }
 
+/// The `tracing` target of every order-lifecycle line: sent, acked, filled, rejected,
+/// cancelled, expired, or blocked by the RMS. `engine::telemetry` writes these lines to the
+/// execution log and keeps them out of the diagnostics log.
+///
+/// Code outside this crate that logs order-lifecycle lines must use it too:
+/// `tracing::info!(target: oms::EXEC_TARGET, ...)`.
+pub const EXEC_TARGET: &str = "exec";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct OrderId(Uuid);

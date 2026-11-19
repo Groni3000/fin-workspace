@@ -11,7 +11,7 @@ order protocol: `ExecEvent`, `Request`, `RejectReason`, `RequestSink`).
 | `executor` | the `Executor` trait: whatever fills, cancels and rejects orders, simulated or live |
 | `merge` | the one rule for merging feed records with scheduled events: `scheduled_first` and `NextRecord` |
 | `sim` | backtest-only pieces: `SimQueue`, `MarketExecutor`, `MarketStopLimitExecutor` |
-| `telemetry` | `SimClock`, which stamps log lines with simulated time, and `init`/`init_json` to install a logger with it |
+| `telemetry` | `SimClock`, which stamps log lines with simulated time, and `init`, which logs to two weekly-rotated files: the execution log (order lifecycle, JSON) and the diagnostics log (everything else) |
 | `utils` | helpers for strategies, such as `dt_trigger::DateTimeTrigger` |
 
 ## The idea

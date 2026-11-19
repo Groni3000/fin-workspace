@@ -176,6 +176,8 @@ dependencies = [
  "instrid",
  "mdata",
  "oms",
+ "serde_json",
+ "tracing",
  "tracing-subscriber",
  "tradeprim",
 ]

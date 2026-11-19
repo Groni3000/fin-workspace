@@ -2,7 +2,7 @@ use crate::order::{New, Order};
 use instrid::instruments::Instrument;
 use tradeprim::position::{NonZeroQuantity, Position};
 
-use crate::portfolio::Portfolio;
+use crate::{EXEC_TARGET, portfolio::Portfolio};
 
 /// Risk gate sitting between Strategy and OMS.
 pub trait Rms {
@@ -104,7 +104,7 @@ impl Rms for MaxPositionRms {
             other => other,
         };
         if clamped != want {
-            tracing::warn!(
+            tracing::warn!(target: EXEC_TARGET,
                 instrument = %instrument,
                 %want,
                 %clamped,
@@ -118,7 +118,7 @@ impl Rms for MaxPositionRms {
     fn approve_order(&self, order: &Order<New>, _pf: &Portfolio) -> bool {
         let approved = order.quantity().value() <= self.max_position.value();
         if !approved {
-            tracing::warn!(
+            tracing::warn!(target: EXEC_TARGET,
                 order_id = ?order.order_id(),
                 quantity = %order.quantity().qty(),
                 max = %self.max_position.qty(),
