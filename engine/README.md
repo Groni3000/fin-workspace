@@ -35,7 +35,7 @@ Each example is a folder under [`examples/`](./examples) with its own README:
 
 | Example | What it shows |
 |---|---|
-| [`market_order`](./examples/market_order) | the smallest complete backtest: a market order acked, then filled at the next bar's open |
+| [`market_order`](./examples/market_order) | a complete backtest through the full pipeline: enter long, add, exit, go short, exit, with market orders. Backtests and replays only |
 
 ```bash
 cargo run -p engine --example market_order

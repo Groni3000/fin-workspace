@@ -17,6 +17,12 @@ use crate::{
 ///    sending its requests to `queue`.
 ///
 /// Returns the OMS and the portfolio as they are at the end.
+///
+/// Backtests and replays only, for now.
+///
+/// In live trading real time data can lag. So when we fall behind
+/// wall clock, we need to switch to simulated executor and when
+/// we get caught back - we switch to live one. That is not present right now.
 pub fn run<Q, S, R>(
     queue: &mut Q,
     strategy: &mut S,
