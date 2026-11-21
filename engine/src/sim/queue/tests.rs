@@ -1,12 +1,12 @@
 use std::fmt;
 
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 use instrid::{
     asset::{Asset, AssetClass},
     instruments::{Instrument, Stock},
     mic::Mic,
 };
-use mdata::{Candle, Instrumented, RelevantPrice, Tagged, Timestamped};
+use mdata::{Candle, Instrumented, Ohlcv, Tagged};
 use oms::{
     OrderId,
     order::{New, Order, OrderBuilder},
@@ -20,43 +20,6 @@ use crate::{
     executor::Executor,
 };
 
-/// The smallest record the queue accepts: a timestamp and one price for o/h/l/c.
-#[derive(Debug, Clone, Copy)]
-struct Bar {
-    ts: DateTime<Utc>,
-    px: Price,
-}
-
-impl Timestamped for Bar {
-    fn timestamp(&self) -> DateTime<Utc> {
-        self.ts
-    }
-}
-
-impl RelevantPrice for Bar {
-    fn last_price(&self) -> Price {
-        self.px
-    }
-}
-
-impl Candle for Bar {
-    fn open(&self) -> Price {
-        self.px
-    }
-    fn high(&self) -> Price {
-        self.px
-    }
-    fn low(&self) -> Price {
-        self.px
-    }
-    fn close(&self) -> Price {
-        self.px
-    }
-    fn volume(&self) -> u64 {
-        1
-    }
-}
-
 /// What a broken market-data stream yields instead of a record, e.g. an unparsable row.
 #[derive(Debug)]
 struct FeedFailure(&'static str);
@@ -69,7 +32,7 @@ impl fmt::Display for FeedFailure {
 
 impl std::error::Error for FeedFailure {}
 
-type Record = Tagged<Bar>;
+type Record = Tagged<Ohlcv>;
 type Stream = std::vec::IntoIter<Result<Record, FeedFailure>>;
 
 /// Mock `Executor`, has two functions:
@@ -138,13 +101,12 @@ fn spy() -> Instrument {
     ))
 }
 
+/// A candle at `ts`: the queue only looks at the time, so every price is 1.
 fn bar(ts: i64) -> Result<Record, FeedFailure> {
+    let px = Price::from_str_unchecked("1");
     Ok(Tagged::new(
         spy(),
-        Bar {
-            ts: DateTime::from_timestamp_nanos(ts),
-            px: Price::from_str_unchecked("1"),
-        },
+        Ohlcv::new(DateTime::from_timestamp_nanos(ts), px, px, px, px, 1),
     ))
 }
 

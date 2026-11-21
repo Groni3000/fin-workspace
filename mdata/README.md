@@ -20,6 +20,11 @@ into small capability traits, and consumers ask only for the ones they need:
 for any `Iterator<Item = Result<R, E>>`, so a reader only has to be an
 iterator.
 
+`Ohlcv` is a plain candle implementing `Timestamped`, `RelevantPrice` (its close) and
+`Candle`, for examples, tests and other hand-written data. It checks nothing (a `low` above
+the `high` is stored as given). For a real data source, write your own record type and
+implement the traits: what to check when a record is built is up to that type.
+
 Most formats name the instrument once (in the file name or the topic), not on
 every row. `Tagged<R>` pairs a record with its instrument, which makes it
 `Instrumented` while carrying over everything the inner record already has.

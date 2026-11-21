@@ -1,15 +1,15 @@
-//! Shared by the simulated executors' tests: a bar with its own open/high/low/close,
+//! Shared by the simulated executors' tests: candles with their own open/high/low/close,
 //! and a run through `SimQueue` that describes every event.
 
 use std::convert::Infallible;
 
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 use instrid::{
     asset::{Asset, AssetClass},
     instruments::{Instrument, Stock},
     mic::Mic,
 };
-use mdata::{Candle, RelevantPrice, Tagged, Timestamped};
+use mdata::{Ohlcv, Tagged};
 use oms::{
     order::{New, Order, OrderBuilder, OrderType},
     protocol::{ExecEvent, RejectReason, Request, RequestSink},
@@ -35,46 +35,7 @@ pub const REJECT: i64 = 3 * MS;
 /// 5ms
 pub const FILL: i64 = 5 * MS;
 
-#[derive(Debug)]
-pub struct Bar {
-    ts: DateTime<Utc>,
-    open: Price,
-    high: Price,
-    low: Price,
-    close: Price,
-}
-
-impl Timestamped for Bar {
-    fn timestamp(&self) -> DateTime<Utc> {
-        self.ts
-    }
-}
-
-impl RelevantPrice for Bar {
-    fn last_price(&self) -> Price {
-        self.close
-    }
-}
-
-impl Candle for Bar {
-    fn open(&self) -> Price {
-        self.open
-    }
-    fn high(&self) -> Price {
-        self.high
-    }
-    fn low(&self) -> Price {
-        self.low
-    }
-    fn close(&self) -> Price {
-        self.close
-    }
-    fn volume(&self) -> u64 {
-        1
-    }
-}
-
-pub type Record = Tagged<Bar>;
+pub type Record = Tagged<Ohlcv>;
 pub type Stream = std::vec::IntoIter<Result<Record, Infallible>>;
 
 /// A bar at `secs`, as `[open, high, low, close]`.
@@ -85,13 +46,14 @@ pub fn bar(
 ) -> Result<Record, Infallible> {
     Ok(Tagged::new(
         instrument,
-        Bar {
-            ts: DateTime::from_timestamp(secs, 0).expect("valid timestamp"),
-            open: Price::from_str_unchecked(o),
-            high: Price::from_str_unchecked(h),
-            low: Price::from_str_unchecked(l),
-            close: Price::from_str_unchecked(c),
-        },
+        Ohlcv::new(
+            DateTime::from_timestamp(secs, 0).expect("valid timestamp"),
+            px(o),
+            px(h),
+            px(l),
+            px(c),
+            1,
+        ),
     ))
 }
 

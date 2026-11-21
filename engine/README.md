@@ -27,7 +27,7 @@ In a backtest that source is a `SimQueue`. It merges a market-data stream
 with what a simulated executor schedules: a scheduled event wins a tie with
 market data, and equal-time scheduled events go out in the order they were
 scheduled. The executor sees every event before the caller does, so it can
-fill against each bar.
+fill against each candle.
 
 ## Examples
 

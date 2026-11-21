@@ -6,7 +6,7 @@
 
 use std::{fs, path::Path};
 
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 use engine::{
     event::{Event, Kind},
     event_loop::run,
@@ -20,7 +20,7 @@ use instrid::{
     instruments::{Instrument, Stock},
     mic::Mic,
 };
-use mdata::{Candle, RelevantPrice, Tagged, Timestamped};
+use mdata::{Candle, Ohlcv, Tagged};
 use oms::{
     desired::Desired, manager::Oms, portfolio::Portfolio, protocol::ExecEvent, rms::NaiveRms,
 };
@@ -36,9 +36,9 @@ const FILL: i64 = 200 * MS;
 const CANCEL: i64 = 200 * MS;
 const REJECT: i64 = 200 * MS;
 
-/// One-minute bars, the first at 00:01, and the position (signed lots) the strategy wants
+/// One-minute candles, the first at 00:01, and the position (signed lots) the strategy wants
 /// after seeing each one.
-const BARS: [(&str, &str, i64); 11] = [
+const CANDLES: [(&str, &str, i64); 11] = [
     // open, close, want
     ("100", "101", 1),  // enter long 1
     ("102", "103", 1),  // unchanged: nothing sent, the buy is still working
@@ -55,10 +55,10 @@ const BARS: [(&str, &str, i64); 11] = [
 
 fn main() {
     let spy = spy();
-    let md: Vec<_> = BARS
+    let md: Vec<_> = CANDLES
         .iter()
         .zip(1..)
-        .map(|((open, close, _), minute)| bar(spy, minute * 60, open, close))
+        .map(|((open, close, _), minute)| candle(spy, minute * 60, open, close))
         .collect();
     let exec = MarketExecutor::new(ACK as u64, FILL as u64, CANCEL as u64, REJECT as u64);
     let mut queue = SimQueue::new(md.into_iter(), exec);
@@ -72,7 +72,7 @@ fn main() {
     telemetry::init(clock.clone(), &logs, "market_order").expect("logging can start");
     println!("logs in {}", logs.display());
 
-    let mut strategy = Scripted::new(spy, BARS.iter().map(|(_, _, want)| *want).collect());
+    let mut strategy = Scripted::new(spy, CANDLES.iter().map(|(_, _, want)| *want).collect());
     let (_oms, pf) = run(
         &mut queue,
         &mut strategy,
@@ -93,26 +93,26 @@ fn main() {
     // What the README promises. `cargo test` runs this example, so it can't drift.
     let min = |m: i64| m * 60 * SEC;
     let expected = [
-        (min(1), "bar open=100 close=101, want 1"),
+        (min(1), "candle open=100 close=101, want 1"),
         (min(1) + ACK, "ack"),
-        (min(2), "bar open=102 close=103, want 1"),
+        (min(2), "candle open=102 close=103, want 1"),
         (min(2) + FILL, "fill Buy 1 @ 102"),
-        (min(3), "bar open=103 close=102, want 1"),
-        (min(4), "bar open=102 close=104, want 2"),
+        (min(3), "candle open=103 close=102, want 1"),
+        (min(4), "candle open=102 close=104, want 2"),
         (min(4) + ACK, "ack"),
-        (min(5), "bar open=105 close=106, want 2"),
+        (min(5), "candle open=105 close=106, want 2"),
         (min(5) + FILL, "fill Buy 1 @ 105"),
-        (min(6), "bar open=106 close=104, want 0"),
+        (min(6), "candle open=106 close=104, want 0"),
         (min(6) + ACK, "ack"),
-        (min(7), "bar open=103 close=102, want 0"),
+        (min(7), "candle open=103 close=102, want 0"),
         (min(7) + FILL, "fill Sell 2 @ 103"),
-        (min(8), "bar open=102 close=100, want -1"),
+        (min(8), "candle open=102 close=100, want -1"),
         (min(8) + ACK, "ack"),
-        (min(9), "bar open=99 close=98, want -1"),
+        (min(9), "candle open=99 close=98, want -1"),
         (min(9) + FILL, "fill Sell 1 @ 99"),
-        (min(10), "bar open=98 close=99, want 0"),
+        (min(10), "candle open=98 close=99, want 0"),
         (min(10) + ACK, "ack"),
-        (min(11), "bar open=100 close=100, want 0"),
+        (min(11), "candle open=100 close=100, want 0"),
         (min(11) + FILL, "fill Buy 1 @ 100"),
     ];
     let expected: Vec<(i64, String)> = expected
@@ -179,16 +179,16 @@ fn exec_log(dir: &Path) -> Vec<String> {
         .collect()
 }
 
-/// The whole strategy: after each bar, want the position the script says.
+/// The whole strategy: after each candle, want the position the script says.
 ///
 /// It never sends an order. It says what it wants to hold, and the OMS sends what closes the
 /// gap between that and what is held or already working. When the wanted position doesn't
 /// change, the OMS sends nothing.
 struct Scripted {
     instrument: Instrument,
-    /// The position wanted after each bar, in signed lots.
+    /// The position wanted after each candle, in signed lots.
     script: Vec<i64>,
-    bars_seen: usize,
+    candles_seen: usize,
     desired: HashMap<Instrument, Desired>,
     /// Every event the strategy saw, for the printout and the check in `main`.
     seen: Vec<(i64, String)>,
@@ -199,23 +199,27 @@ impl Scripted {
         Self {
             instrument,
             script,
-            bars_seen: 0,
+            candles_seen: 0,
             desired: HashMap::default(),
             seen: Vec::new(),
         }
     }
 }
 
-impl Traded<Tagged<Bar>> for Scripted {
-    fn on_event(&mut self, event: &Event<Tagged<Bar>>, _pf: &Portfolio) {
+impl Traded<Tagged<Ohlcv>> for Scripted {
+    fn on_event(&mut self, event: &Event<Tagged<Ohlcv>>, _pf: &Portfolio) {
         let what = match event.kind() {
-            Kind::MarketData(bar) => {
-                let lots = self.script[self.bars_seen];
-                self.bars_seen += 1;
+            Kind::MarketData(candle) => {
+                let lots = self.script[self.candles_seen];
+                self.candles_seen += 1;
                 let mut want = Desired::new();
                 want.set_desired_position(position(lots));
                 self.desired.insert(self.instrument, want);
-                format!("bar open={} close={}, want {lots}", bar.open(), bar.close())
+                format!(
+                    "candle open={} close={}, want {lots}",
+                    candle.open(),
+                    candle.close()
+                )
             }
             Kind::Exec(ExecEvent::Ack(_)) => "ack".to_string(),
             Kind::Exec(ExecEvent::Fill(fill)) => format!(
@@ -250,52 +254,29 @@ fn position(lots: i64) -> Position {
     }
 }
 
-/// A one-minute bar: all the queue and the executor need from market data.
-#[derive(Debug)]
-struct Bar {
-    ts: DateTime<Utc>,
-    open: Price,
-    close: Price,
-}
-
-impl Timestamped for Bar {
-    fn timestamp(&self) -> DateTime<Utc> {
-        self.ts
-    }
-}
-
-impl RelevantPrice for Bar {
-    fn last_price(&self) -> Price {
-        self.close
-    }
-}
-
-impl Candle for Bar {
-    fn open(&self) -> Price {
-        self.open
-    }
-    fn high(&self) -> Price {
-        self.open.max(self.close)
-    }
-    fn low(&self) -> Price {
-        self.open.min(self.close)
-    }
-    fn close(&self) -> Price {
-        self.close
-    }
-    fn volume(&self) -> u64 {
-        0
-    }
-}
-
 /// A market-data stream is just an iterator of `Result`s. This one never fails.
-fn bar(spy: Instrument, secs: i64, open: &str, close: &str) -> Result<Tagged<Bar>, std::io::Error> {
-    let bar = Bar {
-        ts: DateTime::from_timestamp(secs, 0).expect("valid timestamp"),
-        open: Price::from_str_unchecked(open),
-        close: Price::from_str_unchecked(close),
-    };
-    Ok(Tagged::new(spy, bar))
+///
+/// A market order fills at the next candle's open, so the high and the low don't matter
+/// here: they're just the open and the close.
+fn candle(
+    spy: Instrument,
+    secs: i64,
+    open: &str,
+    close: &str,
+) -> Result<Tagged<Ohlcv>, std::io::Error> {
+    let (open, close) = (
+        Price::from_str_unchecked(open),
+        Price::from_str_unchecked(close),
+    );
+    let candle = Ohlcv::new(
+        DateTime::from_timestamp(secs, 0).expect("valid timestamp"),
+        open,
+        open.max(close),
+        open.min(close),
+        close,
+        0,
+    );
+    Ok(Tagged::new(spy, candle))
 }
 
 fn spy() -> Instrument {
