@@ -36,9 +36,11 @@ Each example is a folder under [`examples/`](./examples) with its own README:
 | Example | What it shows |
 |---|---|
 | [`market_order`](./examples/market_order) | a complete backtest through the full pipeline: enter long, add, exit, go short, exit, with market orders. Backtests and replays only |
+| [`simulated_stop`](./examples/simulated_stop) | a strategy that keeps its own stop and exits at market, instead of a stop order at the venue |
 
 ```bash
 cargo run -p engine --example market_order
+cargo run -p engine --example simulated_stop
 ```
 
 Each example asserts its own output and is run by `cargo test`, so a behaviour

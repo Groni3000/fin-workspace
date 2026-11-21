@@ -75,6 +75,7 @@ clamp what gets sent.
 cargo test --workspace --all-features   # everything, including README doctests
 cargo test -p futchain                  # one crate
 cargo run -p engine --example market_order
+cargo run -p engine --example simulated_stop
 cargo run -p futchain --example find_active_contract
 cargo run -p futchain --example historical_roll_schedule
 cargo run -p instrid --example typed_groupby
