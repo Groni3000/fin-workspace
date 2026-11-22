@@ -21,6 +21,8 @@ use crate::{
 ///   reaches the strategy before the candle that comes at the same time;
 /// - scheduled events with the same timestamp go out in the order they were scheduled;
 /// - a feed error goes out at the current time, without moving the clock;
+/// - an event without a time of its own, before the first one with a time, is stamped 0
+///   (1970-01-01);
 /// - time never goes backwards: a market-data record older than the current time panics.
 ///
 /// Every event is shown to the executor before it is returned.

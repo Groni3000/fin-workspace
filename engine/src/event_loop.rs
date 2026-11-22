@@ -16,6 +16,8 @@ use crate::{
 /// 4. The OMS closes the gap between what the strategy wants and what's held or working,
 ///    sending its requests to `queue`.
 ///
+/// A feed error is logged as a warning (diagnostics log), so no strategy has to.
+///
 /// Returns the OMS and the portfolio as they are at the end.
 ///
 /// Backtests and replays only, for now.
@@ -39,8 +41,10 @@ where
     while let Some(event) = queue.next_event() {
         clock.set(event.ts());
 
-        if let Kind::Exec(exec) = event.kind() {
-            oms.on_exec(exec, &mut pf);
+        match event.kind() {
+            Kind::Exec(exec) => oms.on_exec(exec, &mut pf),
+            Kind::FeedError(err) => tracing::warn!(error = %err, "feed error"),
+            Kind::MarketData(_) => {}
         }
         strategy.on_event(&event, &pf);
 
