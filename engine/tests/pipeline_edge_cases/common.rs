@@ -19,7 +19,7 @@ use oms::{
     manager::Oms,
     portfolio::Portfolio,
     protocol::{ExecEvent, Request, RequestSink},
-    rms::NaiveRms,
+    rms::Rms,
 };
 use tradeprim::{currency::Currency, position::Position, quantity::Quantity};
 
@@ -34,9 +34,10 @@ type Trace = Rc<RefCell<Vec<String>>>;
 /// Runs the scripted strategy over `queue` (with some executor).
 ///
 /// Returns its trace, the OMS and the final portfolio.
-pub fn run_scripted<Q>(queue: Q, wanted_lots: &[i64]) -> (Vec<String>, Oms, Portfolio)
+pub fn run_scripted<Q, R>(queue: Q, wanted_lots: &[i64], rms: &R) -> (Vec<String>, Oms, Portfolio)
 where
     Q: EventSource<Record = Record>,
+    R: Rms,
 {
     let trace = Trace::default();
     let mut queue = Recorder {
@@ -55,7 +56,7 @@ where
         &mut strategy,
         Oms::default(),
         Portfolio::new(),
-        &NaiveRms,
+        rms,
         &SimClock::new(),
     );
     (strategy.trace.take(), oms, pf)
