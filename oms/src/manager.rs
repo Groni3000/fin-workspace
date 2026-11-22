@@ -242,6 +242,7 @@ impl Oms {
                 instrument = %instr,
                 side = ?side,
                 qty = %order.quantity().qty(),
+                want = %Quantity::display_raw(want.dp().as_i64()),
                 dp = %Quantity::display_raw(dp),
                 rp = %Quantity::display_raw(rp),
                 m = %Quantity::display_raw(m),

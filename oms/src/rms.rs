@@ -93,9 +93,17 @@ impl MaxPositionRms {
 }
 
 impl Rms for MaxPositionRms {
-    fn clamp_position(&self, instrument: &Instrument, want: Position, _pf: &Portfolio) -> Position {
-        let clamped = match want {
-            Position::Flat => return Position::Flat,
+    /// Logs nothing: it runs after every event, so a warning here would repeat on every one.
+    /// The OMS logs the clamp on the order it shapes (`want` next to `dp` in "send market
+    /// order").
+    fn clamp_position(
+        &self,
+        _instrument: &Instrument,
+        want: Position,
+        _pf: &Portfolio,
+    ) -> Position {
+        match want {
+            Position::Flat => Position::Flat,
             Position::Long(q) if q.value() > self.max_position.value() => {
                 Position::Long(self.max_position)
             }
@@ -103,17 +111,7 @@ impl Rms for MaxPositionRms {
                 Position::Short(self.max_position)
             }
             other => other,
-        };
-        if clamped != want {
-            tracing::warn!(target: EXEC_TARGET,
-                instrument = %instrument,
-                %want,
-                %clamped,
-                max = %self.max_position.qty(),
-                "rms clamped desired position"
-            );
         }
-        clamped
     }
 
     /// Judges the position the order leads to: what's held plus this order. Orders still in

@@ -16,11 +16,13 @@ fn max_1() -> MaxPositionRms {
     )
 }
 
-/// Current behavior produces noise (the `WARN` lines).
-///
 /// Strategy wants 2, Rms allows max 1, so Oms sends 1.
-/// On every event, the first one included, Rms logs that it
-/// clamped the wanted position.
+///
+/// No warnings: the clamp is checked after every event, so it logs nothing itself, or it would
+/// repeat on every one. It's logged once, on the order it shapes: the exec log's "send market
+/// order" line carries `want` (2) next to `dp` (1). Once at the cap nothing more is sent, so
+/// nothing more is logged: the position doesn't change, and the strategy can see from its
+/// portfolio that it holds less than it wants.
 #[test]
 fn a_cap_of_1_buys_1_when_the_strategy_wants_2_and_asks_no_more() {
     let (trace, oms, pf) = run_script_with(&OPENS, &[2, 2, 2, 2, 2, 2], &max_1());
@@ -29,22 +31,14 @@ fn a_cap_of_1_buys_1_when_the_strategy_wants_2_and_asks_no_more() {
         trace,
         [
             "01:00.000  candle 100, held 0, want 2",
-            "01:00.000  WARN rms clamped desired position",
             "01:00.000  send Market Buy 1",
             "01:00.200  ack",
-            "01:00.200  WARN rms clamped desired position",
             "02:00.000  candle 101, held 0, want 2",
-            "02:00.000  WARN rms clamped desired position",
             "02:00.200  fill Buy 1 @ 101, held 1",
-            "02:00.200  WARN rms clamped desired position",
             "03:00.000  candle 102, held 1, want 2",
-            "03:00.000  WARN rms clamped desired position",
             "04:00.000  candle 103, held 1, want 2",
-            "04:00.000  WARN rms clamped desired position",
             "05:00.000  candle 104, held 1, want 2",
-            "05:00.000  WARN rms clamped desired position",
             "06:00.000  candle 105, held 1, want 2",
-            "06:00.000  WARN rms clamped desired position",
         ]
     );
     assert_eq!(pf.position(&spy()), &position(1));
