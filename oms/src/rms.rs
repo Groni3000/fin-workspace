@@ -75,7 +75,8 @@ impl Rms for HaltedRms {
     }
 }
 
-/// Caps absolute position size per instrument and rejects oversized resting orders.
+/// Caps the absolute position per instrument: clamps the wanted position, and refuses an order
+/// that would take the position beyond the cap.
 #[derive(Debug, Clone, Copy)]
 pub struct MaxPositionRms {
     max_position: NonZeroQuantity,
@@ -115,16 +116,25 @@ impl Rms for MaxPositionRms {
         clamped
     }
 
-    fn approve_order(&self, order: &Order<New>, _pf: &Portfolio) -> bool {
-        let approved = order.quantity().value() <= self.max_position.value();
+    /// Judges the position the order leads to: what's held plus this order. Orders still in
+    /// flight aren't visible here, so while one is unfilled a valid order may be refused; the
+    /// OMS asks again on the next event.
+    fn approve_order(&self, order: &Order<New>, pf: &Portfolio) -> bool {
+        let held = pf.position(&order.instrument()).as_i64();
+        let after = held + order.side().as_i64() * order.quantity().value() as i64;
+        let approved = after.unsigned_abs() <= self.max_position.value();
         if !approved {
             tracing::warn!(target: EXEC_TARGET,
                 order_id = ?order.order_id(),
+                side = ?order.side(),
                 quantity = %order.quantity().qty(),
                 max = %self.max_position.qty(),
-                "rms rejected desired order"
+                "rms rejected order"
             );
         }
         approved
     }
 }
+
+#[cfg(test)]
+mod tests;
