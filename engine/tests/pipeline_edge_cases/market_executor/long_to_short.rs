@@ -6,7 +6,7 @@ use crate::common::{position, spy};
 
 #[test]
 fn long_1_to_short_1_is_one_sell_for_2() {
-    let (trace, pf) = run_script(&["100", "101", "102", "103", "104"], &[1, 1, -1, -1, -1]);
+    let (trace, oms, pf) = run_script(&["100", "101", "102", "103", "104"], &[1, 1, -1, -1, -1]);
 
     assert_eq!(
         trace,
@@ -25,11 +25,12 @@ fn long_1_to_short_1_is_one_sell_for_2() {
         ]
     );
     assert_eq!(pf.position(&spy()), &position(-1));
+    assert!(oms.is_empty(), "nothing left in flight");
 }
 
 #[test]
 fn long_2_to_short_1_before_the_buy_fills_is_one_sell_for_3() {
-    let (trace, pf) = run_script(&["100", "101", "102", "103"], &[2, -1, -1, -1]);
+    let (trace, oms, pf) = run_script(&["100", "101", "102", "103"], &[2, -1, -1, -1]);
 
     assert_eq!(
         trace,
@@ -47,4 +48,5 @@ fn long_2_to_short_1_before_the_buy_fills_is_one_sell_for_3() {
         ]
     );
     assert_eq!(pf.position(&spy()), &position(-1));
+    assert!(oms.is_empty(), "nothing left in flight");
 }

@@ -33,8 +33,8 @@ type Trace = Rc<RefCell<Vec<String>>>;
 
 /// Runs the scripted strategy over `queue` (with some executor).
 ///
-/// Returns its trace and the final portfolio.
-pub fn run_scripted<Q>(queue: Q, wanted_lots: &[i64]) -> (Vec<String>, Portfolio)
+/// Returns its trace, the OMS and the final portfolio.
+pub fn run_scripted<Q>(queue: Q, wanted_lots: &[i64]) -> (Vec<String>, Oms, Portfolio)
 where
     Q: EventSource<Record = Record>,
 {
@@ -50,7 +50,7 @@ where
         desired: HashMap::default(),
         trace,
     };
-    let (_oms, pf) = run(
+    let (oms, pf) = run(
         &mut queue,
         &mut strategy,
         Oms::default(),
@@ -58,7 +58,7 @@ where
         &NaiveRms,
         &SimClock::new(),
     );
-    (strategy.trace.take(), pf)
+    (strategy.trace.take(), oms, pf)
 }
 
 pub fn spy() -> Instrument {

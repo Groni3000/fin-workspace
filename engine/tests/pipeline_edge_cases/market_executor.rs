@@ -4,12 +4,13 @@
 use chrono::DateTime;
 use engine::sim::{MarketExecutor, SimQueue};
 use mdata::{Ohlcv, Tagged};
-use oms::portfolio::Portfolio;
+use oms::{manager::Oms, portfolio::Portfolio};
 use tradeprim::price::Price;
 
 use crate::common::{Record, run_scripted, spy};
 
 mod change_of_mind;
+mod last_candle;
 mod long_to_short;
 
 /// 200ms
@@ -24,8 +25,8 @@ const LATENCY: u64 = 200_000_000;
 /// `P_{i+1}`.
 ///
 /// This function will run the scripted strategy
-/// and return its trace
-pub fn run_script(opens: &[&str], wanted_lots: &[i64]) -> (Vec<String>, Portfolio) {
+/// and return its trace, the OMS and the final portfolio.
+pub fn run_script(opens: &[&str], wanted_lots: &[i64]) -> (Vec<String>, Oms, Portfolio) {
     let md: Vec<Result<Record, std::io::Error>> = opens
         .iter()
         .zip(1..)

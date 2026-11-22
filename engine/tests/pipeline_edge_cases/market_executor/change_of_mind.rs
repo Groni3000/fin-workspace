@@ -7,7 +7,7 @@ use crate::common::{position, spy};
 
 #[test]
 fn flat_again_before_the_buy_fills_sells_it_at_once() {
-    let (trace, pf) = run_script(&["100", "101", "102", "103"], &[1, 0, 0, 0]);
+    let (trace, oms, pf) = run_script(&["100", "101", "102", "103"], &[1, 0, 0, 0]);
 
     assert_eq!(
         trace,
@@ -25,11 +25,12 @@ fn flat_again_before_the_buy_fills_sells_it_at_once() {
         ]
     );
     assert_eq!(pf.position(&spy()), &position(0));
+    assert!(oms.is_empty(), "nothing left in flight");
 }
 
 #[test]
 fn back_and_forth_before_anything_fills_sends_one_order_per_change() {
-    let (trace, pf) = run_script(&["100", "101", "102", "103", "104"], &[1, 0, 1, 1, 1]);
+    let (trace, oms, pf) = run_script(&["100", "101", "102", "103", "104"], &[1, 0, 1, 1, 1]);
 
     assert_eq!(
         trace,
@@ -51,4 +52,5 @@ fn back_and_forth_before_anything_fills_sends_one_order_per_change() {
         ]
     );
     assert_eq!(pf.position(&spy()), &position(1));
+    assert!(oms.is_empty(), "nothing left in flight");
 }
