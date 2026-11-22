@@ -1,8 +1,8 @@
 # pipeline_edge_cases
 
 The whole pipeline (strategy, OMS, RMS, `event_loop::run`) in the cases that may not be obvious: a change of mind while an order is working, long to short in one step, and so on. Each
-test pins one trace: the events the strategy saw and the requests the OMS sent, in order,
-plus the final position.
+test pins one trace: the events the strategy saw, the requests the OMS sent and the warnings
+logged, in order, plus the final position.
 
 ```bash
 cargo test -p engine --test pipeline_edge_cases

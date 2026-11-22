@@ -1,4 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    fmt::Debug,
+    sync::{Arc, Mutex},
+};
 
 use chrono::DateTime;
 use engine::{
@@ -21,17 +24,31 @@ use oms::{
     protocol::{ExecEvent, Request, RequestSink},
     rms::Rms,
 };
+use tracing::{
+    Level, Subscriber,
+    field::{Field, Visit},
+};
+use tracing_subscriber::{
+    Layer,
+    layer::{Context, SubscriberExt},
+};
 use tradeprim::{currency::Currency, position::Position, quantity::Quantity};
 
 pub type Record = Tagged<Ohlcv>;
-/// Ideally, `Trace = Vec<String>`, but two writers fill it:
-/// the queue (requests) and the strategy (events).
-/// `run` holds both mutably at the same time.
-///
-/// So we share (`Rc`), and the borrow rules are checked at runtime (`RefCell`).
-type Trace = Rc<RefCell<Vec<String>>>;
+
+/// The log target of the lines the queue wrapper and the strategy write for the trace.
+const TRACE: &str = "trace";
+
+/// Initially, we wanted `Trace = Vec<String>`, but had to use Rc<RefCell<T>>,
+/// then I saw that some tests would produce noise, and in order to
+/// show that, I had to use tracing log lines, but it requires `Send+Sync`,
+/// so, here we are, `Arc<Mutex<T>>`.
+type Trace = Arc<Mutex<Vec<String>>>;
 
 /// Runs the scripted strategy over `queue` (with some executor).
+///
+/// The trace is what the run logged: the strategy's events and the requests that reached the
+/// queue (target `trace`), plus every warning and error from anywhere.
 ///
 /// Returns its trace, the OMS and the final portfolio.
 pub fn run_scripted<Q, R>(queue: Q, wanted_lots: &[i64], rms: &R) -> (Vec<String>, Oms, Portfolio)
@@ -40,26 +57,32 @@ where
     R: Rms,
 {
     let trace = Trace::default();
-    let mut queue = Recorder {
-        inner: queue,
-        now: 0,
+    let clock = SimClock::new();
+    let capture = Capture {
         trace: trace.clone(),
+        clock: clock.clone(),
     };
+    let mut queue = Recorder { inner: queue };
     let mut strategy = Scripted {
         wanted_lots: wanted_lots.to_vec(),
         candles_seen: 0,
         desired: HashMap::default(),
-        trace,
     };
-    let (oms, pf) = run(
-        &mut queue,
-        &mut strategy,
-        Oms::default(),
-        Portfolio::new(),
-        rms,
-        &SimClock::new(),
-    );
-    (strategy.trace.take(), oms, pf)
+    // Only for this call and this thread: tests running in parallel don't see each other's logs.
+    let subscriber = tracing_subscriber::registry().with(capture);
+    let (oms, pf) = tracing::subscriber::with_default(subscriber, || {
+        run(
+            &mut queue,
+            &mut strategy,
+            Oms::default(),
+            Portfolio::new(),
+            rms,
+            &clock,
+        )
+    });
+    let lines = std::mem::take(&mut *trace.lock().expect("not poisoned"));
+
+    (lines, oms, pf)
 }
 
 pub fn spy() -> Instrument {
@@ -92,11 +115,10 @@ fn time(ts: i64) -> String {
         .to_string()
 }
 
-/// The queue, recording each request the OMS sends at the time of the event that led to it.
+/// The queue, logging each request that reaches it. That's what was really sent, independent
+/// of what the OMS logs about it.
 struct Recorder<Q> {
     inner: Q,
-    now: i64,
-    trace: Trace,
 }
 
 impl<Q: EventSource> RequestSink for Recorder<Q> {
@@ -110,9 +132,7 @@ impl<Q: EventSource> RequestSink for Recorder<Q> {
             ),
             other => format!("{other:?}"),
         };
-        self.trace
-            .borrow_mut()
-            .push(format!("{}  {what}", time(self.now)));
+        tracing::info!(target: TRACE, "{what}");
         self.inner.submit(req);
     }
 }
@@ -121,21 +141,18 @@ impl<Q: EventSource<Record = Record>> EventSource for Recorder<Q> {
     type Record = Record;
 
     fn next_event(&mut self) -> Option<Event<Record>> {
-        let event = self.inner.next_event()?;
-        self.now = event.ts();
-        Some(event)
+        self.inner.next_event()
     }
 }
 
 /// Strategy that knows how many lots it wants to own
 /// at any moment `T_i` in time.
 ///
-/// Writes records for the tests in `Trace`.
+/// Logs every event it sees, for the trace.
 struct Scripted {
     wanted_lots: Vec<i64>,
     candles_seen: usize,
     desired: HashMap<Instrument, Desired>,
-    trace: Trace,
 }
 
 impl Traded<Record> for Scripted {
@@ -163,12 +180,51 @@ impl Traded<Record> for Scripted {
             ),
             other => format!("{other:?}"),
         };
-        self.trace
-            .borrow_mut()
-            .push(format!("{}  {what}", time(event.ts())));
+        tracing::info!(target: TRACE, "{what}");
     }
 
     fn desired(&self) -> &HashMap<Instrument, Desired> {
         &self.desired
+    }
+}
+
+/// Fills the trace from the log, at the simulated time: every line with target `trace`, and
+/// every warning and error from anywhere, prefixed with its level.
+struct Capture {
+    trace: Trace,
+    clock: SimClock,
+}
+
+impl<S: Subscriber> Layer<S> for Capture {
+    fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
+        let meta = event.metadata();
+        let level = *meta.level();
+        let mut message = Message::default();
+        event.record(&mut message);
+        let line = if meta.target() == TRACE {
+            message.0
+        // In `tracing`, less verbose is smaller: ERROR < WARN < INFO.
+        } else if level <= Level::WARN {
+            format!("{level} {}", message.0)
+        } else {
+            return;
+        };
+        let now = time(self.clock.get());
+        self.trace
+            .lock()
+            .expect("not poisoned")
+            .push(format!("{now}  {line}"));
+    }
+}
+
+/// The `message` field of a log line, without the other fields.
+#[derive(Default)]
+struct Message(String);
+
+impl Visit for Message {
+    fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
+        if field.name() == "message" {
+            self.0 = format!("{value:?}");
+        }
     }
 }
