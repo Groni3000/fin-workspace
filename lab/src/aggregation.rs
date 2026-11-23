@@ -5,7 +5,7 @@ use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use tradeprim::price::Price;
 
-use mdata::{Candle, RelevantPrice, Timestamped};
+use mdata::{Candle, HasLastPrice, HasTimestamp};
 
 /// Aggregated OHLCV. `ts` is the bucket start.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -57,13 +57,13 @@ impl Bar {
     }
 }
 
-impl Timestamped for Bar {
+impl HasTimestamp for Bar {
     fn timestamp(&self) -> DateTime<Utc> {
         self.ts
     }
 }
 
-impl RelevantPrice for Bar {
+impl HasLastPrice for Bar {
     fn last_price(&self) -> Price {
         self.close
     }

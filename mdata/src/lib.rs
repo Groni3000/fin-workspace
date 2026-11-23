@@ -6,6 +6,6 @@ pub mod stream;
 pub mod tagged;
 
 pub use ohlcv::Ohlcv;
-pub use record::{Candle, Instrumented, RelevantPrice, Symboled, Timestamped};
+pub use record::{Candle, HasInstrument, HasLastPrice, HasSymbol, HasTimestamp};
 pub use stream::MarketData;
 pub use tagged::Tagged;

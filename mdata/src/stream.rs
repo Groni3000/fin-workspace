@@ -2,21 +2,21 @@
 
 use std::{error::Error, fmt::Debug};
 
-use crate::record::RelevantPrice;
+use crate::record::HasLastPrice;
 
 /// A fallible stream of market-data records.
 ///
 /// Blanket-implemented for every `Iterator<Item = Result<R, E>>` whose record
-/// has at least a [`RelevantPrice`] and whose error is an [`Error`].
+/// has at least a [`HasLastPrice`] and whose error is an [`Error`].
 pub trait MarketData: Iterator<Item = Result<Self::Record, Self::Error>> {
-    type Record: Debug + RelevantPrice;
+    type Record: Debug + HasLastPrice;
     type Error;
 }
 
 impl<T, R, E> MarketData for T
 where
     T: Iterator<Item = Result<R, E>>,
-    R: Debug + RelevantPrice,
+    R: Debug + HasLastPrice,
     E: Error,
 {
     type Record = R;

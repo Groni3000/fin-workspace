@@ -6,7 +6,7 @@ use instrid::{
     instruments::{Instrument, Stock},
     mic::Mic,
 };
-use mdata::{Candle, Instrumented, Ohlcv, Tagged};
+use mdata::{Candle, HasInstrument, Ohlcv, Tagged};
 use oms::{
     OrderId,
     order::{New, Order, OrderBuilder},
@@ -54,7 +54,7 @@ impl MockExec {
 
 impl Executor for MockExec {
     /// Just remember incoming event
-    fn on_event<M: Candle + Instrumented>(
+    fn on_event<M: Candle + HasInstrument>(
         &mut self,
         event: &Event<M>,
         _scheduler: &mut Scheduler<'_, M>,

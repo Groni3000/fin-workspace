@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 use tradeprim::price::Price;
 
-use crate::{Candle, RelevantPrice, Timestamped};
+use crate::{Candle, HasLastPrice, HasTimestamp};
 
 /// A candle: open, high, low, close and volume over an interval starting at `ts`.
 ///
@@ -38,14 +38,14 @@ impl Ohlcv {
     }
 }
 
-impl Timestamped for Ohlcv {
+impl HasTimestamp for Ohlcv {
     fn timestamp(&self) -> DateTime<Utc> {
         self.ts
     }
 }
 
 /// The close: the latest price the candle knows.
-impl RelevantPrice for Ohlcv {
+impl HasLastPrice for Ohlcv {
     fn last_price(&self) -> Price {
         self.close
     }

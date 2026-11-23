@@ -4,7 +4,7 @@ use chrono::{DateTime, Datelike, NaiveDate, NaiveTime};
 use chrono_tz::Tz;
 use futchain::{FutChain, eot::EndOfTrading};
 use instrid::instruments::{FuturesContract, Instrument};
-use mdata::{Candle, Instrumented, RelevantPrice, Timestamped};
+use mdata::{Candle, HasInstrument, HasLastPrice, HasTimestamp};
 use oms::{desired::Desired, fill::Fill, portfolio::Portfolio, protocol::ExecEvent};
 use tradeprim::{position::Position, price::Price, quantity::Quantity};
 
@@ -95,7 +95,7 @@ impl State {
 
 impl<E: EndOfTrading, R> Traded<R> for Strategy<E>
 where
-    R: Timestamped + Instrumented + Candle,
+    R: HasTimestamp + HasInstrument + Candle,
 {
     fn on_event(&mut self, event: &Event<R>, pf: &Portfolio) {
         Strategy::on_event(self, event, pf);
@@ -140,7 +140,7 @@ impl<E: EndOfTrading> Strategy<E> {
 
     pub fn on_event<R>(&mut self, event: &Event<R>, pf: &Portfolio)
     where
-        R: Timestamped + Instrumented + Candle,
+        R: HasTimestamp + HasInstrument + Candle,
     {
         match event.kind() {
             Kind::MarketData(md) => self.process_md(md),
@@ -210,7 +210,7 @@ impl<E: EndOfTrading> Strategy<E> {
 
     fn entry_condition<R>(&mut self, md_record: &R, exchange_ts: DateTime<Tz>) -> bool
     where
-        R: Timestamped + Instrumented + RelevantPrice,
+        R: HasTimestamp + HasInstrument + HasLastPrice,
     {
         if self.state.fired_today {
             return false;
@@ -248,7 +248,7 @@ impl<E: EndOfTrading> Strategy<E> {
 
     fn out_condition<R>(&mut self, md_record: &R, exchange_ts: DateTime<Tz>)
     where
-        R: Timestamped + Instrumented + Candle,
+        R: HasTimestamp + HasInstrument + Candle,
     {
         let exchange_time = exchange_ts.time();
         let stop_loss_fired = if let Some(sl_price) = self.state.stop_loss_price {
@@ -308,7 +308,7 @@ impl<E: EndOfTrading> Strategy<E> {
 
     fn process_md<R>(&mut self, md_record: &R)
     where
-        R: Timestamped + Instrumented + Candle,
+        R: HasTimestamp + HasInstrument + Candle,
     {
         // The only tz conversion per record: chrono-tz binary-searches transitions on each call.
         let exchange_ts = md_record

@@ -5,7 +5,7 @@ use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use tradeprim::price::{ParsePriceError, Price};
 
-use mdata::{Candle, RelevantPrice, Timestamped};
+use mdata::{Candle, HasLastPrice, HasTimestamp};
 
 #[derive(Serialize, Deserialize)]
 pub struct RawFrdCandle<'a> {
@@ -28,13 +28,13 @@ pub struct FrdCandle {
     volume: u64,
 }
 
-impl Timestamped for FrdCandle {
+impl HasTimestamp for FrdCandle {
     fn timestamp(&self) -> DateTime<Utc> {
         self.timestamp
     }
 }
 
-impl RelevantPrice for FrdCandle {
+impl HasLastPrice for FrdCandle {
     fn last_price(&self) -> Price {
         self.close
     }

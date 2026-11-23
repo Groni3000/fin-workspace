@@ -7,7 +7,7 @@ use serde::de::DeserializeOwned;
 use crate::formats::de_price_f64;
 use tradeprim::price::Price;
 
-use mdata::{Candle, RelevantPrice, Symboled, Tagged, Timestamped};
+use mdata::{Candle, HasLastPrice, HasSymbol, HasTimestamp, Tagged};
 
 use std::{
     fmt::Display,
@@ -103,19 +103,19 @@ impl Ord for CustomDatabentoAggregatedCandle {
     }
 }
 
-impl Timestamped for CustomDatabentoAggregatedCandle {
+impl HasTimestamp for CustomDatabentoAggregatedCandle {
     fn timestamp(&self) -> DateTime<Utc> {
         self.ts_event
     }
 }
 
-impl Symboled for CustomDatabentoAggregatedCandle {
+impl HasSymbol for CustomDatabentoAggregatedCandle {
     fn symbol(&self) -> &str {
         &self.symbol
     }
 }
 
-impl RelevantPrice for CustomDatabentoAggregatedCandle {
+impl HasLastPrice for CustomDatabentoAggregatedCandle {
     fn last_price(&self) -> Price {
         self.close
     }
@@ -241,7 +241,7 @@ impl From<KafkaError> for KafkaMdError {
 }
 
 #[cfg(feature = "kafka")]
-impl<T: DeserializeOwned + Symboled> Iterator for CustomDatabentoConsumerMd<T> {
+impl<T: DeserializeOwned + HasSymbol> Iterator for CustomDatabentoConsumerMd<T> {
     type Item = Result<Tagged<T>, KafkaMdError>;
 
     fn next(&mut self) -> Option<Self::Item> {

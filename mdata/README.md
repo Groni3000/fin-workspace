@@ -10,24 +10,24 @@ into small capability traits, and consumers ask only for the ones they need:
 
 | Trait | What the record can tell you |
 |---|---|
-| `Timestamped` | when it happened in UTC |
-| `RelevantPrice` | a single price (`Timestamped` + `last_price`) |
-| `Candle` | open / high / low / close / volume (extends `RelevantPrice`) |
-| `Instrumented` | which `Instrument` it belongs to |
-| `Symboled` | a raw venue/vendor symbol not yet resolved to an `Instrument` |
+| `HasTimestamp` | when it happened in UTC |
+| `HasLastPrice` | a single price (`HasTimestamp` + `last_price`) |
+| `Candle` | open / high / low / close / volume (extends `HasLastPrice`) |
+| `HasInstrument` | which `Instrument` it belongs to |
+| `HasSymbol` | a raw venue/vendor symbol not yet resolved to an `Instrument` |
 
 `MarketData` is a fallible stream of such records. It's blanket-implemented
 for any `Iterator<Item = Result<R, E>>`, so a reader only has to be an
 iterator.
 
-`Ohlcv` is a plain candle implementing `Timestamped`, `RelevantPrice` (its close) and
+`Ohlcv` is a plain candle implementing `HasTimestamp`, `HasLastPrice` (its close) and
 `Candle`, for examples, tests and other hand-written data. It checks nothing (a `low` above
 the `high` is stored as given). For a real data source, write your own record type and
 implement the traits: what to check when a record is built is up to that type.
 
 Most formats name the instrument once (in the file name or the topic), not on
 every row. `Tagged<R>` pairs a record with its instrument, which makes it
-`Instrumented` while carrying over everything the inner record already has.
+`HasInstrument` while carrying over everything the inner record already has.
 
 ## Example
 
@@ -38,7 +38,7 @@ use instrid::{
     instruments::{Instrument, Stock},
     mic::Mic,
 };
-use mdata::{Instrumented, RelevantPrice, Tagged, Timestamped};
+use mdata::{HasInstrument, HasLastPrice, HasTimestamp, Tagged};
 use tradeprim::{currency::Currency, price::Price};
 
 /// A vendor format: knows its time and price, not its instrument.
@@ -48,20 +48,20 @@ struct Trade {
     px: Price,
 }
 
-impl Timestamped for Trade {
+impl HasTimestamp for Trade {
     fn timestamp(&self) -> DateTime<Utc> {
         self.ts
     }
 }
 
-impl RelevantPrice for Trade {
+impl HasLastPrice for Trade {
     fn last_price(&self) -> Price {
         self.px
     }
 }
 
 /// A consumer that works with any format providing these capabilities.
-fn describe<R: RelevantPrice + Instrumented>(r: &R) -> String {
+fn describe<R: HasLastPrice + HasInstrument>(r: &R) -> String {
     format!("{} @ {}", r.instrument(), r.last_price())
 }
 

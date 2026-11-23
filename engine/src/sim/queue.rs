@@ -1,6 +1,6 @@
 use std::{cmp::Reverse, collections::BinaryHeap, error::Error, iter::Peekable};
 
-use mdata::{Candle, Instrumented, MarketData, Timestamped};
+use mdata::{Candle, HasInstrument, HasTimestamp, MarketData};
 use oms::protocol::{Request, RequestSink};
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
 /// executor schedules (acks, fills, rejects, ...).
 ///
 /// Works over any [`MarketData`] stream whose records are [`Candle`] +
-/// [`Instrumented`], which is what the simulated executors fill against.
+/// [`HasInstrument`], which is what the simulated executors fill against.
 ///
 /// Ordering rules (the first two are [`scheduled_first`]'s):
 /// - the earliest timestamp goes first;
@@ -62,7 +62,7 @@ impl<MD: MarketData, E> SimQueue<MD, E> {
     }
 }
 
-fn nanos<T: Timestamped>(record: &T) -> i64 {
+fn nanos<T: HasTimestamp>(record: &T) -> i64 {
     record
         .timestamp()
         .timestamp_nanos_opt()
@@ -72,7 +72,7 @@ fn nanos<T: Timestamped>(record: &T) -> i64 {
 impl<MD, E> EventSource for SimQueue<MD, E>
 where
     MD: MarketData,
-    MD::Record: Candle + Instrumented,
+    MD::Record: Candle + HasInstrument,
     MD::Error: Error + Send + 'static,
     E: Executor,
 {

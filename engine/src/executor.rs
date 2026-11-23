@@ -1,4 +1,4 @@
-use mdata::{Candle, Instrumented};
+use mdata::{Candle, HasInstrument};
 
 use oms::protocol::Request;
 
@@ -8,7 +8,7 @@ use crate::event::{Event, Scheduler};
 
 /// Marks type as an executor: it fills/cancels/rejects orders.
 pub trait Executor {
-    fn on_event<M: Candle + Instrumented>(
+    fn on_event<M: Candle + HasInstrument>(
         &mut self,
         event: &Event<M>,
         scheduler: &mut Scheduler<'_, M>,

@@ -12,7 +12,7 @@ use oms::{
 };
 use tradeprim::{Side, price::Price};
 
-use mdata::{Candle, Instrumented};
+use mdata::{Candle, HasInstrument};
 
 use crate::{
     event::{Event, Kind, Scheduler},
@@ -163,7 +163,7 @@ impl MarketStopLimitExecutor {
     /// the bar's open, triggered stops at their trigger, worsened to the bar's
     /// open when the bar gapped through the trigger price, and reached limits at
     /// their limit, improved to the bar's open when the bar opened beyond it.
-    pub fn on_record<M: Candle + Instrumented>(
+    pub fn on_record<M: Candle + HasInstrument>(
         &mut self,
         md_record: &M,
         timestamp: i64,
@@ -277,7 +277,7 @@ impl MarketStopLimitExecutor {
 }
 
 impl Executor for MarketStopLimitExecutor {
-    fn on_event<M: Candle + Instrumented>(
+    fn on_event<M: Candle + HasInstrument>(
         &mut self,
         event: &Event<M>,
         scheduler: &mut Scheduler<'_, M>,

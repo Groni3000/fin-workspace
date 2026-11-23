@@ -1,7 +1,7 @@
 use crate::formats::de_price_f64;
 use chrono::serde::ts_nanoseconds;
 use chrono::{DateTime, Utc};
-use mdata::{Candle, RelevantPrice, Symboled, Timestamped};
+use mdata::{Candle, HasLastPrice, HasSymbol, HasTimestamp};
 use serde::Deserialize;
 use tradeprim::price::Price;
 
@@ -25,19 +25,19 @@ pub struct MergedCandle {
     ts_ingest: DateTime<Utc>,
 }
 
-impl Timestamped for MergedCandle {
+impl HasTimestamp for MergedCandle {
     fn timestamp(&self) -> DateTime<Utc> {
         self.ts_event
     }
 }
 
-impl Symboled for MergedCandle {
+impl HasSymbol for MergedCandle {
     fn symbol(&self) -> &str {
         &self.symbol
     }
 }
 
-impl RelevantPrice for MergedCandle {
+impl HasLastPrice for MergedCandle {
     fn last_price(&self) -> Price {
         self.close
     }
