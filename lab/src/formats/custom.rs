@@ -5,9 +5,9 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use crate::formats::de_price_f64;
-use tradeprim::price::Price;
+use tradeprim::{price::Price, volume::Volume};
 
-use mdata::{Candle, HasLastPrice, HasSymbol, HasTimestamp, Tagged};
+use mdata::{Candle, HasLastPrice, HasSymbol, HasTimestamp, HasVolume, Tagged};
 
 use std::{
     fmt::Display,
@@ -137,9 +137,12 @@ impl Candle for CustomDatabentoAggregatedCandle {
     fn close(&self) -> Price {
         self.close
     }
+}
 
-    fn volume(&self) -> u64 {
-        self.volume
+/// The source reports whole contracts.
+impl HasVolume for CustomDatabentoAggregatedCandle {
+    fn volume(&self) -> Volume {
+        Volume::from_units(self.volume)
     }
 }
 

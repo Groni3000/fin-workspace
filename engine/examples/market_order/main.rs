@@ -24,7 +24,9 @@ use mdata::{Candle, Ohlcv, Tagged};
 use oms::{
     desired::Desired, manager::Oms, portfolio::Portfolio, protocol::ExecEvent, rms::NaiveRms,
 };
-use tradeprim::{currency::Currency, position::Position, price::Price, quantity::Quantity};
+use tradeprim::{
+    currency::Currency, position::Position, price::Price, quantity::Quantity, volume::Volume,
+};
 
 const SEC: i64 = 1_000_000_000;
 const MS: i64 = 1_000_000;
@@ -274,7 +276,7 @@ fn candle(
         open.max(close),
         open.min(close),
         close,
-        0,
+        Volume::ZERO,
     );
     Ok(Tagged::new(spy, candle))
 }

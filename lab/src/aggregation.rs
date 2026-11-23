@@ -2,13 +2,12 @@ use chrono::{
     DateTime, Datelike, LocalResult, NaiveDate, NaiveTime, TimeDelta, TimeZone, Timelike, Utc,
 };
 use chrono_tz::Tz;
-use serde::{Deserialize, Serialize};
-use tradeprim::price::Price;
+use tradeprim::{price::Price, volume::Volume};
 
-use mdata::{Candle, HasLastPrice, HasTimestamp};
+use mdata::{Candle, HasLastPrice, HasTimestamp, HasVolume};
 
 /// Aggregated OHLCV. `ts` is the bucket start.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Bar {
     /// Bucket start
     ts: DateTime<Utc>,
@@ -16,7 +15,7 @@ pub struct Bar {
     high: Price,
     low: Price,
     close: Price,
-    volume: u64,
+    volume: Volume,
 }
 
 impl Bar {
@@ -26,7 +25,7 @@ impl Bar {
         high: Price,
         low: Price,
         close: Price,
-        volume: u64,
+        volume: Volume,
     ) -> Self {
         Self {
             ts,
@@ -38,7 +37,7 @@ impl Bar {
         }
     }
 
-    fn seed<C: Candle>(ts: DateTime<Utc>, c: &C) -> Self {
+    fn seed<C: Candle + HasVolume>(ts: DateTime<Utc>, c: &C) -> Self {
         Self {
             ts,
             open: c.open(),
@@ -49,7 +48,7 @@ impl Bar {
         }
     }
 
-    fn merge<C: Candle>(&mut self, c: &C) {
+    fn merge<C: Candle + HasVolume>(&mut self, c: &C) {
         self.high = self.high.max(c.high());
         self.low = self.low.min(c.low());
         self.close = c.close();
@@ -82,7 +81,10 @@ impl Candle for Bar {
     fn close(&self) -> Price {
         self.close
     }
-    fn volume(&self) -> u64 {
+}
+
+impl HasVolume for Bar {
+    fn volume(&self) -> Volume {
         self.volume
     }
 }
@@ -193,7 +195,7 @@ impl CandleAggregator {
     }
 
     /// Updates the aggregator with a new candle, returning the aggregated bar if it completes a bucket.
-    pub fn update<C: Candle>(&mut self, c: &C) -> Option<Bar> {
+    pub fn update<C: Candle + HasVolume>(&mut self, c: &C) -> Option<Bar> {
         debug_assert!(
             c.timestamp() >= self.last_ts,
             "input stream must be ordered"
@@ -303,7 +305,7 @@ impl SessionAggregator {
         local_to_utc(self.tz, date, self.start_time)
     }
 
-    pub fn update<C: Candle>(&mut self, c: &C) -> Option<Bar> {
+    pub fn update<C: Candle + HasVolume>(&mut self, c: &C) -> Option<Bar> {
         debug_assert!(
             c.timestamp() >= self.last_ts,
             "input stream must be ordered"
@@ -371,7 +373,7 @@ impl WeekAggregator {
         d - TimeDelta::days(back as i64)
     }
 
-    pub fn update<C: Candle>(&mut self, daily: &C) -> Option<Bar> {
+    pub fn update<C: Candle + HasVolume>(&mut self, daily: &C) -> Option<Bar> {
         debug_assert!(
             daily.timestamp() >= self.last_ts,
             "input stream must be ordered"
@@ -420,7 +422,14 @@ mod tests {
     }
 
     fn ohlc(ts: DateTime<Utc>, open: &str, high: &str, low: &str, close: &str, volume: u64) -> Bar {
-        Bar::new(ts, p(open), p(high), p(low), p(close), volume)
+        Bar::new(
+            ts,
+            p(open),
+            p(high),
+            p(low),
+            p(close),
+            Volume::from_units(volume),
+        )
     }
 
     fn utc(date: (i32, u32, u32), time: (u32, u32, u32)) -> DateTime<Utc> {
@@ -442,7 +451,7 @@ mod tests {
         assert!(agg.update(&first).is_none());
         let completed = agg.update(&second).expect("second bar opens a new bucket");
         assert_eq!(completed.close(), p("1"));
-        assert_eq!(completed.volume(), 1);
+        assert_eq!(completed.volume(), Volume::from_units(1));
     }
 
     /// The 25-hour fall-back day still yields whole buckets, and the last one ends at midnight.
@@ -715,7 +724,7 @@ mod tests {
             assert_eq!(completed.high(), p("15"));
             assert_eq!(completed.low(), p("8"));
             assert_eq!(completed.close(), p("14"));
-            assert_eq!(completed.volume(), 12);
+            assert_eq!(completed.volume(), Volume::from_units(12));
         }
 
         #[test]
@@ -731,7 +740,7 @@ mod tests {
             agg.update(&at((2025, 6, 10), (10, 0, 0), "1", 3));
 
             let flushed = agg.flush().expect("in-progress bar");
-            assert_eq!(flushed.volume(), 3);
+            assert_eq!(flushed.volume(), Volume::from_units(3));
             assert!(agg.flush().is_none());
         }
 
@@ -763,7 +772,7 @@ mod tests {
             }
 
             assert_eq!(week.candle().unwrap().open(), p("1"));
-            assert_eq!(week.candle().unwrap().volume(), 2);
+            assert_eq!(week.candle().unwrap().volume(), Volume::from_units(2));
         }
     }
 }

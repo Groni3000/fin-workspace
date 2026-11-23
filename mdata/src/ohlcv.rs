@@ -1,9 +1,9 @@
 //! [`Ohlcv`]: a plain candle, raw straightforward implementation to reuse in code here and there.
 
 use chrono::{DateTime, Utc};
-use tradeprim::price::Price;
+use tradeprim::{price::Price, volume::Volume};
 
-use crate::{Candle, HasLastPrice, HasTimestamp};
+use crate::{Candle, HasLastPrice, HasTimestamp, HasVolume};
 
 /// A candle: open, high, low, close and volume over an interval starting at `ts`.
 ///
@@ -15,7 +15,7 @@ pub struct Ohlcv {
     high: Price,
     low: Price,
     close: Price,
-    volume: u64,
+    volume: Volume,
 }
 
 impl Ohlcv {
@@ -25,7 +25,7 @@ impl Ohlcv {
         high: Price,
         low: Price,
         close: Price,
-        volume: u64,
+        volume: Volume,
     ) -> Self {
         Self {
             ts,
@@ -64,7 +64,10 @@ impl Candle for Ohlcv {
     fn close(&self) -> Price {
         self.close
     }
-    fn volume(&self) -> u64 {
+}
+
+impl HasVolume for Ohlcv {
+    fn volume(&self) -> Volume {
         self.volume
     }
 }

@@ -29,6 +29,7 @@ use tradeprim::{
     position::{NonZeroQuantity, Position},
     price::Price,
     quantity::Quantity,
+    volume::Volume,
 };
 
 const SEC: i64 = 1_000_000_000;
@@ -243,7 +244,7 @@ fn candle(
     let ts = DateTime::from_timestamp(secs, 0).expect("valid timestamp");
     Ok(Tagged::new(
         spy,
-        Ohlcv::new(ts, px(o), px(h), px(l), px(c), 0),
+        Ohlcv::new(ts, px(o), px(h), px(l), px(c), Volume::ZERO),
     ))
 }
 

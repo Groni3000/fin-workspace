@@ -14,7 +14,7 @@ use oms::{
     order::{New, Order, OrderBuilder, OrderType},
     protocol::{ExecEvent, RejectReason, Request, RequestSink},
 };
-use tradeprim::{Side, currency::Currency, price::Price, quantity::Quantity};
+use tradeprim::{Side, currency::Currency, price::Price, quantity::Quantity, volume::Volume};
 
 use super::SimQueue;
 use crate::{
@@ -52,7 +52,7 @@ pub fn bar(
             px(h),
             px(l),
             px(c),
-            1,
+            Volume::from_units(1),
         ),
     ))
 }

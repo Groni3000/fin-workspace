@@ -3,9 +3,9 @@ use std::{fmt::Display, num::ParseIntError, str::FromStr};
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
-use tradeprim::{decimal::ParseDecimalError, price::Price};
+use tradeprim::{decimal::ParseDecimalError, price::Price, volume::Volume};
 
-use mdata::{Candle, HasLastPrice, HasTimestamp};
+use mdata::{Candle, HasLastPrice, HasTimestamp, HasVolume};
 
 #[derive(Serialize, Deserialize)]
 pub struct RawFrdCandle<'a> {
@@ -56,9 +56,12 @@ impl Candle for FrdCandle {
     fn close(&self) -> Price {
         self.close
     }
+}
 
-    fn volume(&self) -> u64 {
-        self.volume
+/// The source reports whole contracts.
+impl HasVolume for FrdCandle {
+    fn volume(&self) -> Volume {
+        Volume::from_units(self.volume)
     }
 }
 
@@ -276,9 +279,5 @@ impl FrdCandle {
 
     pub fn close(&self) -> Price {
         self.close
-    }
-
-    pub fn volume(&self) -> u64 {
-        self.volume
     }
 }

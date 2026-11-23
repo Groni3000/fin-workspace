@@ -12,7 +12,7 @@ use oms::{
     order::{New, Order, OrderBuilder},
     protocol::{ExecEvent, Request, RequestSink},
 };
-use tradeprim::{Side, currency::Currency, price::Price, quantity::Quantity};
+use tradeprim::{Side, currency::Currency, price::Price, quantity::Quantity, volume::Volume};
 
 use super::SimQueue;
 use crate::{
@@ -106,7 +106,14 @@ fn bar(ts: i64) -> Result<Record, FeedFailure> {
     let px = Price::from_str_unchecked("1");
     Ok(Tagged::new(
         spy(),
-        Ohlcv::new(DateTime::from_timestamp_nanos(ts), px, px, px, px, 1),
+        Ohlcv::new(
+            DateTime::from_timestamp_nanos(ts),
+            px,
+            px,
+            px,
+            px,
+            Volume::from_units(1),
+        ),
     ))
 }
 

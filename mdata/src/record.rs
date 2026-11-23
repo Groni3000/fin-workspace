@@ -7,7 +7,7 @@
 
 use chrono::{DateTime, Utc};
 use instrid::instruments::Instrument;
-use tradeprim::price::Price;
+use tradeprim::{price::Price, volume::Volume};
 
 /// The record happened at a known point in time.
 pub trait HasTimestamp {
@@ -39,5 +39,10 @@ pub trait Candle: HasLastPrice {
     fn high(&self) -> Price;
     fn low(&self) -> Price;
     fn close(&self) -> Price;
-    fn volume(&self) -> u64;
+}
+
+/// The record knows how much traded. Not part of [`Candle`]: some sources may not have volume,
+/// and a made-up zero would mislead whoever reads it.
+pub trait HasVolume {
+    fn volume(&self) -> Volume;
 }

@@ -12,7 +12,8 @@ into small capability traits, and consumers ask only for the ones they need:
 |---|---|
 | `HasTimestamp` | when it happened in UTC |
 | `HasLastPrice` | a single price (`HasTimestamp` + `last_price`) |
-| `Candle` | open / high / low / close / volume (extends `HasLastPrice`) |
+| `Candle` | open / high / low / close (extends `HasLastPrice`) |
+| `HasVolume` | how much traded, as a `tradeprim::volume::Volume` |
 | `HasInstrument` | which `Instrument` it belongs to |
 | `HasSymbol` | a raw venue/vendor symbol not yet resolved to an `Instrument` |
 
@@ -20,9 +21,9 @@ into small capability traits, and consumers ask only for the ones they need:
 for any `Iterator<Item = Result<R, E>>`, so a reader only has to be an
 iterator.
 
-`Ohlcv` is a plain candle implementing `HasTimestamp`, `HasLastPrice` (its close) and
-`Candle`, for examples, tests and other hand-written data. It checks nothing (a `low` above
-the `high` is stored as given). For a real data source, write your own record type and
+`Ohlcv` is a plain candle implementing `HasTimestamp`, `HasLastPrice` (its close), `Candle`
+and `HasVolume`, for examples, tests and other hand-written data. It checks nothing (a `low`
+above the `high` is stored as given). For a real data source, write your own record type and
 implement the traits: what to check when a record is built is up to that type.
 
 Most formats name the instrument once (in the file name or the topic), not on

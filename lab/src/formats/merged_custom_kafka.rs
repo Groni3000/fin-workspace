@@ -1,9 +1,9 @@
 use crate::formats::de_price_f64;
 use chrono::serde::ts_nanoseconds;
 use chrono::{DateTime, Utc};
-use mdata::{Candle, HasLastPrice, HasSymbol, HasTimestamp};
+use mdata::{Candle, HasLastPrice, HasSymbol, HasTimestamp, HasVolume};
 use serde::Deserialize;
-use tradeprim::price::Price;
+use tradeprim::{price::Price, volume::Volume};
 
 /// Custom candle used in internal kafka producer for topics like:
 /// `md.db.GLBX.MDP3.<BASE_NAME>.FUT.merged.ohlcv-1s`
@@ -59,8 +59,11 @@ impl Candle for MergedCandle {
     fn close(&self) -> Price {
         self.close
     }
+}
 
-    fn volume(&self) -> u64 {
-        self.volume
+/// The source reports whole contracts.
+impl HasVolume for MergedCandle {
+    fn volume(&self) -> Volume {
+        Volume::from_units(self.volume)
     }
 }

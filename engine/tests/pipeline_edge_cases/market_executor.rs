@@ -9,7 +9,7 @@ use oms::{
     portfolio::Portfolio,
     rms::{NaiveRms, Rms},
 };
-use tradeprim::price::Price;
+use tradeprim::{price::Price, volume::Volume};
 
 use crate::common::{Record, run_scripted, spy};
 
@@ -47,7 +47,10 @@ pub fn run_script_with<R: Rms>(
         .map(|(open, minute)| {
             let px = Price::from_str_unchecked(open);
             let ts = DateTime::from_timestamp(minute * 60, 0).expect("valid timestamp");
-            Ok(Tagged::new(spy(), Ohlcv::new(ts, px, px, px, px, 0)))
+            Ok(Tagged::new(
+                spy(),
+                Ohlcv::new(ts, px, px, px, px, Volume::ZERO),
+            ))
         })
         .collect();
     let exec = MarketExecutor::new(LATENCY, LATENCY, LATENCY, LATENCY);

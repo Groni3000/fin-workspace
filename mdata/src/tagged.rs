@@ -2,9 +2,9 @@
 
 use chrono::{DateTime, Utc};
 use instrid::instruments::Instrument;
-use tradeprim::price::Price;
+use tradeprim::{price::Price, volume::Volume};
 
-use crate::record::{Candle, HasInstrument, HasLastPrice, HasTimestamp};
+use crate::record::{Candle, HasInstrument, HasLastPrice, HasTimestamp, HasVolume};
 
 /// A record paired with the instrument it belongs to.
 ///
@@ -49,7 +49,10 @@ impl<R: Candle> Candle for Tagged<R> {
     fn close(&self) -> Price {
         self.record.close()
     }
-    fn volume(&self) -> u64 {
+}
+
+impl<R: HasVolume> HasVolume for Tagged<R> {
+    fn volume(&self) -> Volume {
         self.record.volume()
     }
 }
