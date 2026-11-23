@@ -37,6 +37,16 @@ impl Oms {
         self.unacked.is_empty() && self.working.is_empty() && self.pending_cancels.is_empty()
     }
 
+    /// Orders sent and not yet acknowledged by the executor.
+    pub fn unacked(&self) -> &HashMap<OrderId, Order<New>> {
+        &self.unacked
+    }
+
+    /// Orders the executor acknowledged and that are not done yet.
+    pub fn working(&self) -> &HashMap<OrderId, Order<Working>> {
+        &self.working
+    }
+
     /// Applies what the executor reported about an order.
     pub fn on_exec(&mut self, event: &ExecEvent, pf: &mut Portfolio) {
         match event {

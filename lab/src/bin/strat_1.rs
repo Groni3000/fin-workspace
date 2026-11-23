@@ -63,19 +63,8 @@ fn main() {
             let rms = rms_from_args();
 
             tracing::info!(strategy = strategy.id(), "backtest start");
-            let (_oms, pf) = run(&mut event_queue, &mut strategy, oms, pf, &rms, &clock);
-            let final_positions = pf
-                .positions()
-                .iter()
-                .filter(|(_i, p)| *p != &Position::Flat)
-                .map(|(i, p)| format!("{i}: {p}"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            tracing::info!(
-                fills = pf.fills().len(),
-                positions = %final_positions,
-                "backtest done"
-            );
+            let (oms, pf) = run(&mut event_queue, &mut strategy, oms, pf, &rms, &clock);
+            log_done(&oms, &pf);
         }
         Source::KafkaReplay => {
             let shutdown = Arc::new(AtomicBool::new(false));
@@ -98,19 +87,8 @@ fn main() {
             let rms = rms_from_args();
 
             tracing::info!(strategy = strategy.id(), "backtest start");
-            let (_oms, pf) = run(&mut event_queue, &mut strategy, oms, pf, &rms, &clock);
-            let final_positions = pf
-                .positions()
-                .iter()
-                .filter(|(_i, p)| *p != &Position::Flat)
-                .map(|(i, p)| format!("{i}: {p}"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            tracing::info!(
-                fills = pf.fills().len(),
-                positions = %final_positions,
-                "backtest done"
-            );
+            let (oms, pf) = run(&mut event_queue, &mut strategy, oms, pf, &rms, &clock);
+            log_done(&oms, &pf);
         }
         Source::KafkaReplayMerged => {
             let shutdown = Arc::new(AtomicBool::new(false));
@@ -133,21 +111,50 @@ fn main() {
             let rms = rms_from_args();
 
             tracing::info!(strategy = strategy.id(), "backtest start");
-            let (_oms, pf) = run(&mut event_queue, &mut strategy, oms, pf, &rms, &clock);
-            let final_positions = pf
-                .positions()
-                .iter()
-                .filter(|(_i, p)| *p != &Position::Flat)
-                .map(|(i, p)| format!("{i}: {p}"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            tracing::info!(
-                fills = pf.fills().len(),
-                positions = %final_positions,
-                "backtest done"
-            );
+            let (oms, pf) = run(&mut event_queue, &mut strategy, oms, pf, &rms, &clock);
+            log_done(&oms, &pf);
         }
     }
+}
+
+/// The end-of-backtest summary. Open orders are listed too: a final position can be an exit that
+/// never filled, not what the strategy wanted.
+fn log_done(oms: &Oms, pf: &Portfolio) {
+    let positions = pf
+        .positions()
+        .iter()
+        .filter(|(_i, p)| *p != &Position::Flat)
+        .map(|(i, p)| format!("{i}: {p}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let unacked = oms.unacked().values().map(|o| {
+        format!(
+            "{}: {:?} {} {} (unacked)",
+            o.instrument(),
+            o.side(),
+            o.quantity().qty(),
+            o.order_type()
+        )
+    });
+    let working = oms.working().values().map(|o| {
+        format!(
+            "{}: {:?} {} of {} {} (working)",
+            o.instrument(),
+            o.side(),
+            o.state().leaves(),
+            o.quantity().qty(),
+            o.order_type()
+        )
+    });
+    let mut open_orders = unacked.chain(working).collect::<Vec<_>>();
+    open_orders.sort();
+    tracing::info!(
+        fills = pf.fills().len(),
+        positions = %positions,
+        open_orders = open_orders.len(),
+        orders = %open_orders.join(", "),
+        "backtest done"
+    );
 }
 
 enum Source {
