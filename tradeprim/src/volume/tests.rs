@@ -35,7 +35,7 @@ fn an_overflowing_sum_panics() {
 
 #[test]
 fn what_is_not_a_volume() {
-    use ParseVolumeError::*;
+    use ParseDecimalError::*;
 
     for (s, err) in [
         ("", InvalidFormat),

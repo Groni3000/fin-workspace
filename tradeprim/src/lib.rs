@@ -3,6 +3,7 @@
 pub mod ascii_code;
 pub mod currency;
 pub mod currency_notional;
+pub mod decimal;
 pub mod position;
 pub mod price;
 pub mod quantity;
@@ -20,9 +21,7 @@ pub mod prelude {
 
     pub mod errors {
         pub use crate::ascii_code::AsciiCode;
-        pub use crate::price::ParsePriceError;
-        pub use crate::quantity::ParseQuantityError;
-        pub use crate::volume::ParseVolumeError;
+        pub use crate::decimal::ParseDecimalError;
     }
 }
 

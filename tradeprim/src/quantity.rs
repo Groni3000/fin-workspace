@@ -2,7 +2,6 @@
 use std::borrow::Cow;
 use std::{
     fmt::Display,
-    num::ParseIntError,
     ops::{Add, Sub},
     str::FromStr,
 };
@@ -10,7 +9,10 @@ use std::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::position::NonZeroQuantity;
+use crate::{
+    decimal::{ParseDecimalError, parse_decimal},
+    position::NonZeroQuantity,
+};
 
 /// Has fixed scale and max value.
 ///
@@ -160,56 +162,15 @@ impl Sub<NonZeroQuantity> for Quantity {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ParseQuantityError {
-    InvalidFormat,
-    OutOfBounds,
-    PrecisionError(usize),
-    ParseIntError(ParseIntError),
-}
-
-impl From<ParseIntError> for ParseQuantityError {
-    fn from(value: ParseIntError) -> Self {
-        ParseQuantityError::ParseIntError(value)
-    }
-}
-
-impl Display for ParseQuantityError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ParseQuantityError::InvalidFormat => write!(f, "Invalid format"),
-            ParseQuantityError::OutOfBounds => write!(f, "Out of bounds"),
-            ParseQuantityError::PrecisionError(precision) => {
-                write!(f, "Precision error: {}", precision)
-            }
-            ParseQuantityError::ParseIntError(err) => err.fmt(f),
-        }
-    }
-}
-
 impl FromStr for Quantity {
-    type Err = ParseQuantityError;
+    type Err = ParseDecimalError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (integer, fraction) = s.split_once('.').unwrap_or((s, "000000000"));
-        let (integer, fraction) = (integer.trim(), fraction.trim());
-
-        let parsed_integer = u64::from_str(integer)?;
-        if parsed_integer > Self::MAX_INTEGER_PART {
-            return Err(ParseQuantityError::OutOfBounds);
-        }
-
-        let used_precision = fraction.len();
-        if used_precision > Self::PRECISION as usize {
-            return Err(ParseQuantityError::PrecisionError(used_precision));
-        }
-        let remaining_precision = Self::PRECISION - used_precision as u32;
-        let parsed_fraction = u64::from_str(fraction)?;
-        let adjusted_fraction = parsed_fraction * Self::POW10[remaining_precision as usize];
-
-        let combined = parsed_integer * Self::SCALE + adjusted_fraction;
-
-        Ok(Self::new_unchecked(combined))
+        let raw = parse_decimal(s, Self::PRECISION)?.unsigned()?;
+        u64::try_from(raw)
+            .ok()
+            .and_then(Self::new)
+            .ok_or(ParseDecimalError::OutOfBounds)
     }
 }
 
@@ -455,7 +416,7 @@ mod tests {
     fn test_str_to_quantity_conversions() {
         let input = "";
         let quantity = Quantity::from_str(input);
-        assert_matches!(quantity, Err(ParseQuantityError::ParseIntError(_)));
+        assert_matches!(quantity, Err(ParseDecimalError::InvalidFormat));
 
         let input = "1";
         let quantity = Quantity::from_str(input);
@@ -467,11 +428,11 @@ mod tests {
 
         let input = "-1.0";
         let quantity = Quantity::from_str(input);
-        assert_matches!(quantity, Err(ParseQuantityError::ParseIntError(_)));
+        assert_matches!(quantity, Err(ParseDecimalError::InvalidFormat));
 
         let input = "-0.5";
         let quantity = Quantity::from_str(input);
-        assert_matches!(quantity, Err(ParseQuantityError::ParseIntError(_)));
+        assert_matches!(quantity, Err(ParseDecimalError::InvalidFormat));
 
         let input = "1.5";
         let quantity = Quantity::from_str(input);
@@ -479,7 +440,7 @@ mod tests {
 
         let input = "1.-5";
         let quantity = Quantity::from_str(input);
-        assert_matches!(quantity, Err(ParseQuantityError::ParseIntError(_)));
+        assert_matches!(quantity, Err(ParseDecimalError::InvalidFormat));
     }
 
     proptest! {
@@ -576,7 +537,7 @@ mod tests {
             let s = format!("{int}.{frac}");
             let got = Quantity::from_str(&s);
             prop_assert!(
-                matches!(got, Err(ParseQuantityError::PrecisionError(_))),
+                matches!(got, Err(ParseDecimalError::PrecisionError(_))),
                 "s={s} got={got:?}"
             );
         }
@@ -589,7 +550,7 @@ mod tests {
             let s = format!("{}.0", int);
             let got = Quantity::from_str(&s);
             prop_assert!(
-                matches!(got, Err(ParseQuantityError::OutOfBounds)),
+                matches!(got, Err(ParseDecimalError::OutOfBounds)),
                 "s={s} got={got:?}"
             );
         }

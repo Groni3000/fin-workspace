@@ -2,7 +2,6 @@
 use std::borrow::Cow;
 use std::{
     fmt::Display,
-    num::ParseIntError,
     ops::{Mul, Neg},
     str::FromStr,
 };
@@ -10,7 +9,11 @@ use std::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::{price::Price, quantity::Quantity};
+use crate::{
+    decimal::{ParseDecimalError, parse_decimal},
+    price::Price,
+    quantity::Quantity,
+};
 
 /// Has fixed scale and max value.
 ///
@@ -198,66 +201,15 @@ impl From<QuoteNotional> for i128 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ParseQuoteNotionalError {
-    InvalidFormat,
-    OutOfBounds,
-    PrecisionError(usize),
-    ParseIntError(ParseIntError),
-}
-
-impl Display for ParseQuoteNotionalError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ParseQuoteNotionalError::InvalidFormat => write!(f, "Invalid format"),
-            ParseQuoteNotionalError::OutOfBounds => write!(f, "Out of bounds"),
-            ParseQuoteNotionalError::PrecisionError(precision) => {
-                write!(f, "Precision error: {}", precision)
-            }
-            ParseQuoteNotionalError::ParseIntError(err) => err.fmt(f),
-        }
-    }
-}
-
 impl FromStr for QuoteNotional {
-    type Err = ParseQuoteNotionalError;
+    type Err = ParseDecimalError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (integer, fraction) = s.split_once('.').unwrap_or((s, "000000000"));
-        let (integer, fraction) = (integer.trim(), fraction.trim());
-        // Check below needed to not accept and parse `-0.-1`
-        // The fraction part would be parsed no problem
-        if fraction.starts_with('-') {
-            return Err(ParseQuoteNotionalError::InvalidFormat);
+        let raw = parse_decimal(s, Self::PRECISION)?.signed()?;
+        if !(-Self::MAX_RAW..=Self::MAX_RAW).contains(&raw) {
+            return Err(ParseDecimalError::OutOfBounds);
         }
-        let is_negative = integer.starts_with('-');
-
-        let parsed_integer =
-            i128::from_str(integer).map_err(ParseQuoteNotionalError::ParseIntError)?;
-        if !(-Self::MAX_INTEGER_PART..=Self::MAX_INTEGER_PART).contains(&parsed_integer) {
-            return Err(ParseQuoteNotionalError::OutOfBounds);
-        }
-        // We do it after min/max check because i128::MIN.abs() would panic
-        let parsed_integer = parsed_integer.abs();
-
-        let used_precision = fraction.len();
-        if used_precision > Self::PRECISION as usize {
-            return Err(ParseQuoteNotionalError::PrecisionError(used_precision));
-        }
-        let remaining_precision = Self::PRECISION - used_precision as u32;
-        let parsed_fraction =
-            i128::from_str(fraction).map_err(ParseQuoteNotionalError::ParseIntError)?;
-        let adjusted_fraction = parsed_fraction * Self::POW10[remaining_precision as usize];
-
-        let combined = match is_negative {
-            true => -(parsed_integer * Self::SCALE + adjusted_fraction),
-            false => parsed_integer * Self::SCALE + adjusted_fraction,
-        };
-        if !(-Self::MAX_RAW..=Self::MAX_RAW).contains(&combined) {
-            return Err(ParseQuoteNotionalError::OutOfBounds);
-        }
-
-        Ok(Self::new_unchecked(combined))
+        Ok(Self::new_unchecked(raw))
     }
 }
 
@@ -327,7 +279,7 @@ mod tests {
     fn test_str_to_quote_notional_conversions() {
         let input = "";
         let qn = QuoteNotional::from_str(input);
-        assert_matches!(qn, Err(ParseQuoteNotionalError::ParseIntError(_)));
+        assert_matches!(qn, Err(ParseDecimalError::InvalidFormat));
 
         let input = "1";
         let qn = QuoteNotional::from_str(input);
@@ -351,7 +303,7 @@ mod tests {
 
         let input = "1.-5";
         let qn = QuoteNotional::from_str(input);
-        assert_matches!(qn, Err(ParseQuoteNotionalError::InvalidFormat));
+        assert_matches!(qn, Err(ParseDecimalError::InvalidFormat));
     }
 
     proptest! {
@@ -426,7 +378,7 @@ mod tests {
             let s = format!("{int}.{frac}");
             let got = QuoteNotional::from_str(&s);
             prop_assert!(
-                matches!(got, Err(ParseQuoteNotionalError::PrecisionError(_))),
+                matches!(got, Err(ParseDecimalError::PrecisionError(_))),
                 "s={s} got={got:?}"
             );
         }
@@ -440,7 +392,7 @@ mod tests {
             let s = format!("{}{int}.0", if neg { "-" } else { "" });
             let got = QuoteNotional::from_str(&s);
             prop_assert!(
-                matches!(got, Err(ParseQuoteNotionalError::OutOfBounds)),
+                matches!(got, Err(ParseDecimalError::OutOfBounds)),
                 "s={s} got={got:?}"
             );
         }
@@ -472,7 +424,7 @@ mod tests {
             let s = format!("{sign}{}.{frac_units:09}", QuoteNotional::MAX_INTEGER_PART);
             let got = QuoteNotional::from_str(&s);
             prop_assert!(
-                matches!(got, Err(ParseQuoteNotionalError::OutOfBounds)),
+                matches!(got, Err(ParseDecimalError::OutOfBounds)),
                 "s={s} got={got:?}"
             );
         }

@@ -3,7 +3,7 @@ use std::{fmt::Display, num::ParseIntError, str::FromStr};
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
-use tradeprim::price::{ParsePriceError, Price};
+use tradeprim::{decimal::ParseDecimalError, price::Price};
 
 use mdata::{Candle, HasLastPrice, HasTimestamp};
 
@@ -74,7 +74,7 @@ pub enum FrdCandleParsingError {
     Missing(FrdField),
     TimezoneConversionError(String),
     BadTimestamp(String),
-    PriceParsingError(ParsePriceError),
+    PriceParsingError(ParseDecimalError),
     VolumeParsingError(ParseIntError),
 }
 

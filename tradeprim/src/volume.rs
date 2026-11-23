@@ -1,14 +1,16 @@
 //! [`Volume`]: how much traded over an interval.
 
 use std::{
-    error::Error,
     fmt::Display,
     iter::Sum,
     ops::{Add, AddAssign},
     str::FromStr,
 };
 
-use crate::quantity::Quantity;
+use crate::{
+    decimal::{ParseDecimalError, parse_decimal},
+    quantity::Quantity,
+};
 
 /// How much traded over an interval, in the units an order's [`Quantity`] counts (contracts,
 /// shares, coins) and with the same decimal places, so a fill's quantity converts without loss.
@@ -59,61 +61,11 @@ impl Display for Volume {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ParseVolumeError {
-    /// Anything but digits with at most one dot between them: no sign, no spaces, no exponent.
-    InvalidFormat,
-    /// More fraction digits than [`Volume::PRECISION`].
-    PrecisionError(usize),
-    /// Beyond what `u128` raw units hold.
-    OutOfBounds,
-}
-
-impl Display for ParseVolumeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::InvalidFormat => write!(f, "invalid format"),
-            Self::PrecisionError(digits) => {
-                write!(f, "{digits} fraction digits, at most {}", Volume::PRECISION)
-            }
-            Self::OutOfBounds => write!(f, "out of bounds"),
-        }
-    }
-}
-
-impl Error for ParseVolumeError {}
-
 impl FromStr for Volume {
-    type Err = ParseVolumeError;
+    type Err = ParseDecimalError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (integer, fraction) = s.split_once('.').unwrap_or((s, ""));
-        let has_dot = integer.len() < s.len();
-        let all_digits = integer
-            .bytes()
-            .chain(fraction.bytes())
-            .all(|b| b.is_ascii_digit());
-        if integer.is_empty() || (has_dot && fraction.is_empty()) || !all_digits {
-            return Err(ParseVolumeError::InvalidFormat);
-        }
-        if fraction.len() > Self::PRECISION as usize {
-            return Err(ParseVolumeError::PrecisionError(fraction.len()));
-        }
-
-        let digits = |part: &str| {
-            part.bytes().try_fold(0_u128, |acc, b| {
-                acc.checked_mul(10)?.checked_add(u128::from(b - b'0'))
-            })
-        };
-        let integer = digits(integer).ok_or(ParseVolumeError::OutOfBounds)?;
-        let fraction = digits(fraction).expect("at most 9 digits")
-            * 10_u128.pow(Self::PRECISION - fraction.len() as u32);
-
-        integer
-            .checked_mul(Self::SCALE)
-            .and_then(|raw| raw.checked_add(fraction))
-            .map(Self::new)
-            .ok_or(ParseVolumeError::OutOfBounds)
+        Ok(Self::new(parse_decimal(s, Self::PRECISION)?.unsigned()?))
     }
 }
 

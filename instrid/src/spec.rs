@@ -1,8 +1,9 @@
-use std::{fmt::Display, num::ParseIntError, str::FromStr};
+use std::{fmt::Display, str::FromStr};
 
 use tradeprim::{
     currency::Currency,
     currency_notional::CurrencyNotional,
+    decimal::{ParseDecimalError, parse_decimal},
     price::Price,
     quantity::{QtyStep, Quantity},
     quote_notional::QuoteNotional,
@@ -406,60 +407,16 @@ impl PointValue {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ParsePointValueError {
-    InvalidFormat,
-    OutOfBounds,
-    PrecisionError(usize),
-    ParseIntError(ParseIntError),
-}
-
-impl Display for ParsePointValueError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ParsePointValueError::InvalidFormat => write!(f, "Invalid format"),
-            ParsePointValueError::OutOfBounds => write!(f, "Out of bounds"),
-            ParsePointValueError::PrecisionError(precision) => {
-                write!(f, "Precision error: {}", precision)
-            }
-            ParsePointValueError::ParseIntError(err) => err.fmt(f),
-        }
-    }
-}
-
-// --- Basically a copy-paste from a Price
 impl FromStr for PointValue {
-    type Err = ParsePointValueError;
+    type Err = ParseDecimalError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (integer, fraction) = s.split_once('.').unwrap_or((s, "000000000"));
-        let (integer, fraction) = (integer.trim(), fraction.trim());
-        // Check below needed to not accept and parse `-0.-1`
-        // The fraction part would be parsed no problem
-        if fraction.starts_with('-') || integer.starts_with('-') {
-            return Err(ParsePointValueError::InvalidFormat);
+        let raw = i128::try_from(parse_decimal(s, Self::PRECISION)?.unsigned()?)
+            .map_err(|_| ParseDecimalError::OutOfBounds)?;
+        if !(Self::MIN_RAW..=Self::MAX_RAW).contains(&raw) {
+            return Err(ParseDecimalError::OutOfBounds);
         }
-
-        let parsed_integer =
-            i128::from_str(integer).map_err(ParsePointValueError::ParseIntError)?;
-        if !(0..=Self::MAX_INTEGER_PART).contains(&parsed_integer) {
-            return Err(ParsePointValueError::OutOfBounds);
-        }
-
-        let used_precision = fraction.len();
-        if used_precision > Self::PRECISION as usize {
-            return Err(ParsePointValueError::PrecisionError(used_precision));
-        }
-        let remaining_precision = Self::PRECISION - used_precision as u32;
-        let parsed_fraction =
-            i128::from_str(fraction).map_err(ParsePointValueError::ParseIntError)?;
-        let adjusted_fraction = parsed_fraction * Self::POW10[remaining_precision as usize];
-        let combined = parsed_integer * Self::SCALE + adjusted_fraction;
-        if !(Self::MIN_RAW..=Self::MAX_RAW).contains(&combined) {
-            return Err(ParsePointValueError::OutOfBounds);
-        }
-
-        Ok(Self::new_unchecked(combined))
+        Ok(Self::new_unchecked(raw))
     }
 }
 
@@ -501,29 +458,27 @@ mod tests {
                 .is_ok_and(|x| x == PointValue::new_unchecked(100 * PointValue::SCALE + 1))
         );
         // --- Errors paths
-        assert!(
-            PointValue::from_str("-100").is_err_and(|x| x == ParsePointValueError::InvalidFormat)
+        assert!(PointValue::from_str("-100").is_err_and(|x| x == ParseDecimalError::InvalidFormat));
+        assert_matches!(
+            PointValue::from_str("1a.32").expect_err("not digits"),
+            ParseDecimalError::InvalidFormat
         );
         assert_matches!(
-            PointValue::from_str("1a.32").expect_err("Should fail with ParseIntError"),
-            ParsePointValueError::ParseIntError(_)
-        );
-        assert_matches!(
-            PointValue::from_str("10.3a").expect_err("Should fail with ParseIntError"),
-            ParsePointValueError::ParseIntError(_)
+            PointValue::from_str("10.3a").expect_err("not digits"),
+            ParseDecimalError::InvalidFormat
         );
         assert!(
             PointValue::from_str("-100.000000001")
-                .is_err_and(|x| x == ParsePointValueError::InvalidFormat)
+                .is_err_and(|x| x == ParseDecimalError::InvalidFormat)
         );
         let max_integer_part = (PointValue::MAX_INTEGER_PART + 1).to_string();
         assert!(
             PointValue::from_str(&max_integer_part)
-                .is_err_and(|x| x == ParsePointValueError::OutOfBounds)
+                .is_err_and(|x| x == ParseDecimalError::OutOfBounds)
         );
         assert!(
             PointValue::from_str("100.0000000001")
-                .is_err_and(|x| x == ParsePointValueError::PrecisionError(10))
+                .is_err_and(|x| x == ParseDecimalError::PrecisionError(10))
         );
     }
 
@@ -533,7 +488,7 @@ mod tests {
         for s in ["0", "0.0", "0.000000000"] {
             assert_eq!(
                 PointValue::from_str(s),
-                Err(ParsePointValueError::OutOfBounds),
+                Err(ParseDecimalError::OutOfBounds),
                 "from_str({s:?}) must reject a zero point value"
             );
         }
@@ -556,7 +511,7 @@ mod tests {
         let s = format!("{}.999999999", PointValue::MAX_INTEGER_PART);
         assert_eq!(
             PointValue::from_str(&s),
-            Err(ParsePointValueError::OutOfBounds),
+            Err(ParseDecimalError::OutOfBounds),
             "from_str({s:?}) is above MAX_RAW"
         );
     }
@@ -580,7 +535,7 @@ mod tests {
             let s = format!("{}.{frac:09}", PointValue::MAX_INTEGER_PART);
             prop_assert_eq!(
                 PointValue::from_str(&s),
-                Err(ParsePointValueError::OutOfBounds),
+                Err(ParseDecimalError::OutOfBounds),
                 "s={}", s
             );
         }

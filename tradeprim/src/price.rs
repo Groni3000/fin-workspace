@@ -1,8 +1,9 @@
+use crate::decimal::{ParseDecimalError, parse_decimal};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "serde")]
 use std::borrow::Cow;
-use std::{fmt::Display, num::ParseIntError, str::FromStr};
+use std::{fmt::Display, str::FromStr};
 
 /// Has fixed scale and max value.
 ///
@@ -133,61 +134,15 @@ impl From<Price> for i64 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ParsePriceError {
-    InvalidFormat,
-    OutOfBounds,
-    PrecisionError(usize),
-    ParseIntError(ParseIntError),
-}
-
-impl Display for ParsePriceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ParsePriceError::InvalidFormat => write!(f, "Invalid format"),
-            ParsePriceError::OutOfBounds => write!(f, "Out of bounds"),
-            ParsePriceError::PrecisionError(precision) => {
-                write!(f, "Precision error: {}", precision)
-            }
-            ParsePriceError::ParseIntError(err) => err.fmt(f),
-        }
-    }
-}
-
 impl FromStr for Price {
-    type Err = ParsePriceError;
+    type Err = ParseDecimalError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (integer, fraction) = s.split_once('.').unwrap_or((s, "000000000"));
-        let (integer, fraction) = (integer.trim(), fraction.trim());
-        // Check below needed to not accept and parse `-0.-1`
-        // The fraction part would be parsed no problem
-        if fraction.starts_with('-') {
-            return Err(ParsePriceError::InvalidFormat);
-        }
-        let is_negative = integer.starts_with('-');
-
-        let parsed_integer = i64::from_str(integer).map_err(ParsePriceError::ParseIntError)?;
-        if !(-Self::MAX_INTEGER_PART..=Self::MAX_INTEGER_PART).contains(&parsed_integer) {
-            return Err(ParsePriceError::OutOfBounds);
-        }
-        // We do it after min/max check because i64::MIN.abs() would panic
-        let parsed_integer = parsed_integer.abs();
-
-        let used_precision = fraction.len();
-        if used_precision > Self::PRECISION as usize {
-            return Err(ParsePriceError::PrecisionError(used_precision));
-        }
-        let remaining_precision = Self::PRECISION - used_precision as u32;
-        let parsed_fraction = i64::from_str(fraction).map_err(ParsePriceError::ParseIntError)?;
-        let adjusted_fraction = parsed_fraction * Self::POW10[remaining_precision as usize];
-
-        let combined = match is_negative {
-            true => -(parsed_integer * Self::SCALE + adjusted_fraction),
-            false => parsed_integer * Self::SCALE + adjusted_fraction,
-        };
-
-        Ok(Self::new_unchecked(combined))
+        let raw = parse_decimal(s, Self::PRECISION)?.signed()?;
+        i64::try_from(raw)
+            .ok()
+            .and_then(Self::new)
+            .ok_or(ParseDecimalError::OutOfBounds)
     }
 }
 
@@ -389,7 +344,7 @@ mod tests {
     fn test_str_to_price_conversions() {
         let input = "";
         let price = Price::from_str(input);
-        assert_matches!(price, Err(ParsePriceError::ParseIntError(_)));
+        assert_matches!(price, Err(ParseDecimalError::InvalidFormat));
 
         let input = "1";
         let price = Price::from_str(input);
@@ -413,7 +368,7 @@ mod tests {
 
         let input = "1.-5";
         let price = Price::from_str(input);
-        assert_matches!(price, Err(ParsePriceError::InvalidFormat));
+        assert_matches!(price, Err(ParseDecimalError::InvalidFormat));
     }
 
     proptest! {
@@ -517,7 +472,7 @@ mod tests {
             let s = format!("{int}.{frac}");
             let got = Price::from_str(&s);
             prop_assert!(
-                matches!(got, Err(ParsePriceError::PrecisionError(_))),
+                matches!(got, Err(ParseDecimalError::PrecisionError(_))),
                 "s={s} got={got:?}"
             );
         }
@@ -531,7 +486,7 @@ mod tests {
             let s = format!("{}{int}.0", if neg { "-" } else { "" });
             let got = Price::from_str(&s);
             prop_assert!(
-                matches!(got, Err(ParsePriceError::OutOfBounds)),
+                matches!(got, Err(ParseDecimalError::OutOfBounds)),
                 "s={s} got={got:?}"
             );
         }
