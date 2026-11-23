@@ -1,23 +1,26 @@
 //! FRD one-minute files: one candle per line, `YYYY-MM-DD HH:MM:SS,open,high,low,close,volume`,
 //! the time in US/Eastern (exchange time), the volume in whole contracts. Parsed into [`Ohlcv`].
 //!
-//! [`parse_line`] parses one line; [`ChainReader`] reads a futures chain's files as one stream.
+//! [`parse_line`] parses one line. With the `frd-chain` feature, `ChainReader` reads a futures
+//! chain's files as one stream.
 
+#[cfg(feature = "frd-chain")]
 mod chain;
+#[cfg(feature = "frd-chain")]
 pub use chain::{ChainReader, ReadError};
 
 use std::{fmt::Display, num::ParseIntError, str::FromStr, sync::LazyLock};
 
+use crate::Ohlcv;
 use jiff::{
     Timestamp,
     civil::DateTime,
     tz::{AmbiguousOffset, TimeZone},
 };
-use mdata::Ohlcv;
 use tradeprim::{decimal::ParseDecimalError, price::Price, volume::Volume};
 
 /// The exchange's time zone, which FRD times are in.
-pub(crate) static EXCHANGE_TZ: LazyLock<TimeZone> = LazyLock::new(|| {
+pub static EXCHANGE_TZ: LazyLock<TimeZone> = LazyLock::new(|| {
     TimeZone::get("America/New_York").expect("the tz database has America/New_York")
 });
 

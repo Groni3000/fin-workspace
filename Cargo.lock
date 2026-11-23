@@ -418,6 +418,7 @@ dependencies = [
 name = "mdata"
 version = "0.1.0"
 dependencies = [
+ "futchain",
  "instrid",
  "jiff",
  "tradeprim",

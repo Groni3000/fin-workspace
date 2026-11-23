@@ -2,10 +2,16 @@
 name = "mdata"
 version = "0.1.0"
 edition = "2024"
-description = "Market-data record traits and instrument tagging"
+description = "Market-data record traits, instrument tagging, aggregation and vendor formats"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
 jiff = "1.0"
 instrid = { path = "../instrid" }
 tradeprim = { path = "../tradeprim" }
+futchain = { path = "../futchain", optional = true }
+
+[features]
+default = []
+# `formats::frd::ChainReader`: reads a futures chain's FRD files as one stream.
+frd-chain = ["dep:futchain"]

@@ -1,10 +1,13 @@
+//! Candles of a longer interval built out of shorter records: fixed intervals
+//! ([`CandleAggregator`]), trading sessions ([`SessionAggregator`]) and weeks ([`WeekAggregator`]).
+
 use jiff::{
     SignedDuration, Timestamp, ToSpan,
     civil::{Date, DateTime, Time},
     tz::{AmbiguousOffset, TimeZone},
 };
 
-use mdata::{Candle, HasTimestamp, HasVolume, Ohlcv};
+use crate::{Candle, HasTimestamp, HasVolume, Ohlcv};
 
 /// `time` on `date` in `tz`. A repeated time (DST ends) is the earlier one. A skipped time (DST
 /// starts) counts from the start of the day: the day's first instant plus `time` since midnight.

@@ -17,13 +17,13 @@ use foldhash::{HashMap, HashMapExt};
 use futchain::{FutChain, ListedTenors};
 use instrid::instruments::{FuturesContract, Instrument};
 use lab::{
-    formats::frd::{ChainReader, ReadError},
     formats::{
         custom::{CustomDatabentoAggregatedCandle, CustomDatabentoConsumerMd, KafkaSettings},
         merged_custom_kafka::MergedCandle,
     },
     strats_impl::strat_1::{config::Config, strategy::Strategy},
 };
+use mdata::formats::frd::{ChainReader, ReadError};
 use oms::{
     manager::Oms,
     portfolio::Portfolio,

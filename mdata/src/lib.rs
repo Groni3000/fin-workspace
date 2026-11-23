@@ -1,5 +1,7 @@
 #![doc = include_str!("../README.md")]
 
+pub mod aggregation;
+pub mod formats;
 pub mod ohlcv;
 pub mod record;
 pub mod stream;

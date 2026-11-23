@@ -1,6 +1,5 @@
 #[cfg(feature = "kafka")]
 pub mod custom;
-pub mod frd;
 #[cfg(feature = "kafka")]
 pub mod merged_custom_kafka;
 #[cfg(feature = "kafka")]

@@ -6,7 +6,9 @@ use jiff::{
     civil::{Date, DateTime, time},
     tz::TimeZone,
 };
-use mdata::{Candle, HasInstrument, HasLastPrice, HasTimestamp, HasVolume};
+use mdata::{
+    Candle, HasInstrument, HasLastPrice, HasTimestamp, HasVolume, aggregation::SessionAggregator,
+};
 use oms::{desired::Desired, fill::Fill, portfolio::Portfolio, protocol::ExecEvent};
 use tradeprim::{position::Position, price::Price, quantity::Quantity};
 
@@ -15,7 +17,7 @@ use engine::{
     strategy::Traded,
 };
 
-use crate::{aggregation::SessionAggregator, strats_impl::strat_1::config::Config};
+use crate::strats_impl::strat_1::config::Config;
 
 /// Why the strategy decided to flatten. Emitted with the `exit` event for the trade ledger.
 #[derive(Debug, Clone, Copy)]

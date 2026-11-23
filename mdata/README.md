@@ -32,6 +32,14 @@ Most formats name the instrument once (in the file name or the topic), not on
 every row. `Tagged<R>` pairs a record with its instrument, which makes it
 `HasInstrument` while carrying over everything the inner record already has.
 
+`aggregation` turns shorter candles into longer ones, in the exchange's local time:
+`CandleAggregator` (fixed intervals from a daily origin), `SessionAggregator` (a trading
+session, overnight ones included) and `WeekAggregator` (Sunday-start weeks).
+
+`formats` holds parsers for vendor files. `formats::frd::parse_line` reads one line of an
+FRD one-minute file into an `Ohlcv`. With the `frd-chain` feature, `formats::frd::ChainReader`
+reads a futures chain's FRD files (one per contract) as one stream of `Tagged<Ohlcv>`.
+
 ## Example
 
 ```rust

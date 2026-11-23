@@ -45,12 +45,14 @@ A `FutChain` cursor walks a `FuturesContract` through a `ListedTenors` cycle
 are independent — glue them together with a `while` loop.
 
 
-### [`mdata`](./mdata) — market-data record traits
+### [`mdata`](./mdata) — market-data records, aggregation and formats
 
 Capability traits for a market-data record (`HasTimestamp`, `HasLastPrice`,
-`Candle`, `HasInstrument`, `HasSymbol`), the `MarketData` stream trait, and
-`Tagged<R>`, which attaches an `Instrument` to a record that doesn't carry one.
-Consumers ask for the capabilities they need, so any format plugs in.
+`Candle`, `HasVolume`, `HasInstrument`, `HasSymbol`), the `MarketData` stream
+trait, `Ohlcv`, and `Tagged<R>`, which attaches an `Instrument` to a record that
+doesn't carry one. Consumers ask for the capabilities they need, so any format
+plugs in. `aggregation` builds interval, session and week candles; `formats`
+parses vendor files (FRD; its futures-chain reader is behind `frd-chain`).
 
 ### [`engine`](./engine) — events, queues and executors
 

@@ -10,10 +10,10 @@ use std::{
     path::PathBuf,
 };
 
+use crate::{HasTimestamp, Ohlcv, Tagged};
 use futchain::FutChain;
 use instrid::instruments::{FuturesContract, Instrument};
 use jiff::Timestamp;
-use mdata::{HasTimestamp, Ohlcv, Tagged};
 
 use super::{ParseError, parse_line};
 

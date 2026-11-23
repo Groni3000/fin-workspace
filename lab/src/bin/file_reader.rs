@@ -3,7 +3,7 @@ use instrid::asset::Asset;
 use instrid::mic::MicIso;
 use instrid::prelude::FuturesContract;
 use instrid::tenor::Tenor;
-use lab::formats::frd::{ChainReader, ReadError};
+use mdata::formats::frd::{ChainReader, ReadError};
 use mdata::{Candle, MarketData};
 use std::path::Path;
 use std::time::{Duration, Instant};
