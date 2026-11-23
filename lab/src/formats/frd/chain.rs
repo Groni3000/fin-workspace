@@ -10,9 +10,9 @@ use std::{
     path::PathBuf,
 };
 
-use chrono::{DateTime, Utc};
 use futchain::FutChain;
 use instrid::instruments::{FuturesContract, Instrument};
+use jiff::Timestamp;
 use mdata::{HasTimestamp, Ohlcv, Tagged};
 
 use super::{ParseError, parse_line};
@@ -84,7 +84,7 @@ impl Leg {
 pub struct ChainReader<'a> {
     legs: Vec<Leg>,
     /// Min-heap of `(next timestamp, leg index)`.
-    queue: BinaryHeap<Reverse<(DateTime<Utc>, usize)>>,
+    queue: BinaryHeap<Reverse<(Timestamp, usize)>>,
     /// Leg that produced the last record and still owes a read-ahead.
     refill: Option<usize>,
     chain: FutChain<'a>,

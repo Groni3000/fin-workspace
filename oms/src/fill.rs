@@ -1,5 +1,5 @@
-use chrono::{DateTime, Utc};
 use instrid::instruments::Instrument;
+use jiff::Timestamp;
 use tradeprim::{
     Side,
     position::{NonZeroQuantity, Position},
@@ -12,7 +12,7 @@ use crate::OrderId;
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Fill {
     order_id: OrderId,
-    timestamp: DateTime<Utc>,
+    timestamp: Timestamp,
     instrument: Instrument,
     side: Side,
     quantity: NonZeroQuantity,
@@ -22,7 +22,7 @@ pub struct Fill {
 impl Fill {
     pub fn new(
         order_id: OrderId,
-        timestamp: DateTime<Utc>,
+        timestamp: Timestamp,
         instrument: Instrument,
         side: Side,
         quantity: NonZeroQuantity,
@@ -38,7 +38,7 @@ impl Fill {
         }
     }
 
-    pub fn timestamp(&self) -> DateTime<Utc> {
+    pub fn timestamp(&self) -> Timestamp {
         self.timestamp
     }
 

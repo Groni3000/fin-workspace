@@ -35,7 +35,7 @@ every row. `Tagged<R>` pairs a record with its instrument, which makes it
 ## Example
 
 ```rust
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use instrid::{
     asset::{Asset, AssetClass},
     instruments::{Instrument, Stock},
@@ -47,12 +47,12 @@ use tradeprim::{currency::Currency, price::Price};
 /// A vendor format: knows its time and price, not its instrument.
 #[derive(Debug)]
 struct Trade {
-    ts: DateTime<Utc>,
+    ts: Timestamp,
     px: Price,
 }
 
 impl HasTimestamp for Trade {
-    fn timestamp(&self) -> DateTime<Utc> {
+    fn timestamp(&self) -> Timestamp {
         self.ts
     }
 }
@@ -75,7 +75,7 @@ let spy = Instrument::Stock(Stock::new(
     Currency::usd(),
 ));
 let trade = Trade {
-    ts: DateTime::from_timestamp_nanos(0),
+    ts: Timestamp::UNIX_EPOCH,
     px: Price::from_str_unchecked("512.25"),
 };
 

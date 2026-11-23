@@ -5,7 +5,6 @@
 
 use std::{fs, path::Path};
 
-use chrono::DateTime;
 use engine::{
     event::{Event, Kind},
     event_loop::run,
@@ -19,6 +18,7 @@ use instrid::{
     instruments::{Instrument, Stock},
     mic::Mic,
 };
+use jiff::Timestamp;
 use mdata::{Candle, Ohlcv, Tagged};
 use oms::{
     desired::Desired, manager::Oms, portfolio::Portfolio, protocol::ExecEvent, rms::NaiveRms,
@@ -108,12 +108,12 @@ fn main() {
     assert_eq!(pf.position(&spy), &Position::Flat);
 
     let expected = [
-        "1970-01-01 00:01:00 UTC  send market order Buy 1",
-        "1970-01-01 00:01:00.200 UTC  ack Buy 1",
-        "1970-01-01 00:02:00.200 UTC  fill Buy 1 @ 101",
-        "1970-01-01 00:04:00 UTC  send market order Sell 1",
-        "1970-01-01 00:04:00.200 UTC  ack Sell 1",
-        "1970-01-01 00:05:00.200 UTC  fill Sell 1 @ 98",
+        "1970-01-01T00:01:00Z  send market order Buy 1",
+        "1970-01-01T00:01:00.2Z  ack Buy 1",
+        "1970-01-01T00:02:00.2Z  fill Buy 1 @ 101",
+        "1970-01-01T00:04:00Z  send market order Sell 1",
+        "1970-01-01T00:04:00.2Z  ack Sell 1",
+        "1970-01-01T00:05:00.2Z  fill Sell 1 @ 98",
     ];
     assert_eq!(exec, expected);
 }
@@ -186,7 +186,10 @@ impl Traded<Tagged<Ohlcv>> for StopOut {
             }
             other => format!("{other:?}"),
         };
-        println!("{}  {what}", DateTime::from_timestamp_nanos(event.ts()));
+        println!(
+            "{}  {what}",
+            Timestamp::from_nanosecond(event.ts().into()).expect("i64 nanoseconds are in range")
+        );
         self.seen.push((event.ts(), what));
     }
 
@@ -241,7 +244,7 @@ fn candle(
     [o, h, l, c]: [&str; 4],
 ) -> Result<Tagged<Ohlcv>, std::io::Error> {
     let px = Price::from_str_unchecked;
-    let ts = DateTime::from_timestamp(secs, 0).expect("valid timestamp");
+    let ts = Timestamp::from_second(secs).expect("valid timestamp");
     Ok(Tagged::new(
         spy,
         Ohlcv::new(ts, px(o), px(h), px(l), px(c), Volume::ZERO),

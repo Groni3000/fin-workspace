@@ -6,7 +6,6 @@
 
 use std::{fs, path::Path};
 
-use chrono::DateTime;
 use engine::telemetry::{self, SimClock};
 use foldhash::HashMap;
 use instrid::{
@@ -14,6 +13,7 @@ use instrid::{
     instruments::{Instrument, Stock},
     mic::Mic,
 };
+use jiff::Timestamp;
 use oms::{
     desired::Desired,
     fill::Fill,
@@ -76,7 +76,7 @@ fn limit(q: &str, price: &str) -> Order<New> {
 fn fill(order: &Order<New>, q: &str) -> ExecEvent {
     ExecEvent::Fill(Fill::new(
         order.order_id(),
-        DateTime::from_timestamp_nanos(0),
+        Timestamp::UNIX_EPOCH,
         spy(),
         order.side(),
         qty(q),

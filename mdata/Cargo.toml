@@ -6,6 +6,6 @@ description = "Market-data record traits and instrument tagging"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-chrono = "0.4.44"
+jiff = "1.0"
 instrid = { path = "../instrid" }
 tradeprim = { path = "../tradeprim" }

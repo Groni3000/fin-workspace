@@ -7,7 +7,7 @@ mod weekly;
 
 use std::{error::Error, path::Path};
 
-use chrono::DateTime;
+use jiff::Timestamp;
 use oms::EXEC_TARGET;
 use tracing_subscriber::{
     EnvFilter, Layer,
@@ -38,7 +38,9 @@ impl SimClock {
 
 impl FormatTime for SimClock {
     fn format_time(&self, w: &mut Writer<'_>) -> std::fmt::Result {
-        write!(w, "{}", DateTime::from_timestamp_nanos(self.get()))
+        let now =
+            Timestamp::from_nanosecond(self.get().into()).expect("i64 nanoseconds are in range");
+        write!(w, "{now}")
     }
 }
 

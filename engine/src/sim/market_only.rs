@@ -2,8 +2,8 @@ use std::collections::hash_map::Entry;
 
 use foldhash::{HashMap, HashMapExt};
 
-use chrono::DateTime;
 use instrid::instruments::Instrument;
+use jiff::Timestamp;
 use oms::{
     OrderId,
     fill::Fill,
@@ -166,7 +166,7 @@ impl MarketExecutor {
         working_orders.get_mut().retain(|order| {
             let fill = Fill::new(
                 order.order_id(),
-                DateTime::from_timestamp_nanos(timestamp),
+                Timestamp::from_nanosecond(timestamp.into()).expect("i64 nanoseconds are in range"),
                 order.instrument(),
                 order.side(),
                 order.quantity(),

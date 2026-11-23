@@ -5,6 +5,8 @@ use chrono_tz::Tz;
 
 use mdata::{Candle, HasTimestamp, HasVolume, Ohlcv};
 
+use crate::time_bridge::{to_chrono, to_jiff};
+
 /// Midnight does not exist in every zone on every date
 /// We add +1h when it doesn't.
 fn local_midnight_utc(tz: Tz, date: NaiveDate) -> DateTime<Utc> {
@@ -112,12 +114,10 @@ impl CandleAggregator {
 
     /// Updates the aggregator with a new candle, returning the aggregated bar if it completes a bucket.
     pub fn update<C: Candle + HasVolume>(&mut self, c: &C) -> Option<Ohlcv> {
-        debug_assert!(
-            c.timestamp() >= self.last_ts,
-            "input stream must be ordered"
-        );
-        self.last_ts = c.timestamp();
-        let bucket = self.bucket_start(c.timestamp());
+        let ts = to_chrono(c.timestamp());
+        debug_assert!(ts >= self.last_ts, "input stream must be ordered");
+        self.last_ts = ts;
+        let bucket = to_jiff(self.bucket_start(ts));
         match &mut self.candle {
             Some(cur) if cur.timestamp() == bucket => {
                 cur.merge(c);
@@ -222,12 +222,10 @@ impl SessionAggregator {
     }
 
     pub fn update<C: Candle + HasVolume>(&mut self, c: &C) -> Option<Ohlcv> {
-        debug_assert!(
-            c.timestamp() >= self.last_ts,
-            "input stream must be ordered"
-        );
-        self.last_ts = c.timestamp();
-        let local = c.timestamp().with_timezone(&self.tz);
+        let ts = to_chrono(c.timestamp());
+        debug_assert!(ts >= self.last_ts, "input stream must be ordered");
+        self.last_ts = ts;
+        let local = ts.with_timezone(&self.tz);
         if !self.within_session(local.time()) {
             self.outside_session += 1;
             return None;
@@ -243,7 +241,8 @@ impl SessionAggregator {
             }
             _ => {
                 self.current_key = Some(key);
-                self.candle.replace(Ohlcv::seed(self.session_open(key), c))
+                self.candle
+                    .replace(Ohlcv::seed(to_jiff(self.session_open(key)), c))
             }
         }
     }
@@ -290,12 +289,10 @@ impl WeekAggregator {
     }
 
     pub fn update<C: Candle + HasVolume>(&mut self, daily: &C) -> Option<Ohlcv> {
-        debug_assert!(
-            daily.timestamp() >= self.last_ts,
-            "input stream must be ordered"
-        );
-        self.last_ts = daily.timestamp();
-        let local_date = daily.timestamp().with_timezone(&self.tz).date_naive();
+        let ts = to_chrono(daily.timestamp());
+        debug_assert!(ts >= self.last_ts, "input stream must be ordered");
+        self.last_ts = ts;
+        let local_date = ts.with_timezone(&self.tz).date_naive();
         let week_start = Self::week_start(local_date);
         match self.current_week_start {
             Some(current) if current == week_start => {
@@ -347,7 +344,7 @@ mod tests {
         volume: u64,
     ) -> Ohlcv {
         Ohlcv::new(
-            ts,
+            to_jiff(ts),
             p(open),
             p(high),
             p(low),
@@ -387,15 +384,18 @@ mod tests {
         agg.update(&last);
 
         assert_eq!(
-            agg.candle().unwrap().timestamp(),
+            to_chrono(agg.candle().unwrap().timestamp()),
             utc((2008, 11, 3), (4, 0, 0))
         );
         // Next local midnight opens a fresh day anchor.
         let midnight = ohlc(utc((2008, 11, 3), (5, 0, 0)), "2", "2", "2", "2", 1);
         let completed = agg.update(&midnight).expect("new day, new bucket");
-        assert_eq!(completed.timestamp(), utc((2008, 11, 3), (4, 0, 0)));
         assert_eq!(
-            agg.candle().unwrap().timestamp(),
+            to_chrono(completed.timestamp()),
+            utc((2008, 11, 3), (4, 0, 0))
+        );
+        assert_eq!(
+            to_chrono(agg.candle().unwrap().timestamp()),
             utc((2008, 11, 3), (5, 0, 0))
         );
     }
@@ -410,13 +410,13 @@ mod tests {
 
         agg.update(&before);
         assert_eq!(
-            agg.candle().unwrap().timestamp(),
+            to_chrono(agg.candle().unwrap().timestamp()),
             utc((2008, 3, 9), (6, 0, 0))
         );
         let completed = agg.update(&after).expect("next hour bucket");
         assert_eq!(completed.close(), p("1"));
         assert_eq!(
-            agg.candle().unwrap().timestamp(),
+            to_chrono(agg.candle().unwrap().timestamp()),
             utc((2008, 3, 9), (7, 0, 0))
         );
     }
@@ -486,7 +486,7 @@ mod tests {
         agg.update(&at((2008, 3, 9), (18, 5, 0), "1", 1));
 
         assert_eq!(
-            agg.candle().unwrap().timestamp(),
+            to_chrono(agg.candle().unwrap().timestamp()),
             utc((2008, 3, 9), (22, 0, 0))
         );
     }
@@ -629,7 +629,7 @@ mod tests {
         #[test]
         fn merges_ohlcv_within_a_bucket() {
             let mut agg = CandleAggregator::new(TimeDelta::minutes(15), None, Eastern);
-            let base = at((2025, 6, 10), (10, 0, 0), "0", 0).timestamp();
+            let base = to_chrono(at((2025, 6, 10), (10, 0, 0), "0", 0).timestamp());
 
             agg.update(&ohlc(base, "10", "12", "9", "11", 5));
             agg.update(&ohlc(

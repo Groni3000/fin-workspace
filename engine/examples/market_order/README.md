@@ -61,45 +61,45 @@ close to right already.
 
 ```text
 logs in <temp>/engine-example-market_order
-1970-01-01 00:01:00 UTC  candle open=100 close=101, want 1
-1970-01-01 00:01:00.200 UTC  ack
-1970-01-01 00:02:00 UTC  candle open=102 close=103, want 1
-1970-01-01 00:02:00.200 UTC  fill Buy 1 @ 102
-1970-01-01 00:03:00 UTC  candle open=103 close=102, want 1
-1970-01-01 00:04:00 UTC  candle open=102 close=104, want 2
-1970-01-01 00:04:00.200 UTC  ack
-1970-01-01 00:05:00 UTC  candle open=105 close=106, want 2
-1970-01-01 00:05:00.200 UTC  fill Buy 1 @ 105
-1970-01-01 00:06:00 UTC  candle open=106 close=104, want 0
-1970-01-01 00:06:00.200 UTC  ack
-1970-01-01 00:07:00 UTC  candle open=103 close=102, want 0
-1970-01-01 00:07:00.200 UTC  fill Sell 2 @ 103
-1970-01-01 00:08:00 UTC  candle open=102 close=100, want -1
-1970-01-01 00:08:00.200 UTC  ack
-1970-01-01 00:09:00 UTC  candle open=99 close=98, want -1
-1970-01-01 00:09:00.200 UTC  fill Sell 1 @ 99
-1970-01-01 00:10:00 UTC  candle open=98 close=99, want 0
-1970-01-01 00:10:00.200 UTC  ack
-1970-01-01 00:11:00 UTC  candle open=100 close=100, want 0
-1970-01-01 00:11:00.200 UTC  fill Buy 1 @ 100
+1970-01-01T00:01:00Z  candle open=100 close=101, want 1
+1970-01-01T00:01:00.2Z  ack
+1970-01-01T00:02:00Z  candle open=102 close=103, want 1
+1970-01-01T00:02:00.2Z  fill Buy 1 @ 102
+1970-01-01T00:03:00Z  candle open=103 close=102, want 1
+1970-01-01T00:04:00Z  candle open=102 close=104, want 2
+1970-01-01T00:04:00.2Z  ack
+1970-01-01T00:05:00Z  candle open=105 close=106, want 2
+1970-01-01T00:05:00.2Z  fill Buy 1 @ 105
+1970-01-01T00:06:00Z  candle open=106 close=104, want 0
+1970-01-01T00:06:00.2Z  ack
+1970-01-01T00:07:00Z  candle open=103 close=102, want 0
+1970-01-01T00:07:00.2Z  fill Sell 2 @ 103
+1970-01-01T00:08:00Z  candle open=102 close=100, want -1
+1970-01-01T00:08:00.2Z  ack
+1970-01-01T00:09:00Z  candle open=99 close=98, want -1
+1970-01-01T00:09:00.2Z  fill Sell 1 @ 99
+1970-01-01T00:10:00Z  candle open=98 close=99, want 0
+1970-01-01T00:10:00.2Z  ack
+1970-01-01T00:11:00Z  candle open=100 close=100, want 0
+1970-01-01T00:11:00.2Z  fill Buy 1 @ 100
 final position: 0
 
 execution log:
-1970-01-01 00:01:00 UTC  send market order Buy 1
-1970-01-01 00:01:00.200 UTC  ack Buy 1
-1970-01-01 00:02:00.200 UTC  fill Buy 1 @ 102
-1970-01-01 00:04:00 UTC  send market order Buy 1
-1970-01-01 00:04:00.200 UTC  ack Buy 1
-1970-01-01 00:05:00.200 UTC  fill Buy 1 @ 105
-1970-01-01 00:06:00 UTC  send market order Sell 2
-1970-01-01 00:06:00.200 UTC  ack Sell 2
-1970-01-01 00:07:00.200 UTC  fill Sell 2 @ 103
-1970-01-01 00:08:00 UTC  send market order Sell 1
-1970-01-01 00:08:00.200 UTC  ack Sell 1
-1970-01-01 00:09:00.200 UTC  fill Sell 1 @ 99
-1970-01-01 00:10:00 UTC  send market order Buy 1
-1970-01-01 00:10:00.200 UTC  ack Buy 1
-1970-01-01 00:11:00.200 UTC  fill Buy 1 @ 100
+1970-01-01T00:01:00Z  send market order Buy 1
+1970-01-01T00:01:00.2Z  ack Buy 1
+1970-01-01T00:02:00.2Z  fill Buy 1 @ 102
+1970-01-01T00:04:00Z  send market order Buy 1
+1970-01-01T00:04:00.2Z  ack Buy 1
+1970-01-01T00:05:00.2Z  fill Buy 1 @ 105
+1970-01-01T00:06:00Z  send market order Sell 2
+1970-01-01T00:06:00.2Z  ack Sell 2
+1970-01-01T00:07:00.2Z  fill Sell 2 @ 103
+1970-01-01T00:08:00Z  send market order Sell 1
+1970-01-01T00:08:00.2Z  ack Sell 1
+1970-01-01T00:09:00.2Z  fill Sell 1 @ 99
+1970-01-01T00:10:00Z  send market order Buy 1
+1970-01-01T00:10:00.2Z  ack Buy 1
+1970-01-01T00:11:00.2Z  fill Buy 1 @ 100
 ```
 
 The first part is what the strategy sees; the second is the execution log.

@@ -1,6 +1,7 @@
 pub mod aggregation;
 pub mod formats;
 pub mod strats_impl;
+mod time_bridge;
 
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, Offset, TimeZone, Utc};
 use chrono_tz::Tz;
@@ -174,7 +175,7 @@ pub mod untested {
             .map_err(ParseError::VolumeParsingError)?;
 
         Ok(Ohlcv::new(
-            ts,
+            crate::time_bridge::to_jiff(ts),
             open,
             high,
             low,

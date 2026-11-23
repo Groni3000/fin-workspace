@@ -5,13 +5,13 @@
 //! simulated executor, `HasLastPrice` for a mark-to-market), so any format
 //! that provides those capabilities plugs in.
 
-use chrono::{DateTime, Utc};
 use instrid::instruments::Instrument;
+use jiff::Timestamp;
 use tradeprim::{price::Price, volume::Volume};
 
 /// The record happened at a known point in time.
 pub trait HasTimestamp {
-    fn timestamp(&self) -> DateTime<Utc>;
+    fn timestamp(&self) -> Timestamp;
 }
 
 /// The record belongs to a known internal representation of an instrument.

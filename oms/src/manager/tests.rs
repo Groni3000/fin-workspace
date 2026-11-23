@@ -7,12 +7,12 @@ use crate::{
     portfolio::Portfolio,
     protocol::{Request, RequestSink},
 };
-use chrono::DateTime;
 use instrid::{
     asset::{Asset, AssetClass},
     instruments::{Instrument, Stock},
     mic::Mic,
 };
+use jiff::Timestamp;
 use tradeprim::{
     Side, currency::Currency, position::NonZeroQuantity, price::Price, quantity::Quantity,
 };
@@ -90,7 +90,7 @@ fn part_eq<T>(order_1: &Order<T>, order_2: &Order<T>) -> bool {
 fn build_fill(order: &Order<Working>, q: NonZeroQuantity, px: Price) -> Fill {
     Fill::new(
         order.order_id(),
-        DateTime::from_timestamp_nanos(0),
+        Timestamp::UNIX_EPOCH,
         order.instrument(),
         order.side(),
         q,

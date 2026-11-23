@@ -3,12 +3,12 @@
 
 use std::convert::Infallible;
 
-use chrono::DateTime;
 use instrid::{
     asset::{Asset, AssetClass},
     instruments::{Instrument, Stock},
     mic::Mic,
 };
+use jiff::Timestamp;
 use mdata::{Ohlcv, Tagged};
 use oms::{
     order::{New, Order, OrderBuilder, OrderType},
@@ -47,7 +47,7 @@ pub fn bar(
     Ok(Tagged::new(
         instrument,
         Ohlcv::new(
-            DateTime::from_timestamp(secs, 0).expect("valid timestamp"),
+            Timestamp::from_second(secs).expect("valid timestamp"),
             px(o),
             px(h),
             px(l),

@@ -1,10 +1,10 @@
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use tradeprim::{price::Price, volume::Volume};
 
 use super::*;
 
-fn at(minute: i64) -> DateTime<Utc> {
-    DateTime::from_timestamp(minute * 60, 0).expect("valid timestamp")
+fn at(minute: i64) -> Timestamp {
+    Timestamp::from_second(minute * 60).expect("valid timestamp")
 }
 
 fn candle(minute: i64, [o, h, l, c]: [&str; 4], volume: u64) -> Ohlcv {

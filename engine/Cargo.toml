@@ -6,7 +6,7 @@ description = "Event queue, executors and runtime plumbing for backtests and liv
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-chrono = "0.4.44"
+jiff = "1.0"
 foldhash = "0.2.0"
 instrid = { path = "../instrid" }
 mdata = { path = "../mdata" }

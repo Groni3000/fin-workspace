@@ -63,9 +63,7 @@ impl<MD: MarketData, E> SimQueue<MD, E> {
 }
 
 fn nanos<T: HasTimestamp>(record: &T) -> i64 {
-    record
-        .timestamp()
-        .timestamp_nanos_opt()
+    i64::try_from(record.timestamp().as_nanosecond())
         .expect("market-data timestamp outside the i64-nanosecond range (years 1677..2262)")
 }
 

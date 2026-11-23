@@ -13,7 +13,9 @@ use engine::{
     strategy::Traded,
 };
 
-use crate::{aggregation::SessionAggregator, strats_impl::strat_1::config::Config};
+use crate::{
+    aggregation::SessionAggregator, strats_impl::strat_1::config::Config, time_bridge::to_chrono,
+};
 
 /// Why the strategy decided to flatten. Emitted with the `exit` event for the trade ledger.
 #[derive(Debug, Clone, Copy)]
@@ -313,9 +315,8 @@ impl<E: EndOfTrading> Strategy<E> {
         R: HasTimestamp + HasInstrument + Candle + HasVolume,
     {
         // The only tz conversion per record: chrono-tz binary-searches transitions on each call.
-        let exchange_ts = md_record
-            .timestamp()
-            .with_timezone(&self.config.exchange_tz());
+        let exchange_ts =
+            to_chrono(md_record.timestamp()).with_timezone(&self.config.exchange_tz());
 
         let date = exchange_ts.date_naive();
         if self.state.last_known_date != date {

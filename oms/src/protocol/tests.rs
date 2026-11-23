@@ -1,9 +1,9 @@
-use chrono::DateTime;
 use instrid::{
     asset::{Asset, AssetClass},
     instruments::{Instrument, Stock},
     mic::Mic,
 };
+use jiff::Timestamp;
 use tradeprim::{Side, currency::Currency, price::Price, quantity::Quantity};
 
 use super::{ExecEvent, RejectReason};
@@ -33,7 +33,7 @@ fn every_exec_event_names_its_order() {
     let id = order.order_id();
     let fill = Fill::new(
         id,
-        DateTime::from_timestamp_nanos(0),
+        Timestamp::UNIX_EPOCH,
         spy(),
         Side::Buy,
         qty,

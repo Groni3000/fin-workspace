@@ -1,6 +1,6 @@
 //! [`Ohlcv`]: a plain candle, raw straightforward implementation to reuse in code here and there.
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use tradeprim::{price::Price, volume::Volume};
 
 use crate::{Candle, HasLastPrice, HasTimestamp, HasVolume};
@@ -10,7 +10,7 @@ use crate::{Candle, HasLastPrice, HasTimestamp, HasVolume};
 /// Nothing is checked: a `low` above the `open` is stored as given.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ohlcv {
-    ts: DateTime<Utc>,
+    ts: Timestamp,
     open: Price,
     high: Price,
     low: Price,
@@ -20,7 +20,7 @@ pub struct Ohlcv {
 
 impl Ohlcv {
     pub fn new(
-        ts: DateTime<Utc>,
+        ts: Timestamp,
         open: Price,
         high: Price,
         low: Price,
@@ -38,7 +38,7 @@ impl Ohlcv {
     }
 
     /// Starts a candle for the interval starting at `ts` from its first record.
-    pub fn seed<C: Candle + HasVolume>(ts: DateTime<Utc>, first: &C) -> Self {
+    pub fn seed<C: Candle + HasVolume>(ts: Timestamp, first: &C) -> Self {
         Self::new(
             ts,
             first.open(),
@@ -63,7 +63,7 @@ impl Ohlcv {
 }
 
 impl HasTimestamp for Ohlcv {
-    fn timestamp(&self) -> DateTime<Utc> {
+    fn timestamp(&self) -> Timestamp {
         self.ts
     }
 }

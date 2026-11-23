@@ -1,11 +1,11 @@
 use std::fmt;
 
-use chrono::DateTime;
 use instrid::{
     asset::{Asset, AssetClass},
     instruments::{Instrument, Stock},
     mic::Mic,
 };
+use jiff::Timestamp;
 use mdata::{Candle, HasInstrument, Ohlcv, Tagged};
 use oms::{
     OrderId,
@@ -107,7 +107,7 @@ fn bar(ts: i64) -> Result<Record, FeedFailure> {
     Ok(Tagged::new(
         spy(),
         Ohlcv::new(
-            DateTime::from_timestamp_nanos(ts),
+            Timestamp::from_nanosecond(ts.into()).expect("i64 nanoseconds are in range"),
             px,
             px,
             px,

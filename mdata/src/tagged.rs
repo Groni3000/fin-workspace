@@ -1,7 +1,7 @@
 //! Attaching an instrument to a record that doesn't carry one.
 
-use chrono::{DateTime, Utc};
 use instrid::instruments::Instrument;
+use jiff::Timestamp;
 use tradeprim::{price::Price, volume::Volume};
 
 use crate::record::{Candle, HasInstrument, HasLastPrice, HasTimestamp, HasVolume};
@@ -25,7 +25,7 @@ impl<R> Tagged<R> {
 }
 
 impl<R: HasTimestamp> HasTimestamp for Tagged<R> {
-    fn timestamp(&self) -> DateTime<Utc> {
+    fn timestamp(&self) -> Timestamp {
         self.record.timestamp()
     }
 }

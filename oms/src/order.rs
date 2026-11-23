@@ -1,7 +1,7 @@
 use std::{fmt::Display, hash::Hash, marker::PhantomData};
 
-use chrono::{DateTime, NaiveDate, Utc};
 use instrid::instruments::Instrument;
+use jiff::{Timestamp, civil::Date};
 use tradeprim::{
     Side,
     position::{NonZeroQuantity, Position},
@@ -408,8 +408,8 @@ pub enum TimeInForce {
     GoodTillCancel,
     FillOrKill,
     ImmediateOrCancel,
-    GoodTillDate(NaiveDate),
-    GoodTillDatetime(DateTime<Utc>),
+    GoodTillDate(Date),
+    GoodTillDatetime(Timestamp),
 }
 
 impl Display for TimeInForce {
@@ -420,8 +420,8 @@ impl Display for TimeInForce {
 
 #[cfg(test)]
 mod tests {
-    use chrono::{DateTime, NaiveDate};
     use instrid::prelude::{Asset, AssetClass, Instrument, Mic, Stock};
+    use jiff::{Timestamp, civil::date};
     use tradeprim::{prelude::Currency, price::Price};
 
     use crate::order::{OrderType, TimeInForce};
@@ -465,10 +465,10 @@ mod tests {
             TimeInForce::GoodTillCancel,
             TimeInForce::FillOrKill,
             TimeInForce::ImmediateOrCancel,
-            TimeInForce::GoodTillDate(NaiveDate::from_yo_opt(2000, 57).expect("invalid date")),
-            TimeInForce::GoodTillDatetime(DateTime::from_timestamp_nanos(
-                1_662_921_288_000_000_000,
-            )),
+            TimeInForce::GoodTillDate(date(2000, 2, 26)),
+            TimeInForce::GoodTillDatetime(
+                Timestamp::from_nanosecond(1_662_921_288_000_000_000).unwrap(),
+            ),
         ];
 
         all.iter().for_each(|order_type| match order_type {
@@ -699,7 +699,7 @@ mod tests {
     }
 
     mod transitions {
-        use chrono::DateTime;
+        use jiff::Timestamp;
         use tradeprim::{Side, price::Price, quantity::Quantity};
 
         use crate::{
@@ -728,7 +728,7 @@ mod tests {
         fn fill_for(order: &Order<Working>, quantity: Quantity) -> Fill {
             Fill::new(
                 order.order_id(),
-                DateTime::from_timestamp_nanos(1_662_921_288_000_000_000),
+                Timestamp::from_nanosecond(1_662_921_288_000_000_000).unwrap(),
                 order.instrument(),
                 order.side(),
                 quantity.non_zero().unwrap(),
@@ -793,9 +793,9 @@ mod tests {
         }
 
         mod preserve_behaviour {
-            use std::{assert_matches, time::SystemTime};
+            use std::assert_matches;
 
-            use chrono::DateTime;
+            use jiff::Timestamp;
             use tradeprim::{price::Price, quantity::Quantity};
 
             use crate::{
@@ -847,13 +847,7 @@ mod tests {
                 // With partial filled
                 let strategy_order = spy_new_order();
                 let oms_order = strategy_order.into_working();
-                let timestamp = DateTime::from_timestamp_secs(
-                    SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs() as i64,
-                )
-                .unwrap();
+                let timestamp = Timestamp::now();
                 let fill = Fill::new(
                     // Partial fill
                     oms_order.order_id(),

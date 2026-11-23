@@ -1,4 +1,4 @@
-use chrono::{DateTime, TimeDelta, Utc};
+use jiff::{SignedDuration, Timestamp};
 
 /// Fires once, on the first timestamp that falls inside `[start, start + tolerance]`.
 ///
@@ -9,13 +9,13 @@ use chrono::{DateTime, TimeDelta, Utc};
 #[derive(Debug)]
 pub struct DateTimeTrigger {
     fired: bool,
-    start_datetime: DateTime<Utc>,
-    end_datetime: DateTime<Utc>,
+    start_datetime: Timestamp,
+    end_datetime: Timestamp,
 }
 
 impl DateTimeTrigger {
-    pub fn new(start_datetime: DateTime<Utc>, tolerance: TimeDelta) -> Self {
-        debug_assert!(tolerance.num_nanoseconds() > Some(0));
+    pub fn new(start_datetime: Timestamp, tolerance: SignedDuration) -> Self {
+        debug_assert!(tolerance.is_positive());
         Self {
             fired: false,
             start_datetime,
@@ -24,10 +24,10 @@ impl DateTimeTrigger {
     }
 
     pub fn check_nanos(&mut self, ts: i64) -> bool {
-        self.check_dt(DateTime::from_timestamp_nanos(ts))
+        self.check_dt(Timestamp::from_nanosecond(ts.into()).expect("i64 nanoseconds are in range"))
     }
 
-    pub fn check_dt(&mut self, ts: DateTime<Utc>) -> bool {
+    pub fn check_dt(&mut self, ts: Timestamp) -> bool {
         if self.fired {
             return false;
         }
@@ -44,12 +44,12 @@ impl DateTimeTrigger {
 mod tests {
     use super::*;
 
-    fn at(secs: i64) -> DateTime<Utc> {
-        DateTime::from_timestamp(secs, 0).unwrap()
+    fn at(secs: i64) -> Timestamp {
+        Timestamp::from_second(secs).unwrap()
     }
 
     fn trigger() -> DateTimeTrigger {
-        DateTimeTrigger::new(at(100), TimeDelta::seconds(10))
+        DateTimeTrigger::new(at(100), SignedDuration::from_secs(10))
     }
 
     #[test]

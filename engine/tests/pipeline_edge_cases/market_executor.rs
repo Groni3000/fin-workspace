@@ -1,8 +1,8 @@
 //! Over `SimQueue` and `MarketExecutor`: a market order fills in full at the next candle's
 //! open.
 
-use chrono::DateTime;
 use engine::sim::{MarketExecutor, SimQueue};
+use jiff::Timestamp;
 use mdata::{Ohlcv, Tagged};
 use oms::{
     manager::Oms,
@@ -46,7 +46,7 @@ pub fn run_script_with<R: Rms>(
         .zip(1..)
         .map(|(open, minute)| {
             let px = Price::from_str_unchecked(open);
-            let ts = DateTime::from_timestamp(minute * 60, 0).expect("valid timestamp");
+            let ts = Timestamp::from_second(minute * 60).expect("valid timestamp");
             Ok(Tagged::new(
                 spy(),
                 Ohlcv::new(ts, px, px, px, px, Volume::ZERO),

@@ -1,9 +1,9 @@
-use chrono::DateTime;
 use instrid::{
     asset::{Asset, AssetClass},
     instruments::{Instrument, Stock},
     mic::Mic,
 };
+use jiff::Timestamp;
 use tradeprim::{
     Side, currency::Currency, position::NonZeroQuantity, price::Price, quantity::Quantity,
 };
@@ -45,7 +45,7 @@ fn holding(n: i64) -> Portfolio {
         let order = market(side, &n.abs().to_string());
         pf.push_fill(Fill::new(
             order.order_id(),
-            DateTime::from_timestamp_nanos(0),
+            Timestamp::UNIX_EPOCH,
             spy(),
             side,
             qty(&n.abs().to_string()),

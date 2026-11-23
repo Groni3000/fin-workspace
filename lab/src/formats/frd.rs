@@ -11,6 +11,8 @@ use std::{fmt::Display, num::ParseIntError, str::FromStr};
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use mdata::Ohlcv;
+
+use crate::time_bridge::to_jiff;
 use tradeprim::{decimal::ParseDecimalError, price::Price, volume::Volume};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -59,7 +61,7 @@ pub fn parse_line(s: &str) -> Result<Ohlcv, ParseError> {
         .map_err(ParseError::VolumeParsingError)?;
 
     Ok(Ohlcv::new(
-        ts,
+        to_jiff(ts),
         open,
         high,
         low,

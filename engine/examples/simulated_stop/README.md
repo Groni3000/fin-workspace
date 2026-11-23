@@ -41,25 +41,25 @@ The stop is measured from the entry fill (101), not from the candle the decision
 
 ```text
 logs in <temp>/engine-example-simulated_stop
-1970-01-01 00:01:00 UTC  candle 100/101/99/100, want 1
-1970-01-01 00:01:00.200 UTC  ack
-1970-01-01 00:02:00 UTC  candle 101/102/100/101
-1970-01-01 00:02:00.200 UTC  fill Buy 1 @ 101, stop at 99
-1970-01-01 00:03:00 UTC  candle 100/101/99.5/100
-1970-01-01 00:04:00 UTC  candle 100/100/99/99.5, stop hit, want 0
-1970-01-01 00:04:00.200 UTC  ack
-1970-01-01 00:05:00 UTC  candle 98/99/97/98
-1970-01-01 00:05:00.200 UTC  fill Sell 1 @ 98
-1970-01-01 00:06:00 UTC  candle 98/99/97/98
+1970-01-01T00:01:00Z  candle 100/101/99/100, want 1
+1970-01-01T00:01:00.2Z  ack
+1970-01-01T00:02:00Z  candle 101/102/100/101
+1970-01-01T00:02:00.2Z  fill Buy 1 @ 101, stop at 99
+1970-01-01T00:03:00Z  candle 100/101/99.5/100
+1970-01-01T00:04:00Z  candle 100/100/99/99.5, stop hit, want 0
+1970-01-01T00:04:00.2Z  ack
+1970-01-01T00:05:00Z  candle 98/99/97/98
+1970-01-01T00:05:00.2Z  fill Sell 1 @ 98
+1970-01-01T00:06:00Z  candle 98/99/97/98
 final position: 0
 
 execution log:
-1970-01-01 00:01:00 UTC  send market order Buy 1
-1970-01-01 00:01:00.200 UTC  ack Buy 1
-1970-01-01 00:02:00.200 UTC  fill Buy 1 @ 101
-1970-01-01 00:04:00 UTC  send market order Sell 1
-1970-01-01 00:04:00.200 UTC  ack Sell 1
-1970-01-01 00:05:00.200 UTC  fill Sell 1 @ 98
+1970-01-01T00:01:00Z  send market order Buy 1
+1970-01-01T00:01:00.2Z  ack Buy 1
+1970-01-01T00:02:00.2Z  fill Buy 1 @ 101
+1970-01-01T00:04:00Z  send market order Sell 1
+1970-01-01T00:04:00.2Z  ack Sell 1
+1970-01-01T00:05:00.2Z  fill Sell 1 @ 98
 ```
 
 Candles are open/high/low/close. `<temp>` is the system temp folder, as in `market_order`.

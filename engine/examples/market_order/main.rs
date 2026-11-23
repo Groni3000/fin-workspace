@@ -6,7 +6,6 @@
 
 use std::{fs, path::Path};
 
-use chrono::DateTime;
 use engine::{
     event::{Event, Kind},
     event_loop::run,
@@ -20,6 +19,7 @@ use instrid::{
     instruments::{Instrument, Stock},
     mic::Mic,
 };
+use jiff::Timestamp;
 use mdata::{Candle, Ohlcv, Tagged};
 use oms::{
     desired::Desired, manager::Oms, portfolio::Portfolio, protocol::ExecEvent, rms::NaiveRms,
@@ -127,21 +127,21 @@ fn main() {
 
     // One order per change of the wanted position, and only the difference.
     let expected = [
-        "1970-01-01 00:01:00 UTC  send market order Buy 1",
-        "1970-01-01 00:01:00.200 UTC  ack Buy 1",
-        "1970-01-01 00:02:00.200 UTC  fill Buy 1 @ 102",
-        "1970-01-01 00:04:00 UTC  send market order Buy 1",
-        "1970-01-01 00:04:00.200 UTC  ack Buy 1",
-        "1970-01-01 00:05:00.200 UTC  fill Buy 1 @ 105",
-        "1970-01-01 00:06:00 UTC  send market order Sell 2",
-        "1970-01-01 00:06:00.200 UTC  ack Sell 2",
-        "1970-01-01 00:07:00.200 UTC  fill Sell 2 @ 103",
-        "1970-01-01 00:08:00 UTC  send market order Sell 1",
-        "1970-01-01 00:08:00.200 UTC  ack Sell 1",
-        "1970-01-01 00:09:00.200 UTC  fill Sell 1 @ 99",
-        "1970-01-01 00:10:00 UTC  send market order Buy 1",
-        "1970-01-01 00:10:00.200 UTC  ack Buy 1",
-        "1970-01-01 00:11:00.200 UTC  fill Buy 1 @ 100",
+        "1970-01-01T00:01:00Z  send market order Buy 1",
+        "1970-01-01T00:01:00.2Z  ack Buy 1",
+        "1970-01-01T00:02:00.2Z  fill Buy 1 @ 102",
+        "1970-01-01T00:04:00Z  send market order Buy 1",
+        "1970-01-01T00:04:00.2Z  ack Buy 1",
+        "1970-01-01T00:05:00.2Z  fill Buy 1 @ 105",
+        "1970-01-01T00:06:00Z  send market order Sell 2",
+        "1970-01-01T00:06:00.2Z  ack Sell 2",
+        "1970-01-01T00:07:00.2Z  fill Sell 2 @ 103",
+        "1970-01-01T00:08:00Z  send market order Sell 1",
+        "1970-01-01T00:08:00.2Z  ack Sell 1",
+        "1970-01-01T00:09:00.2Z  fill Sell 1 @ 99",
+        "1970-01-01T00:10:00Z  send market order Buy 1",
+        "1970-01-01T00:10:00.2Z  ack Buy 1",
+        "1970-01-01T00:11:00.2Z  fill Buy 1 @ 100",
     ];
     assert_eq!(exec, expected);
 }
@@ -232,7 +232,10 @@ impl Traded<Tagged<Ohlcv>> for Scripted {
             ),
             other => format!("{other:?}"),
         };
-        println!("{}  {what}", DateTime::from_timestamp_nanos(event.ts()));
+        println!(
+            "{}  {what}",
+            Timestamp::from_nanosecond(event.ts().into()).expect("i64 nanoseconds are in range")
+        );
         self.seen.push((event.ts(), what));
     }
 
@@ -271,7 +274,7 @@ fn candle(
         Price::from_str_unchecked(close),
     );
     let candle = Ohlcv::new(
-        DateTime::from_timestamp(secs, 0).expect("valid timestamp"),
+        Timestamp::from_second(secs).expect("valid timestamp"),
         open,
         open.max(close),
         open.min(close),

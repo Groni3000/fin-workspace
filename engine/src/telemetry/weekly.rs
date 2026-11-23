@@ -8,7 +8,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use chrono::DateTime;
+use jiff::{Timestamp, tz::TimeZone};
 use tracing_subscriber::fmt::MakeWriter;
 
 const DAY: i64 = 86_400;
@@ -72,9 +72,10 @@ impl WeeklyFile {
 }
 
 fn open_week(dir: &Path, prefix: &str, week: i64) -> io::Result<File> {
-    let sunday = DateTime::from_timestamp(week * DAY, 0)
+    let sunday = Timestamp::from_second(week * DAY)
         .expect("a week start is a valid date")
-        .date_naive();
+        .to_zoned_datetime(TimeZone::UTC)
+        .date();
     OpenOptions::new()
         .create(true)
         .append(true)

@@ -1,15 +1,15 @@
 use std::{fs, io::Write};
 
-use chrono::{DateTime, Datelike};
+use jiff::{Timestamp, ToSpan, tz::TimeZone};
 use tracing_subscriber::fmt::MakeWriter;
 
 use super::{WeeklyFile, week_start};
 
 /// Unix seconds of a UTC date and time, e.g. `"2026-11-14T23:59:59Z"`.
 fn secs(utc: &str) -> i64 {
-    DateTime::parse_from_rfc3339(utc)
+    utc.parse::<Timestamp>()
         .expect("a valid RFC 3339 time")
-        .timestamp()
+        .as_second()
 }
 
 /// Days since 1970-01-01 of a date, e.g. `"2026-11-15"`.
@@ -108,11 +108,11 @@ fn after_weeks_of_silence_the_current_weeks_file_starts() {
     let _ = fs::remove_dir_all(&dir);
 }
 
-/// The date of the Sunday that started the current wall-clock week, worked out with `chrono`
+/// The date of the Sunday that started the current wall-clock week, worked out with `jiff`
 /// rather than with `week_start`.
 fn this_weeks_sunday() -> String {
-    let today = chrono::Utc::now().date_naive();
-    let sunday = today - chrono::Days::new(today.weekday().num_days_from_sunday().into());
+    let today = Timestamp::now().to_zoned_datetime(TimeZone::UTC).date();
+    let sunday = today - today.weekday().to_sunday_zero_offset().days();
     sunday.to_string()
 }
 
@@ -151,7 +151,7 @@ fn new_and_make_writer_write_to_the_current_wall_clock_weeks_file() {
 
     // Opened as of a week ago, `make_writer` must still move on to this week's file: a
     // `make_writer` stuck in the past would keep writing to last week's.
-    let week_ago = chrono::Utc::now().timestamp() - 7 * 86_400;
+    let week_ago = Timestamp::now().as_second() - 7 * 86_400;
     let file = WeeklyFile::open_at(&dir, "y", week_ago).expect("opened");
     file.make_writer()
         .write_all(b"moved on\n")

@@ -3,7 +3,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use chrono::DateTime;
 use engine::{
     event::{Event, EventSource, Kind},
     event_loop::run,
@@ -16,6 +15,7 @@ use instrid::{
     instruments::{Instrument, Stock},
     mic::Mic,
 };
+use jiff::Timestamp;
 use mdata::{Candle, Ohlcv, Tagged};
 use oms::{
     desired::Desired,
@@ -110,8 +110,9 @@ pub fn position(lots: i64) -> Position {
 
 /// `"MM:SS.mmm"`: every case runs within an hour.
 fn time(ts: i64) -> String {
-    DateTime::from_timestamp_nanos(ts)
-        .format("%M:%S%.3f")
+    Timestamp::from_nanosecond(ts.into())
+        .expect("i64 nanoseconds are in range")
+        .strftime("%M:%S%.3f")
         .to_string()
 }
 

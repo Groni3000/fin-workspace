@@ -1,6 +1,6 @@
-use chrono::{DateTime, Utc, serde::ts_nanoseconds};
 use foldhash::HashMap;
 use instrid::instruments::Instrument;
+use jiff::Timestamp;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
@@ -49,8 +49,8 @@ pub struct CustomDatabentoAggregatedCandle {
     // pub schema: String,
     pub instrument_id: u64,
     pub publisher_id: u64,
-    #[serde(with = "ts_nanoseconds")]
-    pub ts_event: DateTime<Utc>,
+    #[serde(with = "jiff::fmt::serde::timestamp::nanosecond::required")]
+    pub ts_event: Timestamp,
     // pub time: String,
     pub src: String,
     #[serde(deserialize_with = "de_price_f64")]
@@ -104,7 +104,7 @@ impl Ord for CustomDatabentoAggregatedCandle {
 }
 
 impl HasTimestamp for CustomDatabentoAggregatedCandle {
-    fn timestamp(&self) -> DateTime<Utc> {
+    fn timestamp(&self) -> Timestamp {
         self.ts_event
     }
 }
