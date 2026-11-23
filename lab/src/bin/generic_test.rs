@@ -13,7 +13,7 @@ use instrid::{asset::Asset, instruments::FuturesContract, mic::Mic, tenor::Tenor
 
 use lab::{
     formats::custom::{CustomDatabentoAggregatedCandle, CustomDatabentoConsumerMd, KafkaSettings},
-    market_data::{FrdFutChainMdReader, FrdMdError},
+    formats::frd::{ChainReader, ReadError},
     process_md,
 };
 use mdata::Candle;
@@ -99,7 +99,7 @@ fn init_kafka_md(
     )
 }
 
-fn init_files_md<'a>(listing: &'a ListedTenors) -> Result<FrdFutChainMdReader<'a>, FrdMdError> {
+fn init_files_md<'a>(listing: &'a ListedTenors) -> Result<ChainReader<'a>, ReadError> {
     let dir = Path::new("lab/data/files/futures/frd");
     let instrument: FuturesContract = FuturesContract::new_unchecked(
         Asset::new("RB", instrid::asset::AssetClass::Commodity).expect("Failed to create Asset"),
@@ -111,7 +111,7 @@ fn init_files_md<'a>(listing: &'a ListedTenors) -> Result<FrdFutChainMdReader<'a
         None,
     );
     let chain = FutChain::new(instrument, listing).expect("Failed to create FutChain");
-    let market_data = FrdFutChainMdReader::new(chain, dir.to_path_buf())?;
+    let market_data = ChainReader::new(chain, dir.to_path_buf())?;
 
     Ok(market_data)
 }

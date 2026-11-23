@@ -1,3 +1,6 @@
+//! One file per contract, named like `RB_F26_1min.txt` (root, month code, two-digit year), read
+//! as one stream for the whole futures chain.
+
 use std::{
     cmp::Reverse,
     collections::BinaryHeap,
@@ -10,39 +13,39 @@ use std::{
 use chrono::{DateTime, Utc};
 use futchain::FutChain;
 use instrid::instruments::{FuturesContract, Instrument};
-use mdata::Tagged;
+use mdata::{HasTimestamp, Ohlcv, Tagged};
 
-use crate::formats::frd::{FrdCandle, FrdCandleParsingError};
+use super::{ParseError, parse_line};
 
 // --------------
 // --- Errors ---
 // --------------
 #[derive(Debug)]
-pub enum FrdMdError {
+pub enum ReadError {
     Io(std::io::Error),
-    Parse(FrdCandleParsingError),
+    Parse(ParseError),
 }
 
-impl Display for FrdMdError {
+impl Display for ReadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FrdMdError::Io(e) => write!(f, "IO error: {}", e),
-            FrdMdError::Parse(e) => write!(f, "Parse error: {}", e),
+            Self::Io(e) => write!(f, "IO error: {}", e),
+            Self::Parse(e) => write!(f, "Parse error: {}", e),
         }
     }
 }
 
-impl std::error::Error for FrdMdError {}
+impl std::error::Error for ReadError {}
 
-impl From<std::io::Error> for FrdMdError {
+impl From<std::io::Error> for ReadError {
     fn from(e: std::io::Error) -> Self {
-        FrdMdError::Io(e)
+        Self::Io(e)
     }
 }
 
-impl From<FrdCandleParsingError> for FrdMdError {
-    fn from(e: FrdCandleParsingError) -> Self {
-        FrdMdError::Parse(e)
+impl From<ParseError> for ReadError {
+    fn from(e: ParseError) -> Self {
+        Self::Parse(e)
     }
 }
 
@@ -56,12 +59,12 @@ struct Leg {
     contract: FuturesContract,
     reader: BufReader<File>,
     buffer: String,
-    pending: Option<FrdCandle>,
+    pending: Option<Ohlcv>,
 }
 
 impl Leg {
     /// `Ok(None)` at end of file. Blank lines are skipped.
-    fn read_candle(&mut self) -> Result<Option<FrdCandle>, FrdMdError> {
+    fn read_candle(&mut self) -> Result<Option<Ohlcv>, ReadError> {
         loop {
             self.buffer.clear();
             if self.reader.read_line(&mut self.buffer)? == 0 {
@@ -71,14 +74,14 @@ impl Leg {
                 continue;
             }
 
-            return Ok(Some(FrdCandle::from_frd_csv_line(&self.buffer)?));
+            return Ok(Some(parse_line(&self.buffer)?));
         }
     }
 }
 
 /// Merges every contract file in the chain into one (timestamp, earlies_expiry)-ordered stream.
 #[derive(Debug)]
-pub struct FrdFutChainMdReader<'a> {
+pub struct ChainReader<'a> {
     legs: Vec<Leg>,
     /// Min-heap of `(next timestamp, leg index)`.
     queue: BinaryHeap<Reverse<(DateTime<Utc>, usize)>>,
@@ -88,8 +91,8 @@ pub struct FrdFutChainMdReader<'a> {
     dir: PathBuf,
 }
 
-impl<'a> FrdFutChainMdReader<'a> {
-    pub fn new(mut chain: FutChain<'a>, dir: PathBuf) -> Result<Self, FrdMdError> {
+impl<'a> ChainReader<'a> {
+    pub fn new(mut chain: FutChain<'a>, dir: PathBuf) -> Result<Self, ReadError> {
         let mut legs = Vec::new();
         loop {
             let path = dir.join(Self::get_file_name(&chain));
@@ -147,8 +150,8 @@ impl<'a> FrdFutChainMdReader<'a> {
     }
 }
 
-impl<'a> Iterator for FrdFutChainMdReader<'a> {
-    type Item = Result<Tagged<FrdCandle>, FrdMdError>;
+impl<'a> Iterator for ChainReader<'a> {
+    type Item = Result<Tagged<Ohlcv>, ReadError>;
 
     /// Returns None when every file is exhausted.
     fn next(&mut self) -> Option<Self::Item> {

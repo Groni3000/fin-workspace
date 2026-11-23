@@ -1,5 +1,6 @@
 use lab::OffsetCache;
-use lab::formats::frd::FrdCandle;
+use lab::untested::parse_frd_line_unchecked;
+use mdata::{HasTimestamp, Ohlcv};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -32,7 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let file_start = Instant::now();
         let mut lines: u64 = 0;
-        let mut last: Option<FrdCandle> = None;
+        let mut last: Option<Ohlcv> = None;
 
         loop {
             line_bytes.clear();
@@ -42,8 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             let candle = unsafe {
-                FrdCandle::from_frd_csv_line_unchecked(&line_bytes, &mut tz_cache)
-                    .map_err(|e| e.to_string())?
+                parse_frd_line_unchecked(&line_bytes, &mut tz_cache).map_err(|e| e.to_string())?
             };
             lines += 1;
             last = Some(candle);

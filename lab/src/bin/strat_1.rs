@@ -18,11 +18,11 @@ use foldhash::{HashMap, HashMapExt};
 use futchain::{FutChain, ListedTenors};
 use instrid::instruments::{FuturesContract, Instrument};
 use lab::{
+    formats::frd::{ChainReader, ReadError},
     formats::{
         custom::{CustomDatabentoAggregatedCandle, CustomDatabentoConsumerMd, KafkaSettings},
         merged_custom_kafka::MergedCandle,
     },
-    market_data::{FrdFutChainMdReader, FrdMdError},
     strats_impl::strat_1::{config::Config, strategy::Strategy},
 };
 use oms::{
@@ -289,10 +289,10 @@ fn init_kafka_merged_md(
 fn init_files_md<'a>(
     listing: &'a ListedTenors,
     instrument: FuturesContract,
-) -> Result<FrdFutChainMdReader<'a>, FrdMdError> {
+) -> Result<ChainReader<'a>, ReadError> {
     let dir = Path::new("lab/data/files/futures/frd");
     let chain = FutChain::new(instrument, listing).expect("Failed to create FutChain");
-    let market_data = FrdFutChainMdReader::new(chain, dir.to_path_buf())?;
+    let market_data = ChainReader::new(chain, dir.to_path_buf())?;
 
     Ok(market_data)
 }

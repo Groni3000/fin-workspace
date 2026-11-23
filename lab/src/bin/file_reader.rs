@@ -3,13 +3,13 @@ use instrid::asset::Asset;
 use instrid::mic::MicIso;
 use instrid::prelude::FuturesContract;
 use instrid::tenor::Tenor;
-use lab::market_data::{FrdFutChainMdReader, FrdMdError};
+use lab::formats::frd::{ChainReader, ReadError};
 use mdata::{Candle, MarketData};
 use std::path::Path;
 use std::time::{Duration, Instant};
 use tradeprim::currency::Currency;
 
-fn main() -> Result<(), FrdMdError> {
+fn main() -> Result<(), ReadError> {
     let dir = Path::new("lab/data/files/futures/frd");
     let instrument: FuturesContract = FuturesContract::new_unchecked(
         Asset::new("RB", instrid::asset::AssetClass::Commodity).expect("Failed to create Asset"),
@@ -22,7 +22,7 @@ fn main() -> Result<(), FrdMdError> {
     );
     let listing = ListedTenors::monthly();
     let chain = FutChain::new(instrument, &listing).expect("Failed to create FutChain");
-    let mut market_data = FrdFutChainMdReader::new(chain, dir.to_path_buf())?;
+    let mut market_data = ChainReader::new(chain, dir.to_path_buf())?;
 
     let start = Instant::now();
     let (total_lines, last_record) = process_contracts(&mut market_data)?;
