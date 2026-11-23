@@ -1,108 +1,78 @@
 # fin-workspace
 
-A small Rust workspace for the boring-but-load-bearing parts of building
-trading systems: identifying instruments, and navigating the contracts
-behind a futures product.
+Rust crates for writing and backtesting trading strategies: trading primitives, instrument
+identity, futures chains, market data, an order management system and an event-driven engine.
+Backtests and replays only for now; live trading isn't there yet.
 
-The crates are deliberately narrow. Each one owns one concept, exposes
-strongly-typed primitives for it, and composes with the others without
-forcing a particular framework on the caller.
+## Start here
+
+```bash
+cargo test --workspace                        # every crate except lab's Kafka bins
+cargo run -p engine --example market_order    # the whole pipeline in one file
+cargo run -p engine --example simulated_stop  # a stop the strategy manages itself
+```
+
+Read [`engine/examples/market_order`](./engine/examples/market_order) first. To write a
+strategy, implement `engine::strategy::Traded` and pass it to `engine::event_loop::run` with a
+queue (`engine::sim::SimQueue` for a backtest), an `oms::manager::Oms`, an
+`oms::portfolio::Portfolio` and an `oms::rms::Rms`.
+
+## How it works
+
+Two worlds. **External**: the market-data feed and the executor (a simulator or a venue).
+**Internal**: the strategy, the OMS and the portfolio. They meet at one pipe, the
+`EventSource`: everything external comes in through it as events, in time order (market data,
+acks, fills, rejects), and the internal world talks back only with requests into it (send an
+order, cancel one).
+
+A strategy never sends orders. It only states its desired state (`oms::desired::Desired`): the
+position it wants per instrument. The OMS is what sends orders, by one formula per instrument:
+
+```text
+order = desired position − (position + market orders in flight)
+```
+
+The RMS can clamp the desired position or block an order. For each event, `event_loop::run`
+hands an executor's event to the OMS (fills update the portfolio), shows the event to the
+strategy, then lets the OMS reconcile.
 
 ## Crates
-### [`tradeprim`](./tradeprim) — primitive types for trading
 
-Price, Quantity, Notional, ... - those basic types implemented here.
-Currently work in progress.
-
-### [`instrid`](./instrid) — strongly-typed instrument identity
-
-Distinguishes *entity-level* identity (`AAPL`, an equity) from *venue-level*
-identity (`AAPL @ XNGS`). `Asset`, `Mic`, `Tenor`, `TradedInstrument`, the
-`Instrument` enum, and concrete kinds (`Stock`, `FuturesContract`,
-`OptionContract`). No prices, no orders — just identity with enough structure
-to compose into bigger things.
-
-`Mic` is 4 bytes (just the code); the full ISO 10383 record lives in a separate
-`MicIso`, looked up on demand. `Instrument` is 72 bytes and `Copy`.
-
-Features:
-- `mic-full` — embeds the full ISO 10383 MIC registry (~2840 entries) as a
-  packed binary blob, lazily parsed into a lookup map on first `mic_by_code`
-  call. Off by default; the 33 curated `Mic::xnas()`-style constants are
-  always available, and lookup works either way — the feature only widens
-  which codes are known.
-- `serde` — `Serialize`/`Deserialize` for every public identity type, with
-  compile-time `DeserializeOwned` checks (no borrowed fields). Contracts
-  deserialize through their validating constructors, so an impossible date
-  like `2025-02-31` is rejected rather than rebuilt field-by-field.
-
-### [`futchain`](./futchain) — futures chain navigation + end-of-trading rules
-
-A `FutChain` cursor walks a `FuturesContract` through a `ListedTenors` cycle
-(quarterly, monthly, or arbitrary). An `EndOfTrading` trait turns
-`(year, tenor)` into a calendar date (`jiff::civil::Date`) via per-product rules
-(*third Friday*, *last business day of prior month*, etc.). Chain and rule
-are independent — glue them together with a `while` loop.
-
-
-### [`mdata`](./mdata) — market-data records, aggregation and formats
-
-Capability traits for a market-data record (`HasTimestamp`, `HasLastPrice`,
-`Candle`, `HasVolume`, `HasInstrument`, `HasSymbol`), the `MarketData` stream
-trait, `Ohlcv`, and `Tagged<R>`, which attaches an `Instrument` to a record that
-doesn't carry one. Consumers ask for the capabilities they need, so any format
-plugs in. `aggregation` builds interval, session and week candles; `formats`
-parses vendor files (FRD; its futures-chain reader is behind `frd-chain`).
-
-### [`engine`](./engine) — events, queues and executors
-
-The runtime around a strategy. `Event`/`Kind` and the `EventSource` trait, the `Executor` trait, and the backtest pieces: `SimQueue` (merges a
-market-data stream with what a simulated executor schedules) and the
-`MarketExecutor`/`MarketStopLimitExecutor` simulators. Also `SimClock` for
-logging in simulated time.
-
-### [`oms`](./oms) — order management system
-
-The trading side between a strategy and an executor. `Order` and its states,
-`Fill`, and `protocol`, the messages to and from an executor (`Request` out,
-`ExecEvent` back, `RequestSink`). On top of them: `manager::Oms` turns what the
-strategy wants (`desired::Desired`) into requests and tracks every order it sent,
-`portfolio::Portfolio` holds positions and fills, and `rms::Rms` can block or
-clamp what gets sent.
-
+| Crate | What's in it |
+|---|---|
+| [`tradeprim`](./tradeprim) | `Price`, `Quantity`, `Position`, `Side`, `Currency` (ISO 4217), `Volume`, notionals; fixed-point decimals |
+| [`instrid`](./instrid) | instrument identity: `Asset`, `Mic`, `Tenor`, `Instrument` (`Stock`, `FuturesContract`, `OptionContract`), and `Specification` (tick size, point value, quantity limits); features `mic-full`, `serde` |
+| [`futchain`](./futchain) | `FutChain` walks a contract through its listed months; `EndOfTrading` rules give the last trading date |
+| [`mdata`](./mdata) | market-data record traits (`HasTimestamp`, `Candle`, …), `MarketData`, `Ohlcv`, `Tagged`; `aggregation`; `formats` (FRD; the chain reader is behind `frd-chain`) |
+| [`oms`](./oms) | orders and fills, the executor protocol (`Request`, `ExecEvent`), `Oms`, `Portfolio`, `Rms`, `Desired` |
+| [`engine`](./engine) | events and `EventSource`, `event_loop::run`, the `Traded` trait, `SimQueue` and simulated executors, `telemetry` (execution and diagnostics logs) |
+| [`indicators`](./indicators) | streaming SMA, EWMA, RSI, TR, ATR that match pandas |
+| [`lab`](./lab) | experiments, not held to the same bar: `strat_1`, bins, Kafka formats |
 
 ## Working in the workspace
 
 ```bash
-cargo test --workspace --all-features   # everything, including README doctests
-cargo test -p futchain                  # one crate
-cargo run -p engine --example market_order
-cargo run -p engine --example simulated_stop
+cargo test --workspace --exclude lab --all-features   # what CI runs, README doctests included
+cargo test -p futchain                                # one crate
 cargo run -p futchain --example find_active_contract
 cargo run -p futchain --example historical_roll_schedule
 cargo run -p instrid --example typed_groupby
 ```
 
-Only a Rust toolchain is required. The Kafka experiments in `lab` are behind
-the `kafka` feature, since `rdkafka` builds librdkafka from C source and needs
-`cmake` plus a C toolchain:
+Only a Rust toolchain is needed, except for lab's `kafka` feature: `rdkafka` builds librdkafka
+from C source, so it also needs `cmake` and a C toolchain.
 
-```bash
-cargo run -p lab --features kafka --bin kafka_check
-```
-
-Each crate's README is included as its crate-level docs and its examples run as
-doctests, so they cannot drift from the code without turning the build red.
+Each crate's README is its crate-level docs, and its examples run as doctests.
 
 ## Design principles
 
-- **Easy to grasp.** each crate is relatively small.
-- **Strongly-typed inputs over stringly-typed ones.** `Tenor::March`, not
-  `3` or `"H"`; `Mic::xnas()`, not `"XNAS"`.
-- **Balance between performance and assumptions.** There may be
-some assumptions about data (struct invariants) to make code more efficient.
-- **Invalid states rejected at construction.** Validating constructors return
-`Result`; `*_unchecked` variants exist where the caller can prove the invariant.
+- **Easy to grasp.** Each crate is small and owns one concept.
+- **Strongly-typed inputs over stringly-typed ones.** `Tenor::March`, not `3` or `"H"`;
+  `Mic::xnas()`, not `"XNAS"`.
+- **Invalid states rejected at construction.** Validating constructors return `Result`;
+  `*_unchecked` variants exist where the caller can prove the invariant.
+- **Performance over generality where it's safe.** Some types assume invariants about the data
+  to stay fast.
 
 ## License
 
