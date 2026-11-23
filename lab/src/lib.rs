@@ -1,10 +1,12 @@
 pub mod aggregation;
 pub mod formats;
 pub mod strats_impl;
-mod time_bridge;
 
-use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, Offset, TimeZone, Utc};
-use chrono_tz::Tz;
+use jiff::{
+    Timestamp,
+    civil::{Date, DateTime},
+    tz::{AmbiguousOffset, Offset, TimeZone},
+};
 
 use mdata::{Candle, MarketData};
 
@@ -30,18 +32,18 @@ where
 
 // TODO: OffsetCache should have tests... A lot of tests...
 
-/// Instead of using chrono-tz's lookup table for Tz,
-/// we cache fixed offset and use it.
+/// Instead of looking up the time zone for every record,
+/// we cache the day's fixed offset and use it.
 ///
 /// Each day we take `(day_start, day_end)` and check offsets.
-/// - If they are the same - use cached FixedOffset.
+/// - If they are the same - use the cached offset.
 /// - If they are different - recompute offset for each record for this day.
 ///
 /// In such way we avoid redundant lookups to two days per year.
 pub struct OffsetCache {
-    date: Option<NaiveDate>,
-    offset: FixedOffset,
-    /// If this day is not a transition day - use FixedOffset
+    date: Option<Date>,
+    offset: Offset,
+    /// If this day is not a transition day - use the cached offset
     /// else - look up the offset for each record during this day.
     constant_day: bool,
 }
@@ -50,21 +52,19 @@ impl OffsetCache {
     pub fn new() -> Self {
         Self {
             date: None,
-            offset: FixedOffset::east_opt(0).unwrap(),
+            offset: Offset::UTC,
             constant_day: false,
         }
     }
 
-    /// Convert to Utc, using cached FixedOffset during `constant_day`
-    pub fn to_utc(&mut self, naive: NaiveDateTime, tz: Tz) -> DateTime<Utc> {
-        let date = naive.date();
+    /// Convert to UTC, using the cached offset during `constant_day`
+    pub fn to_utc(&mut self, local: DateTime, tz: &TimeZone) -> Timestamp {
+        let date = local.date();
 
         if self.date != Some(date) {
             // New day: take both ends, check their offsets.
-            let start = date.and_hms_opt(0, 0, 0).unwrap();
-            let end = date.and_hms_opt(23, 59, 59).unwrap();
-            let off_start = Self::lookup(tz, start);
-            let off_end = Self::lookup(tz, end);
+            let off_start = Self::lookup(tz, date.at(0, 0, 0, 0));
+            let off_end = Self::lookup(tz, date.at(23, 59, 59, 0));
 
             self.date = Some(date);
             self.constant_day = off_start == off_end;
@@ -74,28 +74,30 @@ impl OffsetCache {
         if self.constant_day {
             // Apply the fixed offset
             self.offset
-                .from_local_datetime(&naive)
-                .single()
-                .expect("a fixed offset is never ambiguous")
-                .with_timezone(&Utc)
+                .to_timestamp(local)
+                .expect("a local time in range")
         } else {
             // Transition day: full, correct lookup for this row.
-            match tz.from_local_datetime(&naive) {
-                chrono::LocalResult::Single(ts) => ts.with_timezone(&Utc),
-                chrono::LocalResult::Ambiguous(a, _) => a.with_timezone(&Utc),
-                chrono::LocalResult::None => {
-                    panic!("Non existent local time {:?} for timezone {:?}", naive, tz);
+            let ts = tz.to_ambiguous_timestamp(local);
+            match ts.offset() {
+                AmbiguousOffset::Gap { .. } => {
+                    panic!("Non existent local time {local} for timezone {tz:?}");
+                }
+                AmbiguousOffset::Unambiguous { .. } | AmbiguousOffset::Fold { .. } => {
+                    ts.earlier().expect("a local time in range")
                 }
             }
         }
     }
 
-    /// Get FixedOffset
-    fn lookup(tz: Tz, naive: NaiveDateTime) -> FixedOffset {
-        tz.offset_from_local_datetime(&naive)
-            .single()
-            .expect("midnight/end-of-day is never a DST transition for exchange zones")
-            .fix()
+    /// The offset in effect at `local`.
+    fn lookup(tz: &TimeZone, local: DateTime) -> Offset {
+        match tz.to_ambiguous_timestamp(local).offset() {
+            AmbiguousOffset::Unambiguous { offset } => offset,
+            AmbiguousOffset::Gap { .. } | AmbiguousOffset::Fold { .. } => {
+                panic!("midnight/end-of-day is never a DST transition for exchange zones")
+            }
+        }
     }
 }
 
@@ -108,33 +110,29 @@ impl Default for OffsetCache {
 /// It's better not to use it :/
 pub mod untested {
     use crate::OffsetCache;
-    use crate::formats::frd::{Field, ParseError};
-    use chrono::{NaiveDate, NaiveDateTime};
-    use chrono_tz::US::Eastern as ExchangeTz;
+    use crate::formats::frd::{EXCHANGE_TZ, Field, ParseError};
+    use jiff::civil::DateTime;
     use mdata::Ohlcv;
     use tradeprim::{price::Price, volume::Volume};
 
     /// Parse the fixed-width `YYYY-MM-DD HH:MM:SS` field into a naive local
     /// datetime. Unchecked: assumes exactly that 19-byte ASCII layout.
-    pub fn parse_naive_frd_unchecked(s: &str) -> NaiveDateTime {
+    pub fn parse_naive_frd_unchecked(s: &str) -> DateTime {
         let b = s.as_bytes();
 
         #[inline(always)]
-        fn d2(b: &[u8], i: usize) -> u32 {
-            (b[i] - b'0') as u32 * 10 + (b[i + 1] - b'0') as u32
+        fn d2(b: &[u8], i: usize) -> i8 {
+            (b[i] - b'0') as i8 * 10 + (b[i + 1] - b'0') as i8
         }
 
-        let year = d2(b, 0) * 100 + d2(b, 2); // "20","25" -> 2025
+        let year = i16::from(d2(b, 0)) * 100 + i16::from(d2(b, 2)); // "20","25" -> 2025
         let month = d2(b, 5);
         let day = d2(b, 8);
         let hour = d2(b, 11);
         let min = d2(b, 14);
         let sec = d2(b, 17);
 
-        NaiveDate::from_ymd_opt(year as i32, month, day)
-            .expect("valid date")
-            .and_hms_opt(hour, min, sec)
-            .expect("valid time")
+        DateTime::new(year, month, day, hour, min, sec, 0).expect("valid date and time")
     }
 
     /// **DO NOT USE THIS FUNCTION**
@@ -159,7 +157,7 @@ pub mod untested {
         let trimmed = s.trim_end();
 
         let naive = parse_naive_frd_unchecked(&trimmed[..19]);
-        let ts = tz_cache.to_utc(naive, ExchangeTz);
+        let ts = tz_cache.to_utc(naive, &EXCHANGE_TZ);
 
         // `,` is ommited
         let mut split = trimmed[20..].split(',');
@@ -175,7 +173,7 @@ pub mod untested {
             .map_err(ParseError::VolumeParsingError)?;
 
         Ok(Ohlcv::new(
-            crate::time_bridge::to_jiff(ts),
+            ts,
             open,
             high,
             low,

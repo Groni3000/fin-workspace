@@ -6,14 +6,20 @@
 mod chain;
 pub use chain::{ChainReader, ReadError};
 
-use chrono_tz::{Tz, US::Eastern as ExchangeTZ};
-use std::{fmt::Display, num::ParseIntError, str::FromStr};
+use std::{fmt::Display, num::ParseIntError, str::FromStr, sync::LazyLock};
 
-use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
+use jiff::{
+    Timestamp,
+    civil::DateTime,
+    tz::{AmbiguousOffset, TimeZone},
+};
 use mdata::Ohlcv;
-
-use crate::time_bridge::to_jiff;
 use tradeprim::{decimal::ParseDecimalError, price::Price, volume::Volume};
+
+/// The exchange's time zone, which FRD times are in.
+pub(crate) static EXCHANGE_TZ: LazyLock<TimeZone> = LazyLock::new(|| {
+    TimeZone::get("America/New_York").expect("the tz database has America/New_York")
+});
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Field {
@@ -48,7 +54,7 @@ pub fn parse_line(s: &str) -> Result<Ohlcv, ParseError> {
     let mut split = s.trim().split(',');
 
     let raw_ts = split.next().ok_or(ParseError::Missing(Field::Timestamp))?;
-    let ts = to_utc(raw_ts, ExchangeTZ)?;
+    let ts = to_utc(raw_ts, &EXCHANGE_TZ)?;
     let mut price = || -> Result<Price, ParseError> {
         let field = split.next().ok_or(ParseError::Missing(Field::Price))?;
         Price::from_str(field).map_err(ParseError::PriceParsingError)
@@ -61,7 +67,7 @@ pub fn parse_line(s: &str) -> Result<Ohlcv, ParseError> {
         .map_err(ParseError::VolumeParsingError)?;
 
     Ok(Ohlcv::new(
-        to_jiff(ts),
+        ts,
         open,
         high,
         low,
@@ -71,40 +77,46 @@ pub fn parse_line(s: &str) -> Result<Ohlcv, ParseError> {
 }
 
 /// Exchange time to UTC. An ambiguous time (the hour repeated when DST ends) takes the first.
-fn to_utc(raw_ts: &str, tz: Tz) -> Result<DateTime<Utc>, ParseError> {
-    let naive_ts =
+fn to_utc(raw_ts: &str, tz: &TimeZone) -> Result<Timestamp, ParseError> {
+    let local =
         parse_naive(raw_ts).ok_or_else(|| ParseError::BadTimestamp(format!("{:?}", raw_ts)))?;
-    match tz.from_local_datetime(&naive_ts) {
-        chrono::LocalResult::Single(ts) => Ok(ts.with_timezone(&Utc)),
-        chrono::LocalResult::Ambiguous(a, _) => Ok(a.with_timezone(&Utc)),
-        chrono::LocalResult::None => Err(ParseError::TimezoneConversionError(format!(
-            "Non existent local time {:?} for timezone {:?}",
-            raw_ts, tz
-        ))),
+    let ts = tz.to_ambiguous_timestamp(local);
+    let nonexistent = || {
+        ParseError::TimezoneConversionError(format!(
+            "Non existent local time {:?} for timezone {}",
+            raw_ts,
+            tz.iana_name().unwrap_or("?")
+        ))
+    };
+    match ts.offset() {
+        AmbiguousOffset::Gap { .. } => Err(nonexistent()),
+        AmbiguousOffset::Unambiguous { .. } | AmbiguousOffset::Fold { .. } => {
+            ts.earlier().map_err(|_| nonexistent())
+        }
     }
 }
 
 /// `YYYY-MM-DD HH:MM:SS`, checking only the length and that digits are where they should be.
-fn parse_naive(raw_ts: &str) -> Option<NaiveDateTime> {
+fn parse_naive(raw_ts: &str) -> Option<DateTime> {
     let bytes = raw_ts.as_bytes();
     if bytes.len() != 19 {
         return None;
     }
 
     #[inline(always)]
-    fn d2(b: &[u8], i: usize) -> Option<u32> {
+    fn d2(b: &[u8], i: usize) -> Option<i8> {
         if b[i].is_ascii_digit() && b[i + 1].is_ascii_digit() {
-            return Some((b[i] - b'0') as u32 * 10 + (b[i + 1] - b'0') as u32);
+            return Some((b[i] - b'0') as i8 * 10 + (b[i + 1] - b'0') as i8);
         }
         None
     }
 
-    let year = d2(bytes, 0)? * 100 + d2(bytes, 2)?; // "20","25" -> 2025
+    let year = i16::from(d2(bytes, 0)?) * 100 + i16::from(d2(bytes, 2)?); // "20","25" -> 2025
     let month = d2(bytes, 5)?;
     let day = d2(bytes, 8)?;
     let hour = d2(bytes, 11)?;
     let min = d2(bytes, 14)?;
     let sec = d2(bytes, 17)?;
 
-    NaiveDate::from_ymd_opt(year as i32, month, day)?.and_hms_opt(hour, min, sec)
+    DateTime::new(year, month, day, hour, min, sec, 0).ok()
 }

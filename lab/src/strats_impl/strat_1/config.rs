@@ -1,4 +1,3 @@
-use chrono::{Duration, NaiveTime, Weekday};
 use futchain::{
     ListedTenors,
     eot::{DateOffset, EndOfTrading, LastNthBDayOfPrevMonth},
@@ -9,6 +8,11 @@ use instrid::{
     mic::Mic,
     spec::Specification,
     tenor::Tenor,
+};
+use jiff::{
+    SignedDuration,
+    civil::{Time, Weekday, time},
+    tz::TimeZone,
 };
 use tradeprim::{
     currency::Currency,
@@ -23,10 +27,10 @@ pub struct Config<E: EndOfTrading> {
     listing: ListedTenors,
     eot: E,
     day_of_week: Weekday,
-    exchange_tz: chrono_tz::Tz,
+    exchange_tz: TimeZone,
     /// (start, end)
-    entry_time: (NaiveTime, NaiveTime),
-    out_time: NaiveTime,
+    entry_time: (Time, Time),
+    out_time: Time,
     stop_loss_price_diff: Price,
 }
 
@@ -41,10 +45,10 @@ impl<E: EndOfTrading> Config<E> {
         listing: ListedTenors,
         eot: E,
         day_of_week: Weekday,
-        exchange_tz: chrono_tz::Tz,
-        entry_time: NaiveTime,
-        entry_window_duration: Duration,
-        out_time: NaiveTime,
+        exchange_tz: TimeZone,
+        entry_time: Time,
+        entry_window_duration: SignedDuration,
+        out_time: Time,
         stop_loss_price_diff: Price,
     ) -> Self {
         let entry_time_end = entry_time + entry_window_duration;
@@ -64,15 +68,15 @@ impl<E: EndOfTrading> Config<E> {
         }
     }
 
-    pub fn exchange_tz(&self) -> chrono_tz::Tz {
-        self.exchange_tz
+    pub fn exchange_tz(&self) -> &TimeZone {
+        &self.exchange_tz
     }
 
-    pub fn entry_time(&self) -> (NaiveTime, NaiveTime) {
+    pub fn entry_time(&self) -> (Time, Time) {
         self.entry_time
     }
 
-    pub fn out_time(&self) -> NaiveTime {
+    pub fn out_time(&self) -> Time {
         self.out_time
     }
 
@@ -124,8 +128,8 @@ impl Default for Config<LastNthBDayOfPrevMonth> {
             QtyStep::new(Quantity::from_str_unchecked("1")).unwrap(),
         )
         .unwrap();
-        let entry_time = NaiveTime::from_hms_opt(10, 0, 0).unwrap();
-        let entry_time_end = entry_time + Duration::hours(2);
+        let entry_time = time(10, 0, 0, 0);
+        let entry_time_end = entry_time + SignedDuration::from_hours(2);
         // 1 min price flunctuation is 4.2$ => 500 flunctuations is 2_100$.
         // => flunctuations in price quotation should be 0.05
         let stop_loss_price_diff = Price::from_str_unchecked("0.05");
@@ -139,10 +143,11 @@ impl Default for Config<LastNthBDayOfPrevMonth> {
             // (current_contract_volume, next_contract_volume) / sum(volumes) = 50/50
             // ~ 10 days before the end of trading
             eot: LastNthBDayOfPrevMonth::from_u8(1, DateOffset::BusinessDays(-10)),
-            day_of_week: Weekday::Fri,
-            exchange_tz: chrono_tz::Tz::US__Central,
+            day_of_week: Weekday::Friday,
+            exchange_tz: TimeZone::get("America/Chicago")
+                .expect("the tz database has America/Chicago"),
             entry_time: (entry_time, entry_time_end),
-            out_time: NaiveTime::from_hms_opt(20, 0, 0).unwrap(),
+            out_time: time(20, 0, 0, 0),
             stop_loss_price_diff,
         }
     }

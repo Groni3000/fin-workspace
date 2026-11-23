@@ -8,7 +8,6 @@ use std::{
     time::Duration,
 };
 
-use chrono::Datelike;
 use engine::{
     event_loop::run,
     sim::{MarketExecutor, SimQueue},
@@ -209,7 +208,7 @@ fn init_kafka_md(
     const AUTO_OFFSET_RESET: &str = "earliest";
     let mut fchain = futchain::FutChain::new(instrument, listing).unwrap();
     let mut symbols = HashMap::new();
-    let current_year = chrono::Utc::now().year() as u16;
+    let current_year = jiff::ZonedDateTime::now().year() as u16;
     for year in current_year - 1..=current_year + 2 {
         while fchain.contract().year() < year {
             fchain.advance();
@@ -258,7 +257,7 @@ fn init_kafka_merged_md(
     const AUTO_OFFSET_RESET: &str = "earliest";
     let mut fchain = futchain::FutChain::new(instrument, listing).unwrap();
     let mut symbols = HashMap::new();
-    let current_year = chrono::Utc::now().year() as u16;
+    let current_year = jiff::ZonedDateTime::now().year() as u16;
     for year in current_year - 1..=current_year + 2 {
         while fchain.contract().year() < year {
             fchain.advance();

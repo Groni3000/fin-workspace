@@ -1,9 +1,11 @@
 use foldhash::{HashMap, HashMapExt};
 
-use chrono::{DateTime, Datelike, NaiveDate, NaiveTime};
-use chrono_tz::Tz;
 use futchain::{FutChain, eot::EndOfTrading};
 use instrid::instruments::{FuturesContract, Instrument};
+use jiff::{
+    civil::{Date, DateTime, time},
+    tz::TimeZone,
+};
 use mdata::{Candle, HasInstrument, HasLastPrice, HasTimestamp, HasVolume};
 use oms::{desired::Desired, fill::Fill, portfolio::Portfolio, protocol::ExecEvent};
 use tradeprim::{position::Position, price::Price, quantity::Quantity};
@@ -13,9 +15,7 @@ use engine::{
     strategy::Traded,
 };
 
-use crate::{
-    aggregation::SessionAggregator, strats_impl::strat_1::config::Config, time_bridge::to_chrono,
-};
+use crate::{aggregation::SessionAggregator, strats_impl::strat_1::config::Config};
 
 /// Why the strategy decided to flatten. Emitted with the `exit` event for the trade ledger.
 #[derive(Debug, Clone, Copy)]
@@ -44,13 +44,13 @@ pub struct Strategy<E: EndOfTrading> {
 pub struct State {
     /// If we get stop loss, we will not fire again today.
     fired_today: bool,
-    last_known_date: NaiveDate,
+    last_known_date: Date,
     n_trades: u64,
     stop_loss_price: Option<Price>,
     /// Contract the feed is currently on. `config.instrument()` is only the chain root.
     traded_instrument: Option<Instrument>,
     /// End of trading for `traded_instrument`, recomputed on every roll.
-    eot_date: Option<jiff::civil::Date>,
+    eot_date: Option<Date>,
     /// Contracts rolled away from, waiting on their closing fill before `desired` drops them.
     settling: Vec<Instrument>,
     /// Candle aggregator
@@ -62,7 +62,7 @@ impl State {
         self.stop_loss_price
     }
 
-    pub fn last_known_date(&self) -> NaiveDate {
+    pub fn last_known_date(&self) -> Date {
         self.last_known_date
     }
 
@@ -70,26 +70,26 @@ impl State {
         self.traded_instrument
     }
 
-    pub fn eot_date(&self) -> Option<jiff::civil::Date> {
+    pub fn eot_date(&self) -> Option<Date> {
         self.eot_date
     }
 
     pub fn default_cme_energy(
         traded_instrument: Option<Instrument>,
-        eot_date: Option<jiff::civil::Date>,
+        eot_date: Option<Date>,
     ) -> State {
         State {
             fired_today: false,
-            last_known_date: NaiveDate::MIN,
+            last_known_date: Date::MIN,
             n_trades: 0,
             stop_loss_price: None,
             traded_instrument,
             eot_date,
             settling: Vec::new(),
             session_aggregator: SessionAggregator::new(
-                NaiveTime::from_hms_opt(17, 0, 0).expect("CME energy RTH"),
-                NaiveTime::from_hms_opt(16, 0, 0).expect("CME energy RTH"),
-                chrono_tz::America::Chicago,
+                time(17, 0, 0, 0),
+                time(16, 0, 0, 0),
+                TimeZone::get("America/Chicago").expect("the tz database has America/Chicago"),
             ),
         }
     }
@@ -210,7 +210,7 @@ impl<E: EndOfTrading> Strategy<E> {
         // // and then delete from desired orders
     }
 
-    fn entry_condition<R>(&mut self, md_record: &R, exchange_ts: DateTime<Tz>) -> bool
+    fn entry_condition<R>(&mut self, md_record: &R, exchange_ts: DateTime) -> bool
     where
         R: HasTimestamp + HasInstrument + HasLastPrice,
     {
@@ -248,7 +248,7 @@ impl<E: EndOfTrading> Strategy<E> {
         false
     }
 
-    fn out_condition<R>(&mut self, md_record: &R, exchange_ts: DateTime<Tz>)
+    fn out_condition<R>(&mut self, md_record: &R, exchange_ts: DateTime)
     where
         R: HasTimestamp + HasInstrument + Candle + HasVolume,
     {
@@ -282,9 +282,7 @@ impl<E: EndOfTrading> Strategy<E> {
     ///
     /// If there is still an open position - we change its desired state to Flat. We have protective
     /// EoT-offset, so this is pretty much guaranteed to be closed.
-    fn roll_condition(&mut self, date: NaiveDate) {
-        // The expiry rules give `jiff` dates; this strategy still reads `chrono` ones.
-        let date = jiff::civil::date(date.year() as i16, date.month() as i8, date.day() as i8);
+    fn roll_condition(&mut self, date: Date) {
         while self.state.eot_date.is_some_and(|eot| date >= eot) {
             let Some(Instrument::Futures(current)) = self.state.traded_instrument else {
                 self.state.eot_date = None;
@@ -314,11 +312,10 @@ impl<E: EndOfTrading> Strategy<E> {
     where
         R: HasTimestamp + HasInstrument + Candle + HasVolume,
     {
-        // The only tz conversion per record: chrono-tz binary-searches transitions on each call.
-        let exchange_ts =
-            to_chrono(md_record.timestamp()).with_timezone(&self.config.exchange_tz());
+        // The only tz conversion per record.
+        let exchange_ts = self.config.exchange_tz().to_datetime(md_record.timestamp());
 
-        let date = exchange_ts.date_naive();
+        let date = exchange_ts.date();
         if self.state.last_known_date != date {
             self.state.fired_today = false;
             self.state.last_known_date = date;
