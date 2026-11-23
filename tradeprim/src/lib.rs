@@ -7,6 +7,7 @@ pub mod position;
 pub mod price;
 pub mod quantity;
 pub mod quote_notional;
+pub mod volume;
 
 use std::ops::Neg;
 
@@ -15,11 +16,13 @@ pub mod prelude {
     pub use crate::currency::{Currency, CurrencyTag};
     pub use crate::price::Price;
     pub use crate::quantity::Quantity;
+    pub use crate::volume::Volume;
 
     pub mod errors {
         pub use crate::ascii_code::AsciiCode;
         pub use crate::price::ParsePriceError;
         pub use crate::quantity::ParseQuantityError;
+        pub use crate::volume::ParseVolumeError;
     }
 }
 
