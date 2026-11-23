@@ -168,6 +168,41 @@ So, when we write specification, we need to manually do it once.
 
 `currency_notional = 50 * 3_482.5 = 174_125.0 ($)`
 
+And the last one, with a tick above 1.0:
+
+5. NKD - Nikkei/USD Futures.
+
+   Contract Unit - 5 USD x Nikkei Stock Average
+
+   Price Quotation - U.S. dollars and cents per index point
+
+   Minimum Price Fluctuation - 5.00 index points = $25.00
+
+Therefore:
+
+Let `quantity = 5 (contract)`, `price = 57_975 (points / contract)`.
+
+`quote_notional = quantity * price = (contract) * (points / contract) = points`
+
+`quote_notional = 5 * 57_975 = 289_875 (points)`
+
+`tick_size = (5, 25) = (points per contract, $ per contract)`
+
+`point_value = tick_size.1 * 1 / tick_size.0`
+
+`point_value = ($ / contract) * 1 / (points / contract)`
+
+`point_value = $ / point`
+
+`point_value = 25 * (1 / 5) = 5 ($ / point)`
+
+`currency_notional = point_value * quote_notional = ($ / point) * (points) = $`
+
+`currency_notional = 5 * 289_875 = 1_449_375 ($)`
+
+The units work exactly like ZB's. The only difference is that the tick is 5 points, not a
+fraction of one.
+
 ## Currency concept
 
 - Parsed from ISO 4217
