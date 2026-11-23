@@ -153,7 +153,7 @@ assert_eq!(zb.round_quantity(Quantity::from_str_unchecked("2000")), None);
 ```
 
 `Specification::new` returns `Err(InvalidSpecification)` naming which rule failed:
-`tick_size_price` outside `(0, Price::ONE]`, a tick ratio that isn't representable
+a `tick_size_price` that isn't positive, a tick ratio that isn't representable
 in 9 digits, a point value out of range, a zero `min_quantity`, or a
 `max_quantity` below the minimum. The `Default` spec is a plain US share:
 `0.01` tick, `0.01` per tick, point value `1`, one share minimum and step.

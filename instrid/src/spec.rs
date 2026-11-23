@@ -253,7 +253,7 @@ impl Specification {
         max_quantity: Quantity,
         step_quantity: QtyStep,
     ) -> Result<Self, InvalidSpecification> {
-        if tick_size_price <= Price::ZERO || tick_size_price > Price::ONE {
+        if tick_size_price <= Price::ZERO {
             return Err(InvalidSpecification::TickSizePrice(tick_size_price));
         }
         if min_quantity == Quantity::ZERO {
@@ -634,9 +634,7 @@ mod tests {
         );
     }
 
-    /// - `tick_size_price` is in `(0, Price::ONE)`
-    /// - `tick_size_price` that is `Price::ONE` accepted
-    /// - `tick_size_price = Price::ONE + min increment` - not accepted
+    /// `tick_size_price` must be positive.
     #[test]
     fn new_tick_size_price_boundary() {
         let usd = (Price::ONE, Currency::usd());
@@ -653,31 +651,53 @@ mod tests {
             Err(InvalidSpecification::TickSizePrice(Price::ZERO))
         );
 
-        // Upper edge is inclusive: exactly one whole price unit is valid.
-        assert!(
-            Specification::new(
-                Price::ONE,
-                usd,
-                Quantity::ONE,
-                Quantity::MAX,
-                QtyStep::default()
-            )
-            .is_ok(),
-            "tick_size_price == Price::ONE must be accepted"
-        );
-
-        // One raw step above the edge: not a valid tick.
-        let above_one = Price::from_str_unchecked("1.000000001");
+        let negative = Price::from_str_unchecked("-0.01");
         assert_eq!(
             Specification::new(
-                above_one,
+                negative,
                 usd,
                 Quantity::ONE,
                 Quantity::MAX,
                 QtyStep::default()
             ),
-            Err(InvalidSpecification::TickSizePrice(above_one))
+            Err(InvalidSpecification::TickSizePrice(negative))
         );
+    }
+
+    /// NKD, 5 USD x Nikkei Stock Average, quoted in index points,
+    /// tick 5.00 index points = $25.00. The README example: 5 contracts at 57,975.
+    #[test]
+    fn tick_above_one() {
+        let spec = Specification::new(
+            Price::from_str_unchecked("5"),
+            (Price::from_str_unchecked("25"), Currency::usd()),
+            Quantity::ONE,
+            Quantity::MAX,
+            QtyStep::default(),
+        )
+        .unwrap();
+        assert_eq!(PointValue::from_str_unchecked("5.0"), spec.point_value());
+
+        let cn = spec.currency_notional(QuoteNotional::from_str_unchecked("289875"));
+        assert_eq!(
+            cn,
+            CurrencyNotional::new(1_449_375_000_000_000, Currency::usd().into())
+        );
+
+        let px = Price::from_str_unchecked;
+        assert!(spec.is_price_on_tick(px("57975")));
+        assert!(!spec.is_price_on_tick(px("57976")));
+        assert!(!spec.is_price_on_tick(px("57975.5")));
+        assert_eq!(spec.round_price(px("57977")), Some(px("57975")));
+        assert_eq!(spec.round_price(px("57978")), Some(px("57980")));
+        assert_eq!(
+            spec.round_price(px("57977.5")),
+            Some(px("57980")),
+            "half away from zero"
+        );
+        assert_eq!(spec.round_up_price(px("57976")), Some(px("57980")));
+        assert_eq!(spec.round_down_price(px("57979")), Some(px("57975")));
+        assert_eq!(spec.round_down_price(px("-57976")), Some(px("-57980")));
     }
 
     #[test]
