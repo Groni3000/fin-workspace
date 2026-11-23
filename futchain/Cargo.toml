@@ -6,6 +6,6 @@ description = "Futures contract chain navigation and end-of-trading date rules"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-chrono = "0.4.44"
+jiff = "1.0"
 tradeprim = { path = "../tradeprim" }
 instrid = { path = "../instrid" }

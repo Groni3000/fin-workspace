@@ -1,7 +1,7 @@
 use std::num::NonZeroU8;
 
-use chrono::NaiveDate;
 use instrid::prelude::FuturesContract;
+use jiff::civil::Date;
 
 use super::{DateOffset, EndOfTrading, add_business_days, month_start};
 
@@ -44,8 +44,8 @@ impl LastNthBDayOfPrevMonth {
 }
 
 impl EndOfTrading for LastNthBDayOfPrevMonth {
-    fn calculate(&self, contract: &FuturesContract) -> NaiveDate {
-        let start = month_start(contract.year() as i32, contract.tenor().ordinal() as u32);
+    fn calculate(&self, contract: &FuturesContract) -> Date {
+        let start = month_start(contract);
         let date = add_business_days(start, -(self.n.get() as i32));
         self.offset.apply(date)
     }
@@ -58,6 +58,7 @@ mod tests {
         mic::Mic,
         prelude::{Asset, AssetClass, Tenor},
     };
+    use jiff::civil::date;
     use tradeprim::currency::Currency;
 
     fn gc(year: u16, tenor: Tenor) -> FuturesContract {
@@ -80,7 +81,7 @@ mod tests {
         let rule = LastNthBDayOfPrevMonth::from_u8(1, DateOffset::BusinessDays(-1));
         assert_eq!(
             rule.calculate(&gc(2026, Tenor::February)),
-            NaiveDate::from_ymd_opt(2026, 1, 29).unwrap()
+            date(2026, 1, 29)
         );
     }
 
@@ -89,10 +90,7 @@ mod tests {
         // Apr 2026: month_start = Apr 1 (Wed). -1 BDay = Mar 31 (Tue).
         // -1 BDay defensive offset → Mar 30 (Mon).
         let rule = LastNthBDayOfPrevMonth::from_u8(1, DateOffset::BusinessDays(-1));
-        assert_eq!(
-            rule.calculate(&gc(2026, Tenor::April)),
-            NaiveDate::from_ymd_opt(2026, 3, 30).unwrap()
-        );
+        assert_eq!(rule.calculate(&gc(2026, Tenor::April)), date(2026, 3, 30));
     }
 
     #[test]
@@ -101,10 +99,7 @@ mod tests {
         // Feb 2026 last 3 bdays: Feb 27, 26, 25. So 3rd-from-last = Feb 25 (Wed).
         // -1 BDay defensive → Feb 24 (Tue).
         let rule = LastNthBDayOfPrevMonth::from_u8(3, DateOffset::BusinessDays(-1));
-        assert_eq!(
-            rule.calculate(&gc(2026, Tenor::March)),
-            NaiveDate::from_ymd_opt(2026, 2, 24).unwrap()
-        );
+        assert_eq!(rule.calculate(&gc(2026, Tenor::March)), date(2026, 2, 24));
     }
 
     #[test]
@@ -114,7 +109,7 @@ mod tests {
         let rule = LastNthBDayOfPrevMonth::from_u8(1, DateOffset::BusinessDays(-1));
         assert_eq!(
             rule.calculate(&gc(2026, Tenor::January)),
-            NaiveDate::from_ymd_opt(2025, 12, 30).unwrap()
+            date(2025, 12, 30)
         );
     }
 
@@ -123,9 +118,6 @@ mod tests {
         // Mar 2024 contract → last bday of Feb 2024 (leap year) = Feb 29 (Thu).
         // No offset, sanity check the leap-year boundary.
         let rule = LastNthBDayOfPrevMonth::from_u8(1, DateOffset::BusinessDays(0));
-        assert_eq!(
-            rule.calculate(&gc(2024, Tenor::March)),
-            NaiveDate::from_ymd_opt(2024, 2, 29).unwrap()
-        );
+        assert_eq!(rule.calculate(&gc(2024, Tenor::March)), date(2024, 2, 29));
     }
 }

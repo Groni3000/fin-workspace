@@ -48,7 +48,7 @@ pub struct State {
     /// Contract the feed is currently on. `config.instrument()` is only the chain root.
     traded_instrument: Option<Instrument>,
     /// End of trading for `traded_instrument`, recomputed on every roll.
-    eot_date: Option<NaiveDate>,
+    eot_date: Option<jiff::civil::Date>,
     /// Contracts rolled away from, waiting on their closing fill before `desired` drops them.
     settling: Vec<Instrument>,
     /// Candle aggregator
@@ -68,13 +68,13 @@ impl State {
         self.traded_instrument
     }
 
-    pub fn eot_date(&self) -> Option<NaiveDate> {
+    pub fn eot_date(&self) -> Option<jiff::civil::Date> {
         self.eot_date
     }
 
     pub fn default_cme_energy(
         traded_instrument: Option<Instrument>,
-        eot_date: Option<NaiveDate>,
+        eot_date: Option<jiff::civil::Date>,
     ) -> State {
         State {
             fired_today: false,
@@ -281,6 +281,8 @@ impl<E: EndOfTrading> Strategy<E> {
     /// If there is still an open position - we change its desired state to Flat. We have protective
     /// EoT-offset, so this is pretty much guaranteed to be closed.
     fn roll_condition(&mut self, date: NaiveDate) {
+        // The expiry rules give `jiff` dates; this strategy still reads `chrono` ones.
+        let date = jiff::civil::date(date.year() as i16, date.month() as i8, date.day() as i8);
         while self.state.eot_date.is_some_and(|eot| date >= eot) {
             let Some(Instrument::Futures(current)) = self.state.traded_instrument else {
                 self.state.eot_date = None;

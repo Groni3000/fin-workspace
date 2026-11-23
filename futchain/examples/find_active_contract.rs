@@ -7,7 +7,6 @@
 //!
 //! Run with: `cargo run --example find_active_contract`
 
-use chrono::{NaiveDate, Weekday};
 use futchain::{
     EndOfTrading, FutChain, ListedTenors,
     eot::{DateOffset, NthInMonth, NthWeekdayOfCurrentMonth},
@@ -16,6 +15,7 @@ use instrid::{
     mic::Mic,
     prelude::{Asset, AssetClass, FuturesContract, Tenor},
 };
+use jiff::civil::{Weekday, date};
 use tradeprim::currency::Currency;
 
 fn main() {
@@ -33,7 +33,7 @@ fn main() {
 
     let rule = NthWeekdayOfCurrentMonth {
         n: NthInMonth::Third,
-        weekday: Weekday::Fri,
+        weekday: Weekday::Friday,
         offset: DateOffset::BusinessDays(-1),
     };
 
@@ -49,7 +49,7 @@ fn main() {
         None,
     );
 
-    let today = NaiveDate::from_ymd_opt(2026, 5, 13).unwrap();
+    let today = date(2026, 5, 13);
     let mut chain = FutChain::new(start, &listing).unwrap();
 
     println!("Today: {today}");

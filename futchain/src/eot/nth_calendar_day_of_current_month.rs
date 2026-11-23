@@ -1,5 +1,5 @@
-use chrono::{Duration, NaiveDate};
 use instrid::prelude::FuturesContract;
+use jiff::{ToSpan, civil::Date};
 
 use super::{DateOffset, EndOfTrading, add_business_days, is_weekend, month_start};
 
@@ -26,9 +26,9 @@ pub struct NthCalendarDayOfCurrentMonth {
 }
 
 impl EndOfTrading for NthCalendarDayOfCurrentMonth {
-    fn calculate(&self, contract: &FuturesContract) -> NaiveDate {
-        let start = month_start(contract.year() as i32, contract.tenor().ordinal() as u32);
-        let mut date = start + Duration::days((self.n as i64) - 1);
+    fn calculate(&self, contract: &FuturesContract) -> Date {
+        let start = month_start(contract);
+        let mut date = start + (i32::from(self.n) - 1).days();
         if is_weekend(date) {
             date = match self.mode {
                 NonBusinessDayAdjust::Preceding => add_business_days(date, -1),
@@ -46,6 +46,7 @@ mod tests {
         mic::Mic,
         prelude::{Asset, AssetClass, Tenor},
     };
+    use jiff::civil::date;
     use tradeprim::currency::Currency;
 
     /// https://www.eurex.com/ex-en/markets/int/fix/government-bonds/Euro-Bund-Futures-137298
@@ -74,10 +75,7 @@ mod tests {
             mode: NonBusinessDayAdjust::Preceding,
             offset: DateOffset::BusinessDays(0),
         };
-        assert_eq!(
-            rule.calculate(&fgbl(2026, Tenor::March)),
-            NaiveDate::from_ymd_opt(2026, 3, 13).unwrap()
-        );
+        assert_eq!(rule.calculate(&fgbl(2026, Tenor::March)), date(2026, 3, 13));
     }
 
     #[test]
@@ -88,10 +86,7 @@ mod tests {
             mode: NonBusinessDayAdjust::Succeeding,
             offset: DateOffset::BusinessDays(0),
         };
-        assert_eq!(
-            rule.calculate(&fgbl(2026, Tenor::March)),
-            NaiveDate::from_ymd_opt(2026, 3, 16).unwrap()
-        );
+        assert_eq!(rule.calculate(&fgbl(2026, Tenor::March)), date(2026, 3, 16));
     }
 
     #[test]
@@ -102,10 +97,7 @@ mod tests {
             mode: NonBusinessDayAdjust::Preceding,
             offset: DateOffset::BusinessDays(0),
         };
-        assert_eq!(
-            rule.calculate(&fgbl(2026, Tenor::June)),
-            NaiveDate::from_ymd_opt(2026, 6, 15).unwrap()
-        );
+        assert_eq!(rule.calculate(&fgbl(2026, Tenor::June)), date(2026, 6, 15));
     }
 
     #[test]
@@ -116,9 +108,6 @@ mod tests {
             mode: NonBusinessDayAdjust::Preceding,
             offset: DateOffset::BusinessDays(-1),
         };
-        assert_eq!(
-            rule.calculate(&fgbl(2026, Tenor::March)),
-            NaiveDate::from_ymd_opt(2026, 3, 12).unwrap()
-        );
+        assert_eq!(rule.calculate(&fgbl(2026, Tenor::March)), date(2026, 3, 12));
     }
 }

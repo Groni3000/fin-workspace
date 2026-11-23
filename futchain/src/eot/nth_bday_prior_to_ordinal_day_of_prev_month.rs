@@ -1,9 +1,9 @@
 use std::num::NonZeroU8;
 
-use chrono::NaiveDate;
 use instrid::prelude::FuturesContract;
+use jiff::{ToSpan, civil::Date};
 
-use super::{DateOffset, EndOfTrading, add_business_days, is_weekend};
+use super::{DateOffset, EndOfTrading, add_business_days, is_weekend, month_start};
 
 /// "N business days prior to the Mth calendar day of the month *preceding*
 /// the contract month, then offset."
@@ -37,15 +37,11 @@ impl NthBDayPriorToOrdinalDayOfPrevMonth {
 }
 
 impl EndOfTrading for NthBDayPriorToOrdinalDayOfPrevMonth {
-    fn calculate(&self, contract: &FuturesContract) -> NaiveDate {
-        let year = contract.year() as i32;
-        let month = contract.tenor().ordinal() as u32;
-        let (anchor_year, anchor_month) = if month == 1 {
-            (year - 1, 12)
-        } else {
-            (year, month - 1)
-        };
-        let anchor = NaiveDate::from_ymd_opt(anchor_year, anchor_month, self.ordinal_day as u32)
+    fn calculate(&self, contract: &FuturesContract) -> Date {
+        let prev_month = month_start(contract) - 1.month();
+        let anchor = i8::try_from(self.ordinal_day)
+            .ok()
+            .and_then(|day| prev_month.with().day(day).build().ok())
             .expect("invariant: ordinal_day must be valid for the prior month");
         let mut walk = -(self.n.get() as i32);
         if is_weekend(anchor) {
@@ -62,6 +58,7 @@ mod tests {
         mic::Mic,
         prelude::{Asset, AssetClass, Tenor},
     };
+    use jiff::civil::date;
     use tradeprim::currency::Currency;
 
     // https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.contractSpecs.html
@@ -83,10 +80,7 @@ mod tests {
     fn apr_2026_anchors_on_mar_25() {
         // Apr 2026 contract → anchor Mar 25 2026 (Wed). -3 BDays = Fri Mar 20.
         let rule = NthBDayPriorToOrdinalDayOfPrevMonth::from_u8(25, 3, DateOffset::BusinessDays(0));
-        assert_eq!(
-            rule.calculate(&cl(2026, Tenor::April)),
-            NaiveDate::from_ymd_opt(2026, 3, 20).unwrap()
-        );
+        assert_eq!(rule.calculate(&cl(2026, Tenor::April)), date(2026, 3, 20));
     }
 
     #[test]
@@ -96,7 +90,7 @@ mod tests {
         let rule = NthBDayPriorToOrdinalDayOfPrevMonth::from_u8(25, 3, DateOffset::BusinessDays(0));
         assert_eq!(
             rule.calculate(&cl(2026, Tenor::January)),
-            NaiveDate::from_ymd_opt(2025, 12, 22).unwrap()
+            date(2025, 12, 22)
         );
     }
 
@@ -105,9 +99,6 @@ mod tests {
         // May 2026 contract → anchor Apr 25 2026 (Sat) → walk = -4.
         // From Sat: Fri 24, Thu 23, Wed 22, Tue Apr 21.
         let rule = NthBDayPriorToOrdinalDayOfPrevMonth::from_u8(25, 3, DateOffset::BusinessDays(0));
-        assert_eq!(
-            rule.calculate(&cl(2026, Tenor::May)),
-            NaiveDate::from_ymd_opt(2026, 4, 21).unwrap()
-        );
+        assert_eq!(rule.calculate(&cl(2026, Tenor::May)), date(2026, 4, 21));
     }
 }

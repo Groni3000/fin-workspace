@@ -10,7 +10,6 @@
 //!
 //! Run with: `cargo run --example historical_roll_schedule`
 
-use chrono::NaiveDate;
 use futchain::{
     EndOfTrading, FutChain, ListedTenors,
     eot::{DateOffset, LastNthBDayOfPrevMonth},
@@ -19,6 +18,7 @@ use instrid::{
     mic::Mic,
     prelude::{Asset, AssetClass, FuturesContract, Tenor},
 };
+use jiff::civil::date;
 use tradeprim::currency::Currency;
 
 fn main() {
@@ -35,8 +35,8 @@ fn main() {
     // FND = last BDay of prev month, then -1 BDay defensive.
     let rule = LastNthBDayOfPrevMonth::from_u8(1, DateOffset::BusinessDays(-1));
 
-    let backtest_start = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
-    let backtest_end = NaiveDate::from_ymd_opt(2026, 6, 1).unwrap();
+    let backtest_start = date(2024, 1, 1);
+    let backtest_end = date(2026, 6, 1);
 
     // Begin at a contract whose EOT is on/after backtest_start. Easy way:
     // start somewhere safely in the past and roll forward to the first

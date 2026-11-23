@@ -25,7 +25,7 @@ them together in a `while` loop.
 ## Quick start
 
 ```rust
-use chrono::{NaiveDate, Weekday};
+use jiff::civil::{Weekday, date};
 use futchain::{
     EndOfTrading, FutChain, ListedTenors,
     eot::{DateOffset, NthInMonth, NthWeekdayOfCurrentMonth},
@@ -37,7 +37,7 @@ use instrid::prelude::{Asset, AssetClass, FuturesContract, Mic, Tenor};
 let listing = ListedTenors::quarterly();
 let rule = NthWeekdayOfCurrentMonth {
     n: NthInMonth::Third,
-    weekday: Weekday::Fri,
+    weekday: Weekday::Friday,
     offset: DateOffset::BusinessDays(-1),
 };
 
@@ -49,7 +49,7 @@ let start = FuturesContract::new(
     2024, Tenor::December, None,
 ).unwrap();
 
-let today = NaiveDate::from_ymd_opt(2026, 5, 13).unwrap();
+let today = date(2026, 5, 13);
 let mut chain = FutChain::new(start, &listing).unwrap();
 
 while rule.calculate(chain.contract()) < today {
@@ -90,7 +90,7 @@ cursor is a `FuturesContract`; navigation moves it through the cycle.
 A trait with a single method:
 
 ```ignore
-fn calculate(&self, contract: &FuturesContract) -> NaiveDate;
+fn calculate(&self, contract: &FuturesContract) -> Date;
 ```
 
 Implementors hold the _rule parameters_ (e.g. "third Friday, offset −1 BDay");
@@ -156,7 +156,7 @@ let _ = LastNthBDayOfPrevMonth::from_u8(3, DateOffset::BusinessDays(-1));
 In scope:
 
 - Chain navigation under a fixed listing cycle.
-- Stateless EOT rules that take a `FuturesContract` and return a `NaiveDate`.
+- Stateless EOT rules that take a `FuturesContract` and return a `jiff::civil::Date`.
 - Weekends-only business-day arithmetic.
 
 Out of scope (intentionally):

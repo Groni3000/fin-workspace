@@ -1,7 +1,7 @@
 use std::num::NonZeroU8;
 
-use chrono::NaiveDate;
 use instrid::prelude::FuturesContract;
+use jiff::civil::Date;
 
 use super::{DateOffset, EndOfTrading, add_business_days, is_weekend, month_start};
 
@@ -34,8 +34,8 @@ impl NthBDayOfCurrentMonth {
 }
 
 impl EndOfTrading for NthBDayOfCurrentMonth {
-    fn calculate(&self, contract: &FuturesContract) -> NaiveDate {
-        let start = month_start(contract.year() as i32, contract.tenor().ordinal() as u32);
+    fn calculate(&self, contract: &FuturesContract) -> Date {
+        let start = month_start(contract);
         let walk = if is_weekend(start) {
             self.n.get() as i32
         } else {
@@ -52,6 +52,7 @@ mod tests {
         mic::Mic,
         prelude::{Asset, AssetClass, Tenor},
     };
+    use jiff::civil::date;
     use tradeprim::currency::Currency;
 
     /// HE@XCME - Lean Hogs. LTD is the 10th business day of the contract
@@ -72,39 +73,27 @@ mod tests {
     fn first_bday_jul_2026_starts_on_wednesday() {
         // Jul 1 2026 = Wed (BDay). n=1 → walk 0 → Jul 1.
         let rule = NthBDayOfCurrentMonth::from_u8(1, DateOffset::BusinessDays(0));
-        assert_eq!(
-            rule.calculate(&he(2026, Tenor::July)),
-            NaiveDate::from_ymd_opt(2026, 7, 1).unwrap()
-        );
+        assert_eq!(rule.calculate(&he(2026, Tenor::July)), date(2026, 7, 1));
     }
 
     #[test]
     fn first_bday_feb_2026_starts_on_sunday() {
         // Feb 1 2026 = Sun. n = 1 -> walk 1 → Mon Feb 2.
         let rule = NthBDayOfCurrentMonth::from_u8(1, DateOffset::BusinessDays(0));
-        assert_eq!(
-            rule.calculate(&he(2026, Tenor::February)),
-            NaiveDate::from_ymd_opt(2026, 2, 2).unwrap()
-        );
+        assert_eq!(rule.calculate(&he(2026, Tenor::February)), date(2026, 2, 2));
     }
 
     #[test]
     fn third_bday_feb_2026() {
         // Feb 2026: BDays start Mon Feb 2, Tue 3, Wed Feb 4 = 3rd.
         let rule = NthBDayOfCurrentMonth::from_u8(3, DateOffset::BusinessDays(0));
-        assert_eq!(
-            rule.calculate(&he(2026, Tenor::February)),
-            NaiveDate::from_ymd_opt(2026, 2, 4).unwrap()
-        );
+        assert_eq!(rule.calculate(&he(2026, Tenor::February)), date(2026, 2, 4));
     }
 
     #[test]
     fn second_bday_jul_2026() {
         // Jul 1 2026 = Wed (BDay). n=2 → walk 1 → Thu Jul 2.
         let rule = NthBDayOfCurrentMonth::from_u8(2, DateOffset::BusinessDays(0));
-        assert_eq!(
-            rule.calculate(&he(2026, Tenor::July)),
-            NaiveDate::from_ymd_opt(2026, 7, 2).unwrap()
-        );
+        assert_eq!(rule.calculate(&he(2026, Tenor::July)), date(2026, 7, 2));
     }
 }

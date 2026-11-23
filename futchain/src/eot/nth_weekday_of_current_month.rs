@@ -1,7 +1,7 @@
-use chrono::{NaiveDate, Weekday};
 use instrid::prelude::FuturesContract;
+use jiff::civil::{Date, Weekday};
 
-use super::{DateOffset, EndOfTrading, NthInMonth, nth_weekday_of_month};
+use super::{DateOffset, EndOfTrading, NthInMonth, month_start, nth_weekday_of_month};
 
 /// "Nth weekday of the contract month, then offset."
 ///
@@ -22,13 +22,8 @@ pub struct NthWeekdayOfCurrentMonth {
 }
 
 impl EndOfTrading for NthWeekdayOfCurrentMonth {
-    fn calculate(&self, contract: &FuturesContract) -> NaiveDate {
-        let date = nth_weekday_of_month(
-            contract.year() as i32,
-            contract.tenor().ordinal() as u32,
-            self.weekday,
-            self.n,
-        );
+    fn calculate(&self, contract: &FuturesContract) -> Date {
+        let date = nth_weekday_of_month(month_start(contract), self.weekday, self.n);
         self.offset.apply(date)
     }
 }
@@ -40,6 +35,7 @@ mod tests {
         mic::Mic,
         prelude::{Asset, AssetClass, Tenor},
     };
+    use jiff::civil::date;
     use tradeprim::currency::Currency;
 
     fn es(year: u16, tenor: Tenor) -> FuturesContract {
@@ -61,12 +57,12 @@ mod tests {
         // Dec 2025: 3rd Friday = Dec 19 (Fri). -1 BDay = Dec 18 (Thu).
         let rule = NthWeekdayOfCurrentMonth {
             n: NthInMonth::Third,
-            weekday: Weekday::Fri,
+            weekday: Weekday::Friday,
             offset: DateOffset::BusinessDays(-1),
         };
         assert_eq!(
             rule.calculate(&es(2025, Tenor::December)),
-            NaiveDate::from_ymd_opt(2025, 12, 18).unwrap()
+            date(2025, 12, 18)
         );
     }
 
@@ -75,13 +71,10 @@ mod tests {
         // Mar 2026: 3rd Friday = Mar 20 (Fri). -1 BDay = Mar 19 (Thu).
         let rule = NthWeekdayOfCurrentMonth {
             n: NthInMonth::Third,
-            weekday: Weekday::Fri,
+            weekday: Weekday::Friday,
             offset: DateOffset::BusinessDays(-1),
         };
-        assert_eq!(
-            rule.calculate(&es(2026, Tenor::March)),
-            NaiveDate::from_ymd_opt(2026, 3, 19).unwrap()
-        );
+        assert_eq!(rule.calculate(&es(2026, Tenor::March)), date(2026, 3, 19));
     }
 
     #[test]
@@ -90,12 +83,12 @@ mod tests {
         // -1 BDay = Dec 25 (Thu) — we don't model the Christmas holiday.
         let rule = NthWeekdayOfCurrentMonth {
             n: NthInMonth::Last,
-            weekday: Weekday::Fri,
+            weekday: Weekday::Friday,
             offset: DateOffset::BusinessDays(-1),
         };
         assert_eq!(
             rule.calculate(&es(2025, Tenor::December)),
-            NaiveDate::from_ymd_opt(2025, 12, 25).unwrap()
+            date(2025, 12, 25)
         );
     }
 
@@ -105,13 +98,10 @@ mod tests {
         // Mar 2026: 3rd Wednesday = Mar 18 (Wed). -3 BDay = Mar 13 (Fri).
         let rule = NthWeekdayOfCurrentMonth {
             n: NthInMonth::Third,
-            weekday: Weekday::Wed,
+            weekday: Weekday::Wednesday,
             offset: DateOffset::BusinessDays(-3),
         };
-        assert_eq!(
-            rule.calculate(&es(2026, Tenor::March)),
-            NaiveDate::from_ymd_opt(2026, 3, 13).unwrap()
-        );
+        assert_eq!(rule.calculate(&es(2026, Tenor::March)), date(2026, 3, 13));
     }
 
     #[test]
@@ -119,12 +109,12 @@ mod tests {
         // Sanity: zero offset returns the raw nth-weekday.
         let rule = NthWeekdayOfCurrentMonth {
             n: NthInMonth::Third,
-            weekday: Weekday::Fri,
+            weekday: Weekday::Friday,
             offset: DateOffset::BusinessDays(0),
         };
         assert_eq!(
             rule.calculate(&es(2025, Tenor::December)),
-            NaiveDate::from_ymd_opt(2025, 12, 19).unwrap()
+            date(2025, 12, 19)
         );
     }
 }
