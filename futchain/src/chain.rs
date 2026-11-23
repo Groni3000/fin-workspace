@@ -1,4 +1,4 @@
-use instrid::prelude::FuturesContract;
+use instrid::{instruments::MAX_YEAR, prelude::FuturesContract};
 
 use crate::listing::ListedTenors;
 
@@ -11,6 +11,8 @@ pub struct FutChain<'a> {
 #[derive(Debug, PartialEq)]
 pub enum FutChainError {
     ContractTenorNotListed,
+    /// The contract's year is past [`MAX_YEAR`]; only a `new_unchecked` contract can be.
+    YearPastMax,
 }
 
 impl<'a> FutChain<'a> {
@@ -20,6 +22,9 @@ impl<'a> FutChain<'a> {
     ) -> Result<Self, FutChainError> {
         if !listing.contains(contract.tenor()) {
             return Err(FutChainError::ContractTenorNotListed);
+        }
+        if contract.year() > MAX_YEAR {
+            return Err(FutChainError::YearPastMax);
         }
 
         Ok(Self {
@@ -47,13 +52,10 @@ impl<'a> FutChain<'a> {
         let next_tenor = listing
             .nth(next_idx)
             .expect("invariant: next tenor is in listing");
-        self.cursor = self.cursor.with_year_tenor(
-            self.cursor
-                .year()
-                .checked_add(additional_year)
-                .expect("year overflow on advance"),
-            next_tenor,
-        );
+        self.cursor = self
+            .cursor
+            .with_year_tenor(self.cursor.year() + additional_year, next_tenor)
+            .expect("no contract after the year 9999");
     }
 
     /// Advance the cursor `n` times. `n == 0` is a no-op.
@@ -81,13 +83,15 @@ impl<'a> FutChain<'a> {
         let next_tenor = listing
             .nth(next_idx)
             .expect("invariant: next tenor is in listing");
-        self.cursor = self.cursor.with_year_tenor(
-            self.cursor
-                .year()
-                .checked_sub(excess_year)
-                .expect("year underflow on retreat"),
-            next_tenor,
-        );
+        let year = self
+            .cursor
+            .year()
+            .checked_sub(excess_year)
+            .expect("year underflow on retreat");
+        self.cursor = self
+            .cursor
+            .with_year_tenor(year, next_tenor)
+            .expect("an earlier year is in range");
     }
 
     /// Retreat the cursor `n` times. `n == 0` is a no-op.
@@ -196,6 +200,13 @@ mod tests {
     }
 
     #[test]
+    fn new_rejects_contract_past_max_year() {
+        let listing = ListedTenors::quarterly();
+        let err = FutChain::new(es(MAX_YEAR + 1, Tenor::March, None), &listing).unwrap_err();
+        assert_eq!(err, FutChainError::YearPastMax);
+    }
+
+    #[test]
     #[should_panic(expected = "year underflow on retreat")]
     fn retreat_panics_at_year_zero() {
         let listing = ListedTenors::quarterly();
@@ -297,10 +308,10 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "year overflow on advance")]
-    fn advance_panics_at_year_max() {
+    #[should_panic(expected = "no contract after the year 9999")]
+    fn advance_panics_past_max_year() {
         let listing = ListedTenors::quarterly();
-        let mut chain = FutChain::new(es(u16::MAX, Tenor::December, None), &listing).unwrap();
-        chain.advance(); // December year MAX -> March year MAX+1 → overflow
+        let mut chain = FutChain::new(es(MAX_YEAR, Tenor::December, None), &listing).unwrap();
+        chain.advance(); // December 9999 -> March 10000
     }
 }

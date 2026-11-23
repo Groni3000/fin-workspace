@@ -40,7 +40,7 @@ Features:
 
 A `FutChain` cursor walks a `FuturesContract` through a `ListedTenors` cycle
 (quarterly, monthly, or arbitrary). An `EndOfTrading` trait turns
-`(year, tenor)` into a calendar `NaiveDate` via per-product rules
+`(year, tenor)` into a calendar date (`jiff::civil::Date`) via per-product rules
 (*third Friday*, *last business day of prior month*, etc.). Chain and rule
 are independent — glue them together with a `while` loop.
 

@@ -103,7 +103,12 @@ impl Display for Instrument {
     }
 }
 
-/// A struct representing an invalid contract date returned by Instrument constructors
+/// The latest year a contract can have. Common date libraries stop at 9999, so a later contract
+/// date couldn't be worked with anyway.
+pub const MAX_YEAR: u16 = 9999;
+
+/// A struct representing an invalid contract date returned by Instrument constructors: a day
+/// that doesn't exist in its month, or a year past [`MAX_YEAR`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InvalidContractDate {
     pub year: u16,

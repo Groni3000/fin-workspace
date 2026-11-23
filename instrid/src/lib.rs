@@ -54,19 +54,22 @@ pub(crate) const fn days_in_month(year: u16, month: u8) -> u8 {
 #[cfg(test)]
 mod calendar_tests {
     use super::days_in_month;
-    use crate::instruments::InvalidContractDate;
+    use crate::instruments::{InvalidContractDate, MAX_YEAR};
     use crate::prelude::*;
-    use chrono::NaiveDate;
+    use jiff::civil::Date;
     use proptest::prelude::*;
     use tradeprim::currency::Currency;
     use tradeprim::price::Price;
 
-    /// Get last day of the (year, month) using chrono to test against it
-    fn chrono_days_in_month(year: u16, month: u8) -> u8 {
-        (28..=31u32)
-            .rev()
-            .find(|d| NaiveDate::from_ymd_opt(year as i32, month as u32, *d).is_some())
-            .expect("every valid month has 28..=31 days") as u8
+    /// Whether the date exists in the calendar, by jiff.
+    fn is_real_date(year: u16, month: u8, day: u8) -> bool {
+        Date::new(year as i16, month as i8, day as i8).is_ok()
+    }
+
+    /// Days in (year, month) by jiff.
+    fn jiff_days_in_month(year: u16, month: u8) -> u8 {
+        let first = Date::new(year as i16, month as i8, 1).expect("a valid year and month");
+        first.days_in_month() as u8
     }
 
     fn option_with(
@@ -123,48 +126,59 @@ mod calendar_tests {
     }
 
     proptest! {
-        /// Our version to get number of days in (year, month) should follow chrono.
+        /// Our version to get number of days in (year, month) should follow jiff.
         #[test]
-        fn days_in_month_matches_chrono(year in 0u16..=u16::MAX, month in 1u8..=12) {
+        fn days_in_month_matches_jiff(year in 0u16..=MAX_YEAR, month in 1u8..=12) {
             prop_assert_eq!(
                 days_in_month(year, month),
-                chrono_days_in_month(year, month),
+                jiff_days_in_month(year, month),
                 "year={} month={}", year, month
             );
         }
 
         /// `OptionContract::new` must accept exactly the (year, month, day).
-        /// If date does not exist (by chrono), `OptionContract::new` must reject it with `Err`.
+        /// If date does not exist (by jiff), `OptionContract::new` must reject it with `Err`.
         #[test]
         fn option_constructor_accepts_exactly_valid_dates(
-            year in 0u16..=3000, month in 1u8..=12, day in 0u8..=40,
+            year in 0u16..=MAX_YEAR, month in 1u8..=12, day in 0u8..=40,
         ) {
             let tenor = Tenor::try_from(month).expect("1..=12 is a valid tenor");
-            let chrono_some =
-                NaiveDate::from_ymd_opt(year as i32, month as u32, day as u32).is_some();
             prop_assert_eq!(
-                option_with(year, tenor, day).is_ok(), chrono_some,
+                option_with(year, tenor, day).is_ok(), is_real_date(year, month, day),
                 "year={} month={} day={}", year, month, day
             );
         }
 
         /// `FuturesContract::new` must accept exactly the (year, month, day).
-        /// If date does not exist (by chrono), `FuturesContract::new` must reject it with `Err`.
+        /// If date does not exist (by jiff), `FuturesContract::new` must reject it with `Err`.
         #[test]
         fn future_constructor_accepts_exactly_valid_dates(
-            year in 0u16..=3000, month in 1u8..=12, day in 0u8..=40,
+            year in 0u16..=MAX_YEAR, month in 1u8..=12, day in 0u8..=40,
         ) {
             let tenor = Tenor::try_from(month).expect("1..=12 is a valid tenor");
-            let chrono_ok =
-                NaiveDate::from_ymd_opt(year as i32, month as u32, day as u32).is_some();
             prop_assert_eq!(
-                future_with(year, tenor, Some(day)).is_ok(), chrono_ok,
+                future_with(year, tenor, Some(day)).is_ok(), is_real_date(year, month, day),
                 "year={} month={} day={}", year, month, day
             );
             prop_assert!(
                 future_with(year, tenor, None).is_ok(),
                 "day: None must always be accepted"
             );
+        }
+
+        /// Past `MAX_YEAR` nothing is a valid contract date, whatever the day.
+        #[test]
+        fn years_past_max_year_are_rejected(
+            year in (MAX_YEAR + 1)..=u16::MAX, month in 1u8..=12, day in 1u8..=28,
+        ) {
+            let tenor = Tenor::try_from(month).expect("1..=12 is a valid tenor");
+            let rejected = InvalidContractDate { year, tenor, day: None };
+            prop_assert_eq!(future_with(year, tenor, None), Err(rejected));
+            prop_assert!(future_with(year, tenor, Some(day)).is_err());
+            prop_assert!(option_with(year, tenor, day).is_err());
+            let fut = future_with(MAX_YEAR, tenor, None).expect("MAX_YEAR is valid");
+            prop_assert_eq!(fut.with_year(year), Err(rejected));
+            prop_assert_eq!(fut.with_year_tenor(year, tenor), Err(rejected));
         }
 
         /// The rejection must name the date that was rejected, not just fail.
@@ -246,6 +260,14 @@ mod calendar_tests {
             }
         }
 
+        #[test]
+        fn years_up_to_max_year_deserialize_and_later_ones_dont() {
+            assert!(serde_json::from_str::<OptionContract>(&option_json(9999, 12, 31)).is_ok());
+            assert!(serde_json::from_str::<FuturesContract>(&future_json(9999, 12, 31)).is_ok());
+            assert!(serde_json::from_str::<OptionContract>(&option_json(10000, 1, 1)).is_err());
+            assert!(serde_json::from_str::<FuturesContract>(&future_json(10000, 1, 1)).is_err());
+        }
+
         /// The `Instrument` enum should validate date too.
         #[test]
         fn instrument_enum_inherits_validation() {
@@ -260,23 +282,22 @@ mod calendar_tests {
         }
 
         proptest! {
-            /// We already tested that "what chrono accepts - our internal functions accepts".
+            /// We already tested that "what jiff accepts - our internal functions accepts".
             /// So this test just checks that nothing wrong happens during deserialization
             /// via serde generated functions and our manual trait implementation.
             #[test]
             fn deserialize_accepts_exactly_valid_dates(
                 year in 1u16..=3000, month in 1u8..=12, day in 0u8..=40,
             ) {
-                let chrono_some =
-                    NaiveDate::from_ymd_opt(year as i32, month as u32, day as u32).is_some();
+                let real = super::is_real_date(year, month, day);
                 prop_assert_eq!(
                     serde_json::from_str::<OptionContract>(&option_json(year, month, day)).is_ok(),
-                    chrono_some,
+                    real,
                     "option {}-{}-{}", year, month, day
                 );
                 prop_assert_eq!(
                     serde_json::from_str::<FuturesContract>(&future_json(year, month, day)).is_ok(),
-                    chrono_some,
+                    real,
                     "future {}-{}-{}", year, month, day
                 );
             }

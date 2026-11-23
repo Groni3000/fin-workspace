@@ -80,8 +80,9 @@ cursor is a `FuturesContract`; navigation moves it through the cycle.
 - `advance` / `retreat` — single step. Wraps the year automatically.
 - `advance_by(n)` / `retreat_by(n)` — `n` steps. Simple loop today; the API
   permits a one-shot modular replacement if profiling ever asks for it.
-- Year arithmetic is checked: `u16` over/underflow at the chain ends panics
-  with a clear message instead of silently wrapping.
+- Year arithmetic is checked: going past the year 9999 (`instrid`'s
+  `MAX_YEAR`) or below year 0 panics with a clear message instead of
+  silently wrapping.
 - Navigation clears `day`, since the day-of-month of one contract carries no
   information about the next.
 

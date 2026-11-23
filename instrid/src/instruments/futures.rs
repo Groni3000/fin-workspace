@@ -4,7 +4,7 @@ use tradeprim::currency::Currency;
 
 use crate::asset::Asset;
 use crate::days_in_month;
-use crate::instruments::{InvalidContractDate, TradedInstrument};
+use crate::instruments::{InvalidContractDate, MAX_YEAR, TradedInstrument};
 use crate::mic::Mic;
 use crate::tenor::Tenor;
 
@@ -54,7 +54,8 @@ impl serde::Serialize for FuturesContract {
 
 impl FuturesContract {
     /// Create a new futures contract, validating that `(year, tenor, day)` is a
-    /// real calendar date. A `day` of `None` is always accepted.
+    /// real calendar date and `year` is at most [`MAX_YEAR`]. A `day` of `None` is accepted
+    /// for any year up to [`MAX_YEAR`].
     pub const fn new(
         base: Asset,
         price_quotation: Asset,
@@ -64,6 +65,9 @@ impl FuturesContract {
         tenor: Tenor,
         day: Option<u8>,
     ) -> Result<Self, InvalidContractDate> {
+        if year > MAX_YEAR {
+            return Err(InvalidContractDate { year, tenor, day });
+        }
         if let Some(d) = day {
             let n_days = days_in_month(year, tenor.ordinal());
             if d == 0 || d > n_days {
@@ -81,7 +85,7 @@ impl FuturesContract {
             day,
         })
     }
-    /// Date validation is on user.
+    /// Date validation, the year bound included, is on user.
     pub const fn new_unchecked(
         base: Asset,
         price_quotation: Asset,
@@ -102,12 +106,9 @@ impl FuturesContract {
         }
     }
 
-    pub fn with_year(self, year: u16) -> Self {
-        Self {
-            year,
-            day: None,
-            ..self
-        }
+    /// The same contract in `year`, without a day. Fails past [`MAX_YEAR`].
+    pub fn with_year(self, year: u16) -> Result<Self, InvalidContractDate> {
+        self.with_year_tenor(year, self.tenor)
     }
 
     pub fn with_tenor(self, tenor: Tenor) -> Self {
@@ -118,13 +119,21 @@ impl FuturesContract {
         }
     }
 
-    pub fn with_year_tenor(self, year: u16, tenor: Tenor) -> Self {
-        Self {
+    /// The same contract in `year` and `tenor`, without a day. Fails past [`MAX_YEAR`].
+    pub fn with_year_tenor(self, year: u16, tenor: Tenor) -> Result<Self, InvalidContractDate> {
+        if year > MAX_YEAR {
+            return Err(InvalidContractDate {
+                year,
+                tenor,
+                day: None,
+            });
+        }
+        Ok(Self {
             year,
             tenor,
             day: None,
             ..self
-        }
+        })
     }
 
     pub fn tenor(&self) -> Tenor {

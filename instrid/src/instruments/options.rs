@@ -2,7 +2,10 @@ use std::fmt::Display;
 use tradeprim::{currency::Currency, prelude::Price};
 
 use crate::instruments::InvalidContractDate;
-use crate::{asset::Asset, days_in_month, mic::Mic, prelude::TradedInstrument, tenor::Tenor};
+use crate::{
+    asset::Asset, days_in_month, instruments::MAX_YEAR, mic::Mic, prelude::TradedInstrument,
+    tenor::Tenor,
+};
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 // `remote = "Self"` means that serde will generate ser/de functions for this type
@@ -112,7 +115,7 @@ impl Display for ExerciseStyle {
 
 impl OptionContract {
     /// Create a new options contract, validating that `(year, tenor, day)` is a
-    /// real calendar date.
+    /// real calendar date and `year` is at most [`MAX_YEAR`].
     #[allow(clippy::too_many_arguments)]
     pub const fn new(
         base: Asset,
@@ -126,7 +129,7 @@ impl OptionContract {
         style: ExerciseStyle,
         strike: Price,
     ) -> Result<Self, InvalidContractDate> {
-        if day == 0 || day > days_in_month(year, tenor.ordinal()) {
+        if year > MAX_YEAR || day == 0 || day > days_in_month(year, tenor.ordinal()) {
             return Err(InvalidContractDate {
                 year,
                 tenor,
@@ -147,7 +150,7 @@ impl OptionContract {
             strike,
         })
     }
-    /// Date validation is on user.
+    /// Date validation, the year bound included, is on user.
     #[allow(clippy::too_many_arguments)]
     pub const fn new_unchecked(
         base: Asset,

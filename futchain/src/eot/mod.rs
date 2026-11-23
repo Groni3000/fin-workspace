@@ -91,8 +91,10 @@ pub(crate) fn is_weekend(date: Date) -> bool {
 
 /// First day of the contract month.
 pub(crate) fn month_start(contract: &FuturesContract) -> Date {
-    let year = i16::try_from(contract.year()).expect("a contract year fits a date");
-    Date::new(year, contract.tenor().ordinal() as i8, 1).expect("invariant: valid year/month")
+    i16::try_from(contract.year())
+        .ok()
+        .and_then(|year| Date::new(year, contract.tenor().ordinal() as i8, 1).ok())
+        .expect("contract years end at 9999")
 }
 
 /// The nth occurrence of `weekday` in the month of `month`. `Last` is the final one, whether the

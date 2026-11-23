@@ -115,9 +115,9 @@ pub mod untested {
     use mdata::Ohlcv;
     use tradeprim::{price::Price, volume::Volume};
 
-    /// Parse the fixed-width `YYYY-MM-DD HH:MM:SS` field into a naive local
+    /// Parse the fixed-width `YYYY-MM-DD HH:MM:SS` field into a civil (time-zone-less) local
     /// datetime. Unchecked: assumes exactly that 19-byte ASCII layout.
-    pub fn parse_naive_frd_unchecked(s: &str) -> DateTime {
+    pub fn parse_civil_frd_unchecked(s: &str) -> DateTime {
         let b = s.as_bytes();
 
         #[inline(always)]
@@ -156,8 +156,8 @@ pub mod untested {
         let s = unsafe { str::from_utf8_unchecked(bytes) };
         let trimmed = s.trim_end();
 
-        let naive = parse_naive_frd_unchecked(&trimmed[..19]);
-        let ts = tz_cache.to_utc(naive, &EXCHANGE_TZ);
+        let local = parse_civil_frd_unchecked(&trimmed[..19]);
+        let ts = tz_cache.to_utc(local, &EXCHANGE_TZ);
 
         // `,` is ommited
         let mut split = trimmed[20..].split(',');

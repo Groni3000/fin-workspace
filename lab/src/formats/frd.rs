@@ -77,9 +77,11 @@ pub fn parse_line(s: &str) -> Result<Ohlcv, ParseError> {
 }
 
 /// Exchange time to UTC. An ambiguous time (the hour repeated when DST ends) takes the first.
+/// A skipped time (DST starts) is a [`ParseError::TimezoneConversionError`]; a time outside
+/// jiff's range (the very end of year 9999) is a [`ParseError::BadTimestamp`].
 fn to_utc(raw_ts: &str, tz: &TimeZone) -> Result<Timestamp, ParseError> {
     let local =
-        parse_naive(raw_ts).ok_or_else(|| ParseError::BadTimestamp(format!("{:?}", raw_ts)))?;
+        parse_civil(raw_ts).ok_or_else(|| ParseError::BadTimestamp(format!("{:?}", raw_ts)))?;
     let ts = tz.to_ambiguous_timestamp(local);
     let nonexistent = || {
         ParseError::TimezoneConversionError(format!(
@@ -90,14 +92,14 @@ fn to_utc(raw_ts: &str, tz: &TimeZone) -> Result<Timestamp, ParseError> {
     };
     match ts.offset() {
         AmbiguousOffset::Gap { .. } => Err(nonexistent()),
-        AmbiguousOffset::Unambiguous { .. } | AmbiguousOffset::Fold { .. } => {
-            ts.earlier().map_err(|_| nonexistent())
-        }
+        AmbiguousOffset::Unambiguous { .. } | AmbiguousOffset::Fold { .. } => ts
+            .earlier()
+            .map_err(|_| ParseError::BadTimestamp(format!("{:?} is out of range", raw_ts))),
     }
 }
 
 /// `YYYY-MM-DD HH:MM:SS`, checking only the length and that digits are where they should be.
-fn parse_naive(raw_ts: &str) -> Option<DateTime> {
+fn parse_civil(raw_ts: &str) -> Option<DateTime> {
     let bytes = raw_ts.as_bytes();
     if bytes.len() != 19 {
         return None;
@@ -119,4 +121,24 @@ fn parse_naive(raw_ts: &str) -> Option<DateTime> {
     let sec = d2(bytes, 17)?;
 
     DateTime::new(year, month, day, hour, min, sec, 0).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn skipped_time_is_a_timezone_error() {
+        let err = parse_line("2025-03-09 02:30:00,1,1,1,1,1").unwrap_err();
+        assert!(
+            matches!(err, ParseError::TimezoneConversionError(_)),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn time_past_the_supported_range_is_a_bad_timestamp() {
+        let err = parse_line("9999-12-31 23:59:59,1,1,1,1,1").unwrap_err();
+        assert!(matches!(err, ParseError::BadTimestamp(_)), "{err:?}");
+    }
 }
