@@ -36,6 +36,30 @@ impl Ohlcv {
             volume,
         }
     }
+
+    /// Starts a candle for the interval starting at `ts` from its first record.
+    pub fn seed<C: Candle + HasVolume>(ts: DateTime<Utc>, first: &C) -> Self {
+        Self::new(
+            ts,
+            first.open(),
+            first.high(),
+            first.low(),
+            first.close(),
+            first.volume(),
+        )
+    }
+
+    /// Grows the candle by a later record: the highest high, the lowest low, the record's close,
+    /// the volumes added. The open and `ts` stay.
+    ///
+    /// Records must come in time order and belong to this candle's interval. `merge` checks
+    /// neither: deciding which records make a candle is the aggregator's job.
+    pub fn merge<C: Candle + HasVolume>(&mut self, next: &C) {
+        self.high = self.high.max(next.high());
+        self.low = self.low.min(next.low());
+        self.close = next.close();
+        self.volume += next.volume();
+    }
 }
 
 impl HasTimestamp for Ohlcv {
@@ -71,3 +95,6 @@ impl HasVolume for Ohlcv {
         self.volume
     }
 }
+
+#[cfg(test)]
+mod tests;

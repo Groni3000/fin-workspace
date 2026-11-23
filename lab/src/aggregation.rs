@@ -2,92 +2,8 @@ use chrono::{
     DateTime, Datelike, LocalResult, NaiveDate, NaiveTime, TimeDelta, TimeZone, Timelike, Utc,
 };
 use chrono_tz::Tz;
-use tradeprim::{price::Price, volume::Volume};
 
-use mdata::{Candle, HasLastPrice, HasTimestamp, HasVolume};
-
-/// Aggregated OHLCV. `ts` is the bucket start.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Bar {
-    /// Bucket start
-    ts: DateTime<Utc>,
-    open: Price,
-    high: Price,
-    low: Price,
-    close: Price,
-    volume: Volume,
-}
-
-impl Bar {
-    pub fn new(
-        ts: DateTime<Utc>,
-        open: Price,
-        high: Price,
-        low: Price,
-        close: Price,
-        volume: Volume,
-    ) -> Self {
-        Self {
-            ts,
-            open,
-            high,
-            low,
-            close,
-            volume,
-        }
-    }
-
-    fn seed<C: Candle + HasVolume>(ts: DateTime<Utc>, c: &C) -> Self {
-        Self {
-            ts,
-            open: c.open(),
-            high: c.high(),
-            low: c.low(),
-            close: c.close(),
-            volume: c.volume(),
-        }
-    }
-
-    fn merge<C: Candle + HasVolume>(&mut self, c: &C) {
-        self.high = self.high.max(c.high());
-        self.low = self.low.min(c.low());
-        self.close = c.close();
-        self.volume += c.volume();
-    }
-}
-
-impl HasTimestamp for Bar {
-    fn timestamp(&self) -> DateTime<Utc> {
-        self.ts
-    }
-}
-
-impl HasLastPrice for Bar {
-    fn last_price(&self) -> Price {
-        self.close
-    }
-}
-
-impl Candle for Bar {
-    fn open(&self) -> Price {
-        self.open
-    }
-    fn high(&self) -> Price {
-        self.high
-    }
-    fn low(&self) -> Price {
-        self.low
-    }
-    fn close(&self) -> Price {
-        self.close
-    }
-}
-
-impl HasVolume for Bar {
-    fn volume(&self) -> Volume {
-        self.volume
-    }
-}
+use mdata::{Candle, HasTimestamp, HasVolume, Ohlcv};
 
 /// Midnight does not exist in every zone on every date
 /// We add +1h when it doesn't.
@@ -122,7 +38,7 @@ pub struct CandleAggregator {
     interval: i64,
     origin: NaiveTime,
     tz: Tz,
-    candle: Option<Bar>,
+    candle: Option<Ohlcv>,
     /// Cached `[this origin, next origin)` in UTC; avoids a tz lookup per record.
     window: Option<(DateTime<Utc>, DateTime<Utc>)>,
     last_ts: DateTime<Utc>,
@@ -142,12 +58,12 @@ impl CandleAggregator {
         }
     }
 
-    pub fn candle(&self) -> Option<&Bar> {
+    pub fn candle(&self) -> Option<&Ohlcv> {
         self.candle.as_ref()
     }
 
     /// Emit the in-progress bar without waiting for the next bucket.
-    pub fn flush(&mut self) -> Option<Bar> {
+    pub fn flush(&mut self) -> Option<Ohlcv> {
         self.candle.take()
     }
 
@@ -195,7 +111,7 @@ impl CandleAggregator {
     }
 
     /// Updates the aggregator with a new candle, returning the aggregated bar if it completes a bucket.
-    pub fn update<C: Candle + HasVolume>(&mut self, c: &C) -> Option<Bar> {
+    pub fn update<C: Candle + HasVolume>(&mut self, c: &C) -> Option<Ohlcv> {
         debug_assert!(
             c.timestamp() >= self.last_ts,
             "input stream must be ordered"
@@ -203,11 +119,11 @@ impl CandleAggregator {
         self.last_ts = c.timestamp();
         let bucket = self.bucket_start(c.timestamp());
         match &mut self.candle {
-            Some(cur) if cur.ts == bucket => {
+            Some(cur) if cur.timestamp() == bucket => {
                 cur.merge(c);
                 None
             }
-            _ => self.candle.replace(Bar::seed(bucket, c)),
+            _ => self.candle.replace(Ohlcv::seed(bucket, c)),
         }
     }
 
@@ -230,7 +146,7 @@ pub struct SessionAggregator {
     end_time: NaiveTime,
     session_type: SessionType,
     tz: Tz,
-    candle: Option<Bar>,
+    candle: Option<Ohlcv>,
     current_key: Option<NaiveDate>,
     outside_session: u64,
     last_ts: DateTime<Utc>,
@@ -259,7 +175,7 @@ impl SessionAggregator {
         self.session_type
     }
 
-    pub fn candle(&self) -> Option<&Bar> {
+    pub fn candle(&self) -> Option<&Ohlcv> {
         self.candle.as_ref()
     }
 
@@ -273,7 +189,7 @@ impl SessionAggregator {
         self.outside_session
     }
 
-    pub fn flush(&mut self) -> Option<Bar> {
+    pub fn flush(&mut self) -> Option<Ohlcv> {
         self.current_key = None;
         self.candle.take()
     }
@@ -305,7 +221,7 @@ impl SessionAggregator {
         local_to_utc(self.tz, date, self.start_time)
     }
 
-    pub fn update<C: Candle + HasVolume>(&mut self, c: &C) -> Option<Bar> {
+    pub fn update<C: Candle + HasVolume>(&mut self, c: &C) -> Option<Ohlcv> {
         debug_assert!(
             c.timestamp() >= self.last_ts,
             "input stream must be ordered"
@@ -327,7 +243,7 @@ impl SessionAggregator {
             }
             _ => {
                 self.current_key = Some(key);
-                self.candle.replace(Bar::seed(self.session_open(key), c))
+                self.candle.replace(Ohlcv::seed(self.session_open(key), c))
             }
         }
     }
@@ -338,7 +254,7 @@ impl SessionAggregator {
 #[derive(Debug)]
 pub struct WeekAggregator {
     tz: Tz,
-    candle: Option<Bar>,
+    candle: Option<Ohlcv>,
     current_week_start: Option<NaiveDate>,
     last_ts: DateTime<Utc>,
 }
@@ -353,7 +269,7 @@ impl WeekAggregator {
         }
     }
 
-    pub fn candle(&self) -> Option<&Bar> {
+    pub fn candle(&self) -> Option<&Ohlcv> {
         self.candle.as_ref()
     }
 
@@ -361,7 +277,7 @@ impl WeekAggregator {
         self.current_week_start
     }
 
-    pub fn flush(&mut self) -> Option<Bar> {
+    pub fn flush(&mut self) -> Option<Ohlcv> {
         self.current_week_start = None;
         self.candle.take()
     }
@@ -373,7 +289,7 @@ impl WeekAggregator {
         d - TimeDelta::days(back as i64)
     }
 
-    pub fn update<C: Candle + HasVolume>(&mut self, daily: &C) -> Option<Bar> {
+    pub fn update<C: Candle + HasVolume>(&mut self, daily: &C) -> Option<Ohlcv> {
         debug_assert!(
             daily.timestamp() >= self.last_ts,
             "input stream must be ordered"
@@ -391,7 +307,7 @@ impl WeekAggregator {
             }
             _ => {
                 self.current_week_start = Some(week_start);
-                self.candle.replace(Bar::seed(daily.timestamp(), daily))
+                self.candle.replace(Ohlcv::seed(daily.timestamp(), daily))
             }
         }
     }
@@ -401,13 +317,14 @@ impl WeekAggregator {
 mod tests {
     use super::*;
     use chrono_tz::US::Eastern;
+    use tradeprim::{price::Price, volume::Volume};
 
     fn p(s: &str) -> Price {
         Price::from_str_unchecked(s)
     }
 
     /// A bar at `local` on `date` in Eastern, with all four prices equal.
-    fn at(date: (i32, u32, u32), time: (u32, u32, u32), price: &str, volume: u64) -> Bar {
+    fn at(date: (i32, u32, u32), time: (u32, u32, u32), price: &str, volume: u64) -> Ohlcv {
         let naive = NaiveDate::from_ymd_opt(date.0, date.1, date.2)
             .unwrap()
             .and_hms_opt(time.0, time.1, time.2)
@@ -421,8 +338,15 @@ mod tests {
         ohlc(ts, price, price, price, price, volume)
     }
 
-    fn ohlc(ts: DateTime<Utc>, open: &str, high: &str, low: &str, close: &str, volume: u64) -> Bar {
-        Bar::new(
+    fn ohlc(
+        ts: DateTime<Utc>,
+        open: &str,
+        high: &str,
+        low: &str,
+        close: &str,
+        volume: u64,
+    ) -> Ohlcv {
+        Ohlcv::new(
             ts,
             p(open),
             p(high),
@@ -742,14 +666,6 @@ mod tests {
             let flushed = agg.flush().expect("in-progress bar");
             assert_eq!(flushed.volume(), Volume::from_units(3));
             assert!(agg.flush().is_none());
-        }
-
-        #[test]
-        fn bar_is_a_candle() {
-            let bar = ohlc(utc((2025, 6, 10), (14, 0, 0)), "1", "2", "0.5", "1.5", 9);
-
-            assert_eq!(bar.last_price(), p("1.5"));
-            assert_eq!(bar.timestamp(), utc((2025, 6, 10), (14, 0, 0)));
         }
 
         #[test]

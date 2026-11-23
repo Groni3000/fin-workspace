@@ -25,6 +25,8 @@ iterator.
 and `HasVolume`, for examples, tests and other hand-written data. It checks nothing (a `low`
 above the `high` is stored as given). For a real data source, write your own record type and
 implement the traits: what to check when a record is built is up to that type.
+`Ohlcv::seed` and `Ohlcv::merge` build a longer candle out of shorter records, for
+aggregators.
 
 Most formats name the instrument once (in the file name or the topic), not on
 every row. `Tagged<R>` pairs a record with its instrument, which makes it
