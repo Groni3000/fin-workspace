@@ -1,15 +1,15 @@
-use crate::SMA;
+use crate::sma;
 use std::cmp::Ordering;
 
 /// Parameters for configuring a Relative Strength Index (RSI) indicator.
 #[derive(Debug, Clone, Copy)]
 pub struct Parameters {
-    sma_parameters: SMA::Parameters,
+    sma_parameters: sma::Parameters,
 }
 
 impl Parameters {
     /// Creates a new Parameters instance.
-    pub fn new(sma_parameters: SMA::Parameters) -> Self {
+    pub fn new(sma_parameters: sma::Parameters) -> Self {
         Parameters { sma_parameters }
     }
 }
@@ -18,8 +18,8 @@ impl Parameters {
 pub struct Indicator {
     parameters: Parameters,
     last_price: Option<f64>,
-    rolling_gain: SMA::Indicator,
-    rolling_loss: SMA::Indicator,
+    rolling_gain: sma::Indicator,
+    rolling_loss: sma::Indicator,
 }
 
 impl Indicator {
@@ -27,8 +27,8 @@ impl Indicator {
         Indicator {
             parameters,
             last_price: None,
-            rolling_gain: SMA::Indicator::new(parameters.sma_parameters),
-            rolling_loss: SMA::Indicator::new(parameters.sma_parameters),
+            rolling_gain: sma::Indicator::new(parameters.sma_parameters),
+            rolling_loss: sma::Indicator::new(parameters.sma_parameters),
         }
     }
 
