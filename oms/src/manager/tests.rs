@@ -836,20 +836,12 @@ mod reconcile {
         );
     }
 
-    /// Venue refuses the cancel: "too late". The order reached a terminal state first.
+    /// The venue refuses the cancel as too late: the order filled first, and the refusal reaches
+    /// us before the fill.
     ///
-    /// Mainly occures when we send an order and then immediately cancel it, but venue has already filled
-    /// it before the cancel arrives.
-    ///
-    /// Expected idea: even when we get `CancelResponse(id, false)`, we keep it in pending cancels assuming
-    /// that the only way it can happen - an order is filled.
-    ///
-    /// Why we assume this? Well... The only way to build an order - is to use OrderBuilder. Order does not
-    /// expose OrderId and that id is immutable. We cut off the possibility of a custom OrderId being used.
-    /// Therfore we don't expect any type of Venue response such as `OrderIsNotFound` or something like this.
-    ///
-    /// Yet... It's possible to send order, send cancel and get order is not found when sending order failed/took longer to deliver...
-    /// TODO: I need to think about this...
+    /// Expected: the refused cancel is retried while the order is live. The fill then ends the
+    /// order as `Filled`, and because the strategy still wants to be flat, the OMS sells the fill
+    /// back at market.
     #[test]
     fn cancel_refused_because_the_order_was_already_filling() {
         let (mut oms, mut portfolio, mut sink) = setup();
@@ -886,40 +878,133 @@ mod reconcile {
         assert_matches!(sink.sent[1], Request::CancelOrder(instr, id) if instrument == instr && id == id_lmt);
         check_oms_state(&oms, 0, 1, 1);
 
-        // 4. Too late: the order had already filled when the venue read the request
+        // 4. Refused. The order is still on our books, so the next reconcile asks again, once.
         oms.on_exec(&ExecEvent::CancelResponse(id_lmt, false), &mut portfolio);
-        // a `false` is terminal, never retried, however many events go by
+        check_oms_state(&oms, 0, 1, 0);
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
         oms.reconcile(&desired, &portfolio, &rms, &mut sink);
-        assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
-        // the order is still on our books: only the fill can resolve it
+        assert_eq!(sink.sent.len(), 3, "{:#?}", sink.sent);
+        assert_matches!(sink.sent[2], Request::CancelOrder(instr, id) if instrument == instr && id == id_lmt);
         check_oms_state(&oms, 0, 1, 1);
 
-        // 5. The fill the venue was talking about arrives
+        // 5. The fill arrives. The strategy still wants to be flat: sell 2 at market.
         let fill = build_fill(&lmt.into_working(), q, px("101"));
         oms.on_exec(&ExecEvent::Fill(fill), &mut portfolio);
-        desired
-            .get_mut(&instrument)
-            .expect("should have instrument")
-            .add_desired_position(fill.as_position());
-        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
-        assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
-        // the terminating fill drains `pending_cancels` too
         check_oms_state(&oms, 0, 0, 0);
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 4, "{:#?}", sink.sent);
+        let mkt = match &sink.sent[3] {
+            Request::SendOrder(order) => *order,
+            other => panic!("expected the market sell, got {other:?}"),
+        };
+        assert!(
+            part_eq(&mkt, &build_mkt(instrument, q, Side::Sell)),
+            "{mkt:#?}"
+        );
+        check_oms_state(&oms, 1, 0, 0);
 
-        assert_eq!(portfolio.fills().len(), 1, "{:#?}", portfolio);
-        assert_eq!(portfolio.orders().len(), 1, "{:#?}", portfolio);
-        let filled = &portfolio.orders()[*portfolio
-            .orders_idx()
-            .get(&id_lmt)
-            .expect("filled order should be indexed")];
-        // the cancel lost the race: the order is Filled, not Cancel
+        // 6. The retried cancel is refused too: nothing left to cancel, nothing changes
+        oms.on_exec(&ExecEvent::CancelResponse(id_lmt, false), &mut portfolio);
+        check_oms_state(&oms, 1, 0, 0);
+
+        // 7. The market sell is acked and filled: flat again, nothing more to send
+        oms.on_exec(&ExecEvent::Ack(mkt.order_id()), &mut portfolio);
+        let sell = build_fill(&mkt.into_working(), q, px("100"));
+        oms.on_exec(&ExecEvent::Fill(sell), &mut portfolio);
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 4, "{:#?}", sink.sent);
+        check_oms_state(&oms, 0, 0, 0);
         assert_eq!(
-            filled.state().reason(),
-            TerminationReason::Filled,
+            portfolio.position(&instrument),
+            &Position::Flat,
             "{:#?}",
             portfolio
         );
-        assert_eq!(filled.state().leaves(), Quantity::ZERO, "{:#?}", portfolio);
+
+        assert_eq!(portfolio.fills().len(), 2, "{:#?}", portfolio);
+        assert_eq!(portfolio.orders().len(), 2, "{:#?}", portfolio);
+        for id in [id_lmt, mkt.order_id()] {
+            let order = &portfolio.orders()[*portfolio
+                .orders_idx()
+                .get(&id)
+                .expect("finished order should be indexed")];
+            // the cancel lost the race: the limit order is Filled, not Cancel
+            assert_eq!(
+                order.state().reason(),
+                TerminationReason::Filled,
+                "{:#?}",
+                portfolio
+            );
+            assert_eq!(order.state().leaves(), Quantity::ZERO, "{:#?}", portfolio);
+        }
+    }
+
+    /// The cancel overtakes the order: the venue refuses it because it doesn't know the order yet.
+    ///
+    /// Expected: the refused cancel is retried, and the retry cancels the order once it's acked.
+    #[test]
+    fn cancel_refused_because_the_venue_did_not_have_the_order_yet() {
+        let (mut oms, mut portfolio, mut sink) = setup();
+        let instrument = spy();
+        let rms = NaiveRms;
+        let mut desired = HashMap::from_iter([(instrument, Desired::new())]);
+
+        let q = nz_qty("2");
+        let lmt = build_lmt(instrument, q, px("101"), Side::Buy);
+        let id_lmt = lmt.order_id();
+        desired
+            .get_mut(&instrument)
+            .expect("should have instrument")
+            .set_desired_orders(vec![lmt]);
+
+        // 1. Send
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 1, "{:#?}", sink.sent);
+        check_oms_state(&oms, 1, 0, 0);
+
+        // 2. `Strategy` drops the order before the ack
+        desired
+            .get_mut(&instrument)
+            .expect("should have instrument")
+            .remove_order(id_lmt);
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 2, "{:#?}", sink.sent);
+        assert_matches!(sink.sent[1], Request::CancelOrder(instr, id) if instrument == instr && id == id_lmt);
+        check_oms_state(&oms, 1, 0, 1);
+
+        // 3. Refused: the venue hasn't seen the order yet. The next reconcile asks again.
+        oms.on_exec(&ExecEvent::CancelResponse(id_lmt, false), &mut portfolio);
+        check_oms_state(&oms, 1, 0, 0);
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 3, "{:#?}", sink.sent);
+        assert_matches!(sink.sent[2], Request::CancelOrder(instr, id) if instrument == instr && id == id_lmt);
+        check_oms_state(&oms, 1, 0, 1);
+
+        // 4. The order reaches the venue, then the retried cancel does
+        oms.on_exec(&ExecEvent::Ack(id_lmt), &mut portfolio);
+        check_oms_state(&oms, 0, 1, 1);
+        oms.on_exec(&ExecEvent::CancelResponse(id_lmt, true), &mut portfolio);
+        oms.reconcile(&desired, &portfolio, &rms, &mut sink);
+        assert_eq!(sink.sent.len(), 3, "{:#?}", sink.sent);
+        check_oms_state(&oms, 0, 0, 0);
+
+        assert!(portfolio.fills().is_empty(), "{:#?}", portfolio);
+        assert_eq!(
+            portfolio.position(&instrument),
+            &Position::Flat,
+            "{:#?}",
+            portfolio
+        );
+        let cancelled = &portfolio.orders()[*portfolio
+            .orders_idx()
+            .get(&id_lmt)
+            .expect("cancelled order should be indexed")];
+        assert_eq!(
+            cancelled.state().reason(),
+            TerminationReason::Cancel,
+            "{:#?}",
+            portfolio
+        );
+        assert_eq!(cancelled.state().leaves(), q.qty(), "{:#?}", portfolio);
     }
 }

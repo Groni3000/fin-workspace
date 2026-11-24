@@ -320,7 +320,11 @@ impl Oms {
         };
 
         if !success {
-            tracing::warn!(target: EXEC_TARGET, id=?id, succ=?success, "cancel response failed");
+            // Forget the cancel: the next reconcile sends another one if the strategy
+            // still doesn't want the order.
+            // If it was too late, the order's fill clears it.
+            self.pending_cancels.remove(id);
+            tracing::warn!(target: EXEC_TARGET, id=?id, "cancel refused, retrying while the order is live");
             return;
         }
 
