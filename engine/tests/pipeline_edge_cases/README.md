@@ -29,6 +29,11 @@ pipeline_edge_cases/
 So the idea is simple: pin every non-obvious behavior of pipeline
 (mainly `Oms`/`Executor`).
 
+`common.rs` has two scripted strategies: `Scripted` wants a number of lots on each candle,
+`ScriptedResting` places or drops one limit order on each candle. A folder may also hold a small
+executor made for its cases, such as `unacked_cancel_refused` (a venue that refuses to cancel
+an order it hasn't acked yet).
+
 #### Why one folder per executor
 
 What the pipeline does depends on the executor underneath. `MarketExecutor` fills a whole
