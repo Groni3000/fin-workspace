@@ -10,7 +10,7 @@ Basic types conversions:
 
 `Quantity * Price` -> `QuoteNotional`
 
-`PointValue * QuoteNotional` -> `CurrencyNotional`
+`PointValue * QuoteNotional` -> `SettlementNotional` (in `instrid`)
 
 To explain the idea we will start from a little bit more complex example and
 finish with the simple one.
@@ -47,7 +47,7 @@ Let `quantity = 5 (contract)`, `price = 110'18 (points / contract) = 110.5625 (p
 
 `currency_notional = 1_000 * 552.8125 = 552_812.5 ($)`
 
-We see a clear types conversions up to a `CurrencyNotional`.
+We see a clear types conversions up to a `SettlementNotional`.
 
 2. SPY - State Street SPDR S&P 500 ETF Trust.
    Contract unit - 1 share.
@@ -209,7 +209,7 @@ fraction of one.
 - Only currently used currencies.
 - Usually we use derived `CurrencyTag` (`.into`) that holds only `alphabetic_code` and precision.
   `CurrencyTag` basically a subset of `Currency`.
-- `CurrencyTag` is used when we use `CurrencyNotional` (definition below).
+- `CurrencyTag` is used by `instrid`'s `Asset::Currency`.
 
 ## Price concept
 
@@ -245,23 +245,3 @@ fraction of one.
   requires more.
 - Has **canonical** (`-1.32` for example) conversion from `&str` to `QuoteNotional`.
   Can reject overprecise `str`/out of range values/wrong format.
-
-## CurrencyNotional concept
-
-- Basically, the same idea as QuoteNotional, but tagged with a real currency.
-- min/max values are `-i128::MAX, i128::MAX` in a raw int representation.
-  Note `-i128::MAX != i128::MIN`: `i128::MIN` is excluded so that negation is
-  always a true negation, never an identity mapping.
-- Addition comes in two forms:
-  - `checked_add` -> `Result<Self, CnAddError>`, reporting `CurrencyMismatch`
-    or `Overflow`. Use this anywhere the operands come from outside the process
-    (broker reports, config) — a mismatched currency is a data problem, not a
-    programmer error, and the layer above should decide whether to halt.
-  - `Add` (`+`) delegates to `checked_add` and panics on either failure.
-    Convenient when both operands are already known to share a currency.
-- Used via the `Specification` of an instrument.
-- Very limited in ways to get this type: either Spec or deliberately `::new`.
-  At least for now I think this is a very delicate type and allowing to get it
-  in a lot of different ways may hurt more than help. Though... Strategy's state
-  will require ser/de so... It's probably unavoidable? At least formatters will do the work
-  not the user of this library.

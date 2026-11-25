@@ -4,6 +4,7 @@ pub mod asset;
 pub mod inline_str;
 pub mod instruments;
 pub mod mic;
+pub mod settlement_notional;
 pub mod spec;
 pub mod tenor;
 

@@ -6,13 +6,13 @@ use instrid::{
     asset::{Asset, AssetClass, AssetError},
     instruments::{FuturesContract, Instrument, Stock, TradedInstrument},
     mic::Mic,
+    settlement_notional::SettlementNotional,
     spec::{Spec, Specification},
     tenor::Tenor,
 };
 use tradeprim::{
     Side,
     currency::Currency,
-    currency_notional::CurrencyNotional,
     price::Price,
     quantity::{QtyStep, Quantity},
 };
@@ -155,7 +155,7 @@ fn px(s: &str) -> Price {
 //  - instruments
 //  - specifications
 //  - Quantity
-//  - CurrencyNotional
+//  - SettlementNotional
 //  - groupby functions
 //
 //  All values are not real, because I don't want to waste time on "real values"
@@ -270,7 +270,7 @@ fn create_specs() -> (
     let aapl_xlon_spec: Specification = Specification::default();
     let es_cme_spec: Specification = Specification::new(
         Price::from_str_unchecked("0.25"),
-        (Price::from_str_unchecked("12.5"), Currency::usd()),
+        (Price::from_str_unchecked("12.5"), Currency::usd().into()),
         min_qty,
         Quantity::MAX,
         QtyStep::default(),
@@ -278,7 +278,7 @@ fn create_specs() -> (
     .unwrap();
     let fdax_eurex_spec: Specification = Specification::new(
         Price::from_str_unchecked("1.0"),
-        (Price::from_str_unchecked("25.0"), Currency::eur()),
+        (Price::from_str_unchecked("25.0"), Currency::eur().into()),
         min_qty,
         Quantity::MAX,
         QtyStep::default(),
@@ -287,7 +287,7 @@ fn create_specs() -> (
     let xau_usd_spec: Specification = Specification::default();
     let xau_eur_spec: Specification = Specification::new(
         Price::from_str_unchecked("0.01"),
-        (Price::from_str_unchecked("0.01"), Currency::eur()),
+        (Price::from_str_unchecked("0.01"), Currency::eur().into()),
         min_qty,
         Quantity::MAX,
         QtyStep::default(),
@@ -295,7 +295,7 @@ fn create_specs() -> (
     .unwrap();
     let xau_chf_spec: Specification = Specification::new(
         Price::from_str_unchecked("0.01"),
-        (Price::from_str_unchecked("0.01"), Currency::chf()),
+        (Price::from_str_unchecked("0.01"), Currency::chf().into()),
         min_qty,
         Quantity::MAX,
         QtyStep::default(),
@@ -303,7 +303,7 @@ fn create_specs() -> (
     .unwrap();
     let jpy_6j_spec: Specification = Specification::new(
         Price::from_str_unchecked("0.0000005"),
-        (Price::from_str_unchecked("6.25"), Currency::usd()),
+        (Price::from_str_unchecked("6.25"), Currency::usd().into()),
         min_qty,
         Quantity::MAX,
         QtyStep::default(),
@@ -366,10 +366,10 @@ impl<'a> Fill<'a> {
         }
     }
 
-    /// Signed cashflow of the fill in the instrument's settlement currency.
+    /// Signed cashflow of the fill in the instrument's settlement asset.
     ///
     /// The spec is looked up from the registry by the fill's instrument.
-    pub fn signed_cashflow(&self, registry: &Registry) -> CurrencyNotional {
+    pub fn signed_cashflow(&self, registry: &Registry) -> SettlementNotional {
         let spec = registry
             .spec(self.instrument)
             .expect("instrument must be registered");
@@ -379,19 +379,19 @@ impl<'a> Fill<'a> {
             Side::Buy => -quote_notional,
             Side::Sell => quote_notional,
         };
-        spec.currency_notional(signed)
+        spec.settlement_notional(signed)
     }
 }
 
 /// Sums signed cashflow per price-quotation asset.
 ///
 /// Each fill resolves its spec from the registry. Grouping by price-quotation
-/// asset keeps one currency per bucket, so the `CurrencyNotional` `Add` never
+/// asset keeps one currency per bucket, so the `SettlementNotional` `Add` never
 /// has to mix currencies (it would panic otherwise).
 pub fn signed_cashflow_by_currency<'a>(
     fills: &[Fill<'a>],
     registry: &Registry,
-) -> HashMap<&'a Asset, CurrencyNotional> {
+) -> HashMap<&'a Asset, SettlementNotional> {
     let mut cashflow_by_currency = HashMap::new();
     for fill in fills {
         let price_quotation = fill.instrument.price_quotation();
@@ -399,7 +399,7 @@ pub fn signed_cashflow_by_currency<'a>(
 
         cashflow_by_currency
             .entry(price_quotation)
-            .and_modify(|acc: &mut CurrencyNotional| *acc = *acc + cashflow)
+            .and_modify(|acc: &mut SettlementNotional| *acc = *acc + cashflow)
             .or_insert(cashflow);
     }
 
@@ -410,7 +410,7 @@ pub fn signed_cashflow_by_currency<'a>(
 pub fn signed_cashflow_by_base<'a>(
     fills: &[Fill<'a>],
     registry: &Registry,
-) -> HashMap<&'a Asset, HashMap<&'a Asset, CurrencyNotional>> {
+) -> HashMap<&'a Asset, HashMap<&'a Asset, SettlementNotional>> {
     let mut cashflow_by_base = HashMap::new();
     for fill in fills {
         let base = fill.instrument.base();
@@ -421,7 +421,7 @@ pub fn signed_cashflow_by_base<'a>(
             .entry(base)
             .or_insert_with(HashMap::new)
             .entry(price_quotation)
-            .and_modify(|acc: &mut CurrencyNotional| *acc = *acc + cashflow)
+            .and_modify(|acc: &mut SettlementNotional| *acc = *acc + cashflow)
             .or_insert(cashflow);
     }
 
@@ -437,8 +437,8 @@ pub fn signed_cashflow_by_base<'a>(
 pub fn realized_pnl_by_instrument_for_flat_positions<'a>(
     fills: &[Fill<'a>],
     registry: &Registry,
-) -> HashMap<&'a Instrument, CurrencyNotional> {
-    let mut acc: HashMap<&Instrument, (CurrencyNotional, i128)> = HashMap::new();
+) -> HashMap<&'a Instrument, SettlementNotional> {
+    let mut acc: HashMap<&Instrument, (SettlementNotional, i128)> = HashMap::new();
     for fill in fills {
         let cashflow = fill.signed_cashflow(registry);
         let signed_qty = match fill.side {
@@ -476,11 +476,11 @@ pub fn fills_by_asset_class<'a, 'b>(
 /// Sums signed cashflow by (base asset class, price-quotation asset).
 ///
 /// The price-quotation asset is part of the key, so each bucket is one currency
-/// and the `CurrencyNotional` `Add` never mixes currencies.
+/// and the `SettlementNotional` `Add` never mixes currencies.
 pub fn signed_cashflow_by_asset_class<'a>(
     fills: &[Fill<'a>],
     registry: &Registry,
-) -> HashMap<(AssetClass, &'a Asset), CurrencyNotional> {
+) -> HashMap<(AssetClass, &'a Asset), SettlementNotional> {
     let mut grouped = HashMap::new();
     for fill in fills {
         let base_class = fill.instrument.base().class();
@@ -489,7 +489,7 @@ pub fn signed_cashflow_by_asset_class<'a>(
 
         grouped
             .entry((base_class, price_quotation))
-            .and_modify(|acc: &mut CurrencyNotional| *acc = *acc + cashflow)
+            .and_modify(|acc: &mut SettlementNotional| *acc = *acc + cashflow)
             .or_insert(cashflow);
     }
 

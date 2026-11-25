@@ -102,24 +102,25 @@ The pipeline is two multiplications:
 
 ```text
 Quantity   ×  Price           ->  QuoteNotional     (quote space, may not be money)
-PointValue ×  QuoteNotional   ->  CurrencyNotional  (settlement money, currency-tagged)
+PointValue ×  QuoteNotional   ->  SettlementNotional  (settlement money, asset-tagged)
 ```
 
 `QuoteNotional` is a value that represents price quotation, it is _not_ always money:
 a T-bond quote is in points, a grain quote is in cents.
-`PointValue` it into currency, and `CurrencyNotional` is the only currency-tagged money type.
+`PointValue` turns it into the settlement asset, and `SettlementNotional` is the only asset-tagged
+money type.
 
 A `Specification` carries three things and derives the third from the first two:
 
 ```ignore
 pub struct Specification {
     tick_size_price: Price,                 // smallest price increment, in quote units
-    tick_size_currency: (Price, Currency),  // money that one price-tick is worth, in currency major units
-    point_value: PointValue,                // derived: tick_size_currency / tick_size_price
+    tick_size_settlement: (Price, Asset),   // money that one price-tick is worth, in the asset's major units
+    point_value: PointValue,                // derived: tick_size_settlement / tick_size_price
 }
 ```
 
-The `Spec` trait exposes them plus `currency_notional(QuoteNotional) -> CurrencyNotional`:
+The `Spec` trait exposes them plus `settlement_notional(QuoteNotional) -> SettlementNotional`:
 
 ```rust
 use instrid::spec::{PointValue, Spec, Specification};
@@ -132,7 +133,7 @@ use tradeprim::quote_notional::QuoteNotional;
 // Orders are whole contracts, 1 to 1000.
 let zb = Specification::new(
     Price::from_str_unchecked("0.03125"),
-    (Price::from_str_unchecked("31.25"), Currency::usd()),
+    (Price::from_str_unchecked("31.25"), Currency::usd().into()),
     Quantity::ONE,                                   // min_quantity
     Quantity::from_str_unchecked("1000"),            // max_quantity
     QtyStep::new(Quantity::ONE).unwrap(),            // step
@@ -142,7 +143,7 @@ let zb = Specification::new(
 assert_eq!(zb.point_value().value(), 1000 * PointValue::SCALE);
 
 // 552.8125 points of quote notional -> $552,812.5 of settlement money.
-let money = zb.currency_notional(QuoteNotional::from_str_unchecked("552.8125"));
+let money = zb.settlement_notional(QuoteNotional::from_str_unchecked("552.8125"));
 println!("{money}"); // 552_812.5 (USD)
 
 // Valid order sizes are min + k*step, capped at max.
@@ -176,16 +177,36 @@ listed tick straight into `tick_size_price`:
 
 For example, here are some specs I used for testing:
 
-| Instrument            | `tick_size_price` | `tick_size_currency` | `point_value` |
-| --------------------- | ----------------- | -------------------- | ------------- |
-| US share (`Default`)  | `0.01`            | `(0.01, USD)`        | `1`           |
-| ZW wheat (5k bu)      | `0.25`            | `(12.5, USD)`        | `50`          |
-| RB gasoline (42k gal) | `0.0001`          | `(4.2, USD)`         | `42_000`      |
-| ZB T-bond             | `0.03125`         | `(31.25, USD)`       | `1_000`       |
-| 6J JPY future         | `0.0000005`       | `(6.25, USD)`        | `12_500_000`  |
+| Instrument            | `tick_size_price` | `tick_size_settlement` | `point_value` |
+| --------------------- | ----------------- | ---------------------- | ------------- |
+| US share (`Default`)  | `0.01`            | `(0.01, USD)`          | `1`           |
+| ZW wheat (5k bu)      | `0.25`            | `(12.5, USD)`          | `50`          |
+| RB gasoline (42k gal) | `0.0001`          | `(4.2, USD)`           | `42_000`      |
+| ZB T-bond             | `0.03125`         | `(31.25, USD)`         | `1_000`       |
+| 6J JPY future         | `0.0000005`       | `(6.25, USD)`          | `12_500_000`  |
 
 The rule: **fill a spec once, verify by hand, and reuse it.** Don't derive tick sizes
 at runtime or, at least, make sure it is correct.
+
+### SettlementNotional concept
+
+- Basically, the same idea as QuoteNotional, but tagged with the settlement `Asset`.
+- min/max values are `-i128::MAX, i128::MAX` in a raw int representation.
+  Note `-i128::MAX != i128::MIN`: `i128::MIN` is excluded so that negation is
+  always a true negation, never an identity mapping.
+- Addition comes in two forms:
+  - `checked_add` -> `Result<Self, SnAddError>`, reporting `SettlementMismatch`
+    or `Overflow`. Use this anywhere the operands come from outside the process
+    (broker reports, config) — a mismatched settlement is a data problem, not a
+    programmer error, and the layer above should decide whether to halt.
+  - `Add` (`+`) delegates to `checked_add` and panics on either failure.
+    Convenient when both operands are already known to share a settlement.
+- Used via the `Specification` of an instrument.
+- Very limited in ways to get this type: either Spec or deliberately `::new`.
+  At least for now I think this is a very delicate type and allowing to get it
+  in a lot of different ways may hurt more than help. Though... Strategy's state
+  will require ser/de so... It's probably unavoidable? At least formatters will do the work
+  not the user of this library.
 
 ## Dependencies
 
@@ -319,7 +340,7 @@ identification and thus different flavors of grouping by.
 
 The `examples/typed_groupby.rs` example goes further after I "finished" developing primitives.
 `Instrument` is `Hash`, it keys a `HashMap<Instrument, Specification>` registry, converts each
-fill through `currency_notional` (remember `Spec` trait?), and groups signed cashflow — and realized PnL
+fill through `settlement_notional` (remember `Spec` trait?), and groups signed cashflow — and realized PnL
 for flat positions — by settlement currency, base asset, and asset class. See
 `examples/typed_groupby_output.md` for sample output.
 

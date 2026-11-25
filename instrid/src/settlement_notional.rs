@@ -1,28 +1,25 @@
-use std::{fmt::Display, num::ParseIntError, ops::Add};
+use std::{fmt::Display, ops::Add};
 
-use crate::{currency::CurrencyTag, price::Price};
+use tradeprim::price::Price;
+
+use crate::asset::Asset;
 
 /// Has fixed scale and max value.
 ///
 /// Pretty similar to `QuoteNotional`.
 ///
-/// `CurrencyNotional` is usually a result of multiplication of `QuoteNotional` by `PointValue`.
+/// `SettlementNotional` is usually a result of multiplication of `QuoteNotional` by `PointValue`,
+/// in the [`Asset`] the instrument settles in.
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CurrencyNotional {
+pub struct SettlementNotional {
     // value: i128 = 16 bytes. Align = 16 bytes.
-    // If I use `Currency` with size 24 bytes
-    // => `CurrencyNotional` = 16 + 24 + 8 (padding) = 48 bytes
-    // I can make it smaller by removing `Currency.name` (16 bytes)
-    // and numeric code (3 bytes).
-    //
-    // Then size of `Currency` will be 3 + 1 = 4 (bytes)
-    // => size of CurrencyNotional = 16 + 4 + 12 (padding) = 32 bytes.
+    // `Asset` is 14 bytes => 16 + 14 + 2 (padding) = 32 bytes.
     value: i128,
-    currency: CurrencyTag,
+    settlement: Asset,
 }
 
-impl CurrencyNotional {
+impl SettlementNotional {
     pub const SCALE: i128 = Price::SCALE as i128;
     pub const PRECISION: i128 = 9;
 
@@ -37,60 +34,67 @@ impl CurrencyNotional {
     /// Regardless, what can happen?
     /// Debug: panic
     /// Release: negate i128::MIN will be identity mapping
-    /// CurrencyNotional(i128::MIN).neg() == CurrencyNotional(i128::MIN)
+    /// SettlementNotional(i128::MIN).neg() == SettlementNotional(i128::MIN)
     ///
     /// I don't know... We can get it only from raw
-    /// `CurrencyNotional::new(i128::MIN...)` it's just... Malicious?
+    /// `SettlementNotional::new(i128::MIN...)` it's just... Malicious?
     /// Do I really want to protect from such code?
     ///
     /// Used only in Add as a guard
     pub const MIN_RAW: i128 = -Self::MAX_RAW;
     pub const MAX_INTEGER_PART: i128 = Self::MAX_RAW / Self::SCALE;
 
-    /// Construct a `CurrencyNotional` from a raw value and currency tag.
+    /// Construct a `SettlementNotional` from a raw value and the asset it is in.
     ///
     /// # Note
     ///
-    /// `value == i128::MIN` can lead to problems described in `CurrencyNotional::MIN_RAW`.
-    pub const fn new(value: i128, currency: CurrencyTag) -> Self {
-        Self { value, currency }
+    /// `value == i128::MIN` can lead to problems described in `SettlementNotional::MIN_RAW`.
+    pub const fn new(value: i128, settlement: Asset) -> Self {
+        Self { value, settlement }
     }
 
     pub fn value(&self) -> i128 {
         self.value
     }
 
-    /// Prefer `checked_add` over `add` when currency mismatch/overflow is expected to happen.
-    pub fn checked_add(self, rhs: Self) -> Result<Self, CnAddError> {
-        if self.currency != rhs.currency {
-            return Err(CnAddError::CurrencyMismatch(self.currency, rhs.currency));
+    pub fn settlement(&self) -> &Asset {
+        &self.settlement
+    }
+
+    /// Prefer `checked_add` over `add` when settlement mismatch/overflow is expected to happen.
+    pub fn checked_add(self, rhs: Self) -> Result<Self, SnAddError> {
+        if self.settlement != rhs.settlement {
+            return Err(SnAddError::SettlementMismatch(
+                self.settlement,
+                rhs.settlement,
+            ));
         }
         if let Some(sum) = self.value.checked_add(rhs.value)
-            // Because CurrencyNotional::MIN_RAW != i128::MIN
+            // Because SettlementNotional::MIN_RAW != i128::MIN
             // and it is only reachable via malicious raw construction
             // or sum or two perfectly in range values
             && sum != i128::MIN
         {
-            return Ok(CurrencyNotional::new(sum, self.currency));
+            return Ok(SettlementNotional::new(sum, self.settlement));
         }
 
-        Err(CnAddError::Overflow(self.value, rhs.value))
+        Err(SnAddError::Overflow(self.value, rhs.value))
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CnAddError {
-    CurrencyMismatch(CurrencyTag, CurrencyTag),
+pub enum SnAddError {
+    SettlementMismatch(Asset, Asset),
     Overflow(i128, i128),
 }
 
-impl std::error::Error for CnAddError {}
+impl std::error::Error for SnAddError {}
 
-impl Display for CnAddError {
+impl Display for SnAddError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::CurrencyMismatch(a, b) => {
-                write!(f, "Currency mismatch: {} != {}", a, b)
+            Self::SettlementMismatch(a, b) => {
+                write!(f, "Settlement mismatch: {} != {}", a, b)
             }
             Self::Overflow(a, b) => {
                 write!(f, "Overflow: {} + {}", a, b)
@@ -99,16 +103,16 @@ impl Display for CnAddError {
     }
 }
 
-impl Add for CurrencyNotional {
-    type Output = CurrencyNotional;
+impl Add for SettlementNotional {
+    type Output = SettlementNotional;
 
-    /// Perform checked add, panic on overflow or different currencies.
+    /// Perform checked add, panic on overflow or different settlements.
     fn add(self, rhs: Self) -> Self::Output {
         self.checked_add(rhs).unwrap_or_else(|e| panic!("{e}"))
     }
 }
 
-impl Display for CurrencyNotional {
+impl Display for SettlementNotional {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.value.is_negative() {
             write!(f, "-")?;
@@ -119,7 +123,7 @@ impl Display for CurrencyNotional {
 
         write_grouped(f, abs / Self::SCALE as u128)?;
         if fractional_part == 0 {
-            return write!(f, " ({})", self.currency);
+            return write!(f, " ({})", self.settlement.name());
         }
 
         let mut pow = Self::PRECISION as usize;
@@ -127,7 +131,7 @@ impl Display for CurrencyNotional {
             fractional_part /= 10;
             pow -= 1;
         }
-        write!(f, ".{:0pow$} ({})", fractional_part, self.currency)
+        write!(f, ".{:0pow$} ({})", fractional_part, self.settlement.name())
     }
 }
 
@@ -141,44 +145,27 @@ fn write_grouped(f: &mut std::fmt::Formatter<'_>, value: u128) -> std::fmt::Resu
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ParseCurrencyNotionalError {
-    InvalidFormat,
-    OutOfBounds,
-    PrecisionError(usize),
-    ParseIntError(ParseIntError),
-}
-
-impl Display for ParseCurrencyNotionalError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ParseCurrencyNotionalError::InvalidFormat => write!(f, "Invalid format"),
-            ParseCurrencyNotionalError::OutOfBounds => write!(f, "Out of bounds"),
-            ParseCurrencyNotionalError::PrecisionError(precision) => {
-                write!(f, "Precision error: {}", precision)
-            }
-            ParseCurrencyNotionalError::ParseIntError(err) => err.fmt(f),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::currency::Currency;
+    use tradeprim::currency::Currency;
 
     // helper
-    fn usd() -> CurrencyNotional {
-        CurrencyNotional::new(0, Currency::usd().into())
+    fn usd() -> SettlementNotional {
+        SettlementNotional::new(0, Currency::usd().into())
     }
 
     // helper that uses helper
-    fn usd_raw(raw: i128) -> CurrencyNotional {
-        CurrencyNotional::new(raw, usd().currency)
+    fn usd_raw(raw: i128) -> SettlementNotional {
+        SettlementNotional::new(raw, usd().settlement)
     }
 
-    fn eur_raw(raw: i128) -> CurrencyNotional {
-        CurrencyNotional::new(raw, Currency::eur().into())
+    fn eur_raw(raw: i128) -> SettlementNotional {
+        SettlementNotional::new(raw, Currency::eur().into())
+    }
+
+    fn usdt_raw(raw: i128) -> SettlementNotional {
+        SettlementNotional::new(raw, Asset::crypto("USDT").expect("valid name"))
     }
 
     #[test]
@@ -227,7 +214,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Currency mismatch: USD != EUR")]
+    fn display_crypto() {
+        assert_eq!(usdt_raw(12_500_000_000).to_string(), "12.5 (USDT)");
+    }
+
+    #[test]
+    #[should_panic(expected = "Settlement mismatch: Currency|USD != Currency|EUR")]
     fn add_different_currencies_panics() {
         let _ = usd_raw(1) + eur_raw(1);
     }
@@ -236,7 +228,7 @@ mod tests {
     #[should_panic]
     fn add_overflow_panics() {
         // there should be checked_add
-        let _ = usd_raw(CurrencyNotional::MAX_RAW) + usd_raw(1);
+        let _ = usd_raw(SettlementNotional::MAX_RAW) + usd_raw(1);
     }
 
     mod checked_add {
@@ -247,70 +239,68 @@ mod tests {
             let err = usd_raw(1).checked_add(eur_raw(1)).unwrap_err();
             assert_eq!(
                 err,
-                CnAddError::CurrencyMismatch(Currency::usd().into(), Currency::eur().into())
+                SnAddError::SettlementMismatch(Currency::usd().into(), Currency::eur().into())
             );
-            assert_eq!(err.to_string(), "Currency mismatch: USD != EUR");
+            assert_eq!(
+                err.to_string(),
+                "Settlement mismatch: Currency|USD != Currency|EUR"
+            );
+        }
+
+        /// USD and USDT are different assets, even though a trader may treat them as one.
+        #[test]
+        fn rejects_currency_and_crypto_mix() {
+            let err = usd_raw(1).checked_add(usdt_raw(1)).unwrap_err();
+            assert_eq!(
+                err.to_string(),
+                "Settlement mismatch: Currency|USD != Crypto|USDT"
+            );
         }
 
         #[test]
         fn mismatch_takes_priority_over_overflow() {
-            let err = usd_raw(CurrencyNotional::MAX_RAW)
-                .checked_add(eur_raw(CurrencyNotional::MAX_RAW))
+            let err = usd_raw(SettlementNotional::MAX_RAW)
+                .checked_add(eur_raw(SettlementNotional::MAX_RAW))
                 .unwrap_err();
-            assert!(matches!(err, CnAddError::CurrencyMismatch(..)));
+            assert!(matches!(err, SnAddError::SettlementMismatch(..)));
         }
 
         #[test]
         fn positive_overflow() {
-            let err = usd_raw(CurrencyNotional::MAX_RAW)
+            let err = usd_raw(SettlementNotional::MAX_RAW)
                 .checked_add(usd_raw(1))
                 .unwrap_err();
-            assert_eq!(err, CnAddError::Overflow(CurrencyNotional::MAX_RAW, 1));
+            assert_eq!(err, SnAddError::Overflow(SettlementNotional::MAX_RAW, 1));
             assert!(err.to_string().starts_with("Overflow: "));
         }
 
         #[test]
         fn negative_overflow() {
-            let err = usd_raw(CurrencyNotional::MIN_RAW)
+            let err = usd_raw(SettlementNotional::MIN_RAW)
                 .checked_add(usd_raw(-2))
                 .unwrap_err();
-            assert_eq!(err, CnAddError::Overflow(CurrencyNotional::MIN_RAW, -2));
+            assert_eq!(err, SnAddError::Overflow(SettlementNotional::MIN_RAW, -2));
         }
 
         /// `i128::MIN` is excluded, so a successful result is always within `MIN_RAW..=MAX_RAW`.
         #[test]
         fn rejects_i128_min() {
-            let err = usd_raw(CurrencyNotional::MIN_RAW)
+            let err = usd_raw(SettlementNotional::MIN_RAW)
                 .checked_add(usd_raw(-1))
                 .unwrap_err();
-            assert_eq!(err, CnAddError::Overflow(CurrencyNotional::MIN_RAW, -1));
+            assert_eq!(err, SnAddError::Overflow(SettlementNotional::MIN_RAW, -1));
         }
 
-        /// Malicious `CurrencyNotional::new` input will be reported as Overflow.
+        /// Malicious `SettlementNotional::new` input will be reported as Overflow.
         ///
         /// A little bit... Desicive. But it makes `new` more ergonomic.
         /// And the only desicive arm is 128::MIN, so... I take it.
         #[test]
         fn out_of_range_operand_is_rejected() {
-            let err = CurrencyNotional::new(i128::MIN, usd().currency)
+            let err = SettlementNotional::new(i128::MIN, usd().settlement)
                 .checked_add(usd_raw(0))
                 .unwrap_err();
-            assert_eq!(err, CnAddError::Overflow(i128::MIN, 0));
-        }
-
-        /// Precision is ignored when comparing `CurrencyTag` values during `Add`/`checked_add`.
-        #[test]
-        fn currency_equality_ignores_precision() {
-            let code: CurrencyTag = Currency::usd().into();
-            let loose = CurrencyTag::new(code.alphabetic_code(), 2);
-            let tight = CurrencyTag::new(code.alphabetic_code(), 8);
-
-            assert!(
-                CurrencyNotional::new(1, loose)
-                    .checked_add(CurrencyNotional::new(1, tight))
-                    .is_ok(),
-                "same code, different precision must still add"
-            );
+            assert_eq!(err, SnAddError::Overflow(i128::MIN, 0));
         }
 
         /// Regression guards.
@@ -337,7 +327,7 @@ mod tests {
             #[test]
             #[should_panic(expected = "Overflow")]
             fn add_panics_where_checked_add_rejects() {
-                let _ = usd_raw(CurrencyNotional::MIN_RAW) + usd_raw(-1);
+                let _ = usd_raw(SettlementNotional::MIN_RAW) + usd_raw(-1);
             }
 
             proptest! {

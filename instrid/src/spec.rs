@@ -2,20 +2,21 @@ use std::{fmt::Display, str::FromStr};
 
 use tradeprim::{
     currency::Currency,
-    currency_notional::CurrencyNotional,
     decimal::{ParseDecimalError, parse_decimal},
     price::Price,
     quantity::{QtyStep, Quantity},
     quote_notional::QuoteNotional,
 };
 
+use crate::{asset::Asset, settlement_notional::SettlementNotional};
+
 /// Has essential trading specification parameters.
 ///
 pub trait Spec {
     fn tick_size_price(&self) -> Price;
-    fn tick_size_currency(&self) -> (Price, Currency);
+    fn tick_size_settlement(&self) -> (Price, Asset);
     fn point_value(&self) -> PointValue;
-    fn currency_notional(&self, quote_notional: QuoteNotional) -> CurrencyNotional;
+    fn settlement_notional(&self, quote_notional: QuoteNotional) -> SettlementNotional;
     fn min_quantity(&self) -> Quantity;
     fn max_quantity(&self) -> Quantity;
     fn step_qty(&self) -> QtyStep;
@@ -154,7 +155,7 @@ pub trait Spec {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Specification {
     tick_size_price: Price,
-    tick_size_currency: (Price, Currency),
+    tick_size_settlement: (Price, Asset),
     point_value: PointValue,
     min_quantity: Quantity,
     max_quantity: Quantity,
@@ -165,7 +166,10 @@ impl Default for Specification {
     fn default() -> Self {
         Self {
             tick_size_price: Price::from_str_unchecked("0.01"),
-            tick_size_currency: (Price::from_str_unchecked("0.01"), Currency::default()),
+            tick_size_settlement: (
+                Price::from_str_unchecked("0.01"),
+                Asset::currency(Currency::usd()),
+            ),
             point_value: PointValue::ONE,
             min_quantity: Quantity::ONE,
             max_quantity: Quantity::MAX,
@@ -178,7 +182,7 @@ impl Default for Specification {
 pub enum InvalidSpecification {
     PointValueNotRepresentable {
         tick_size_price: Price,
-        tick_size_currency: (Price, Currency),
+        tick_size_settlement: (Price, Asset),
     },
     PointValueOutOfRange(i128),
     TickSizePrice(Price),
@@ -194,12 +198,14 @@ impl Display for InvalidSpecification {
         match self {
             InvalidSpecification::PointValueNotRepresentable {
                 tick_size_price,
-                tick_size_currency,
+                tick_size_settlement,
             } => {
                 write!(
                     f,
                     "PointValueNotRepresentable {} / {} ({})",
-                    tick_size_price, tick_size_currency.0, tick_size_currency.1
+                    tick_size_price,
+                    tick_size_settlement.0,
+                    tick_size_settlement.1.name()
                 )
             }
             InvalidSpecification::PointValueOutOfRange(out_of_range) => {
@@ -221,7 +227,7 @@ impl std::error::Error for InvalidSpecification {}
 
 impl Specification {
     /// Builds a `Specification`, deriving `point_value` from the tick pair as
-    /// `tick_size_currency.0 / tick_size_price`.
+    /// `tick_size_settlement.0 / tick_size_price`.
     ///
     /// # **Error-prone**: units are NOT verifiable
     ///
@@ -229,7 +235,7 @@ impl Specification {
     /// We usually use major form: 2.13 ($)
     /// Minor form would use cents: 213 (cents)
     ///
-    /// Usually `tick_size_currency` is in major form. At least I haven't seen
+    /// Usually `tick_size_settlement` is in major form. At least I haven't seen
     /// a case where it's in minor form.
     ///
     /// But `tick_size_price` is in price quotation units and if price quotation in
@@ -248,7 +254,7 @@ impl Specification {
     /// So, fill a spec **once**, verify by hand and reuse specs.
     pub fn new(
         tick_size_price: Price,
-        tick_size_currency: (Price, Currency),
+        tick_size_settlement: (Price, Asset),
         min_quantity: Quantity,
         max_quantity: Quantity,
         step_quantity: QtyStep,
@@ -266,13 +272,13 @@ impl Specification {
                 max_quantity,
             });
         }
-        let numerator = tick_size_currency.0.value() as i128 * PointValue::SCALE;
+        let numerator = tick_size_settlement.0.value() as i128 * PointValue::SCALE;
         let denominator = tick_size_price.value() as i128;
         // Not representable in 9 digits
         if numerator % denominator != 0 {
             return Err(InvalidSpecification::PointValueNotRepresentable {
                 tick_size_price,
-                tick_size_currency,
+                tick_size_settlement,
             });
         }
         let point_value = PointValue::new(numerator / denominator)
@@ -280,7 +286,7 @@ impl Specification {
 
         Ok(Self {
             tick_size_price,
-            tick_size_currency,
+            tick_size_settlement,
             point_value,
             min_quantity,
             max_quantity,
@@ -298,21 +304,21 @@ impl Spec for Specification {
         self.tick_size_price
     }
 
-    fn tick_size_currency(&self) -> (Price, Currency) {
-        self.tick_size_currency
+    fn tick_size_settlement(&self) -> (Price, Asset) {
+        self.tick_size_settlement
     }
 
     fn point_value(&self) -> PointValue {
         self.point_value
     }
 
-    /// Convert `QuoteNotional` to `CurrencyNotional` using specification.
-    fn currency_notional(&self, quote_notional: QuoteNotional) -> CurrencyNotional {
+    /// Convert `QuoteNotional` to `SettlementNotional` using specification.
+    fn settlement_notional(&self, quote_notional: QuoteNotional) -> SettlementNotional {
         // QuoteNotional is already half-away-rounded upstream,
         // so truncating the final divide only drops sub-1e-9 noise
-        CurrencyNotional::new(
+        SettlementNotional::new(
             QuoteNotional::round(self.point_value.0 * quote_notional.value()),
-            self.tick_size_currency.1.into(),
+            self.tick_size_settlement.1,
         )
     }
 
@@ -548,18 +554,18 @@ mod tests {
         // default case for a common shares
         // usd, cents
         let ts_p = Price::from_str_unchecked("0.01");
-        let ts_c = (Price::from_str_unchecked("0.01"), Currency::default());
+        let ts_c = (Price::from_str_unchecked("0.01"), Currency::usd().into());
         let spec = Specification::new(ts_p, ts_c, min_qty, max_qty, QtyStep::default()).unwrap();
         assert_eq!(ts_p, spec.tick_size_price());
-        assert_eq!(ts_c.0, spec.tick_size_currency().0);
+        assert_eq!(ts_c.0, spec.tick_size_settlement().0);
         assert_eq!(PointValue::from_str_unchecked("1.0"), spec.point_value());
-        assert_eq!(spec.tick_size_currency.1, Currency::usd());
+        assert_eq!(spec.tick_size_settlement.1, Asset::from(Currency::usd()));
 
-        // ZW, 5k bushels, price in cents, tick_size_currency in $
+        // ZW, 5k bushels, price in cents, tick_size_settlement in $
         // I had to multiply 0.0025 by 100...
         let spec = Specification::new(
             Price::from_str_unchecked("0.25"),
-            (Price::from_str_unchecked("12.5"), Currency::usd()),
+            (Price::from_str_unchecked("12.5"), Currency::usd().into()),
             min_qty,
             max_qty,
             QtyStep::default(),
@@ -568,14 +574,14 @@ mod tests {
         assert_eq!(Price::from_str_unchecked("0.25"), spec.tick_size_price());
         assert_eq!(
             Price::from_str_unchecked("12.5"),
-            spec.tick_size_currency().0
+            spec.tick_size_settlement().0
         );
         assert_eq!(PointValue::from_str_unchecked("50.0"), spec.point_value());
 
-        // RB, 42k gallons, price in dollars and cents, tick_size_currency in $
+        // RB, 42k gallons, price in dollars and cents, tick_size_settlement in $
         let spec = Specification::new(
             Price::from_str_unchecked("0.0001"),
-            (Price::from_str_unchecked("4.2"), Currency::usd()),
+            (Price::from_str_unchecked("4.2"), Currency::usd().into()),
             min_qty,
             max_qty,
             QtyStep::default(),
@@ -584,7 +590,7 @@ mod tests {
         assert_eq!(Price::from_str_unchecked("0.0001"), spec.tick_size_price());
         assert_eq!(
             Price::from_str_unchecked("4.2"),
-            spec.tick_size_currency().0
+            spec.tick_size_settlement().0
         );
         assert_eq!(
             PointValue::from_str_unchecked("42000.0"),
@@ -593,10 +599,10 @@ mod tests {
 
         // ZB, Face value at maturity of $100,000,
         // price Points and fractions of points with par on the basis of 100 points,
-        // tick_size_currency in $
+        // tick_size_settlement in $
         let spec = Specification::new(
             Price::from_str_unchecked("0.03125"),
-            (Price::from_str_unchecked("31.25"), Currency::usd()),
+            (Price::from_str_unchecked("31.25"), Currency::usd().into()),
             min_qty,
             max_qty,
             QtyStep::default(),
@@ -605,7 +611,7 @@ mod tests {
         assert_eq!(Price::from_str_unchecked("0.03125"), spec.tick_size_price());
         assert_eq!(
             Price::from_str_unchecked("31.25"),
-            spec.tick_size_currency().0
+            spec.tick_size_settlement().0
         );
         assert_eq!(PointValue::from_str_unchecked("1000.0"), spec.point_value());
 
@@ -614,7 +620,7 @@ mod tests {
         // 0.0000005 per JPY increment = $6.25
         let spec = Specification::new(
             Price::from_str_unchecked("0.0000005"),
-            (Price::from_str_unchecked("6.25"), Currency::usd()),
+            (Price::from_str_unchecked("6.25"), Currency::usd().into()),
             min_qty,
             max_qty,
             QtyStep::default(),
@@ -626,7 +632,7 @@ mod tests {
         );
         assert_eq!(
             Price::from_str_unchecked("6.25"),
-            spec.tick_size_currency().0
+            spec.tick_size_settlement().0
         );
         assert_eq!(
             PointValue::from_str_unchecked("12500000.0"),
@@ -637,7 +643,7 @@ mod tests {
     /// `tick_size_price` must be positive.
     #[test]
     fn new_tick_size_price_boundary() {
-        let usd = (Price::ONE, Currency::usd());
+        let usd = (Price::ONE, Currency::usd().into());
 
         // Below the range: zero tick would divide by zero deriving point_value.
         assert_eq!(
@@ -670,7 +676,7 @@ mod tests {
     fn tick_above_one() {
         let spec = Specification::new(
             Price::from_str_unchecked("5"),
-            (Price::from_str_unchecked("25"), Currency::usd()),
+            (Price::from_str_unchecked("25"), Currency::usd().into()),
             Quantity::ONE,
             Quantity::MAX,
             QtyStep::default(),
@@ -678,10 +684,10 @@ mod tests {
         .unwrap();
         assert_eq!(PointValue::from_str_unchecked("5.0"), spec.point_value());
 
-        let cn = spec.currency_notional(QuoteNotional::from_str_unchecked("289875"));
+        let cn = spec.settlement_notional(QuoteNotional::from_str_unchecked("289875"));
         assert_eq!(
             cn,
-            CurrencyNotional::new(1_449_375_000_000_000, Currency::usd().into())
+            SettlementNotional::new(1_449_375_000_000_000, Currency::usd().into())
         );
 
         let px = Price::from_str_unchecked;
@@ -700,26 +706,45 @@ mod tests {
         assert_eq!(spec.round_down_price(px("-57976")), Some(px("-57980")));
     }
 
+    /// BTCUSDT-like: quoted and settled in USDT, so the point value is 1 and the notional is the
+    /// quote notional, tagged with the crypto asset.
     #[test]
-    fn test_currency_notional() {
+    fn settlement_notional_in_crypto() {
+        let usdt = Asset::crypto("USDT").expect("valid name");
+        let spec = Specification::new(
+            Price::from_str_unchecked("0.01"),
+            (Price::from_str_unchecked("0.01"), usdt),
+            Quantity::from_str_unchecked("0.00001"),
+            Quantity::from_str_unchecked("9000"),
+            QtyStep::new(Quantity::from_str_unchecked("0.00001")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(spec.point_value(), PointValue::ONE);
+        let sn = spec.settlement_notional(QuoteNotional::from_str_unchecked("971.234"));
+        assert_eq!(sn, SettlementNotional::new(971_234_000_000, usdt));
+        assert_eq!(sn.to_string(), "971.234 (USDT)");
+    }
+
+    #[test]
+    fn test_settlement_notional() {
         // ZB, Face value at maturity of $100,000,
         // price Points and fractions of points with par on the basis of 100 points,
-        // tick_size_currency in $
+        // tick_size_settlement in $
         let spec = Specification::new(
             Price::from_str_unchecked("0.03125"),
-            (Price::from_str_unchecked("31.25"), Currency::usd()),
+            (Price::from_str_unchecked("31.25"), Currency::usd().into()),
             Quantity::ONE,
             Quantity::MAX,
             QtyStep::default(),
         )
         .unwrap();
         let qn = QuoteNotional::from_str_unchecked("552.8125");
-        let cn = spec.currency_notional(qn);
+        let cn = spec.settlement_notional(qn);
 
         // Readme example, should be equal to 552_812.5
         assert_eq!(
             cn,
-            CurrencyNotional::new(552_812_500_000_000, Currency::usd().into())
+            SettlementNotional::new(552_812_500_000_000, Currency::usd().into())
         );
 
         // 6J, contract_unit = 12,500,000 Japanese yen,
@@ -738,21 +763,21 @@ mod tests {
         // cn = pv * qn = 12_500_000 * 0.030625 = 382812.5
         let spec = Specification::new(
             Price::from_str_unchecked("0.0000005"),
-            (Price::from_str_unchecked("6.25"), Currency::usd()),
+            (Price::from_str_unchecked("6.25"), Currency::usd().into()),
             Quantity::ONE,
             Quantity::MAX,
             QtyStep::default(),
         )
         .unwrap();
         let qn = QuoteNotional::from_str_unchecked("0.030625");
-        let cn = spec.currency_notional(qn);
+        let cn = spec.settlement_notional(qn);
         assert_eq!(
             cn,
-            CurrencyNotional::new(382812500000000, Currency::usd().into())
+            SettlementNotional::new(382812500000000, Currency::usd().into())
         )
     }
 
-    /// `currency_notional` must round its final divide to the nearest 1e-9,
+    /// `settlement_notional` must round its final divide to the nearest 1e-9,
     /// not truncate (I was wrong :/ ).
     ///
     /// point_value = 0.95 / 0.5 = 1.9 (exact).
@@ -762,10 +787,10 @@ mod tests {
     ///
     /// This should never happen in real life though.
     #[test]
-    fn currency_notional_rounds_to_nearest_positive() {
+    fn settlement_notional_rounds_to_nearest_positive() {
         let spec = Specification::new(
             Price::from_str_unchecked("0.5"),
-            (Price::from_str_unchecked("0.95"), Currency::usd()),
+            (Price::from_str_unchecked("0.95"), Currency::usd().into()),
             Quantity::ONE,
             Quantity::MAX,
             QtyStep::default(),
@@ -773,18 +798,18 @@ mod tests {
         .unwrap();
         let qn = QuoteNotional::from_str_unchecked("0.000000001");
         assert_eq!(
-            spec.currency_notional(qn),
-            CurrencyNotional::new(2, Currency::usd().into()),
+            spec.settlement_notional(qn),
+            SettlementNotional::new(2, Currency::usd().into()),
             "1.9e-9 must round to 2e-9, not to 1e-9"
         );
     }
 
     /// Same magnitude, opposite sign.
     #[test]
-    fn currency_notional_rounds_symmetrically_for_negatives() {
+    fn settlement_notional_rounds_symmetrically_for_negatives() {
         let spec = Specification::new(
             Price::from_str_unchecked("0.5"),
-            (Price::from_str_unchecked("0.95"), Currency::usd()),
+            (Price::from_str_unchecked("0.95"), Currency::usd().into()),
             Quantity::ONE,
             Quantity::MAX,
             QtyStep::default(),
@@ -792,13 +817,13 @@ mod tests {
         .unwrap();
         let qn = QuoteNotional::from_str_unchecked("-0.000000001");
         assert_eq!(
-            spec.currency_notional(qn),
-            CurrencyNotional::new(-2, Currency::usd().into()),
+            spec.settlement_notional(qn),
+            SettlementNotional::new(-2, Currency::usd().into()),
             "-1.9e-9 must round to -2e-9, symmetric with the positive case"
         );
     }
 
-    /// A spec whose `point_value` (`tick_size_currency.0 / tick_size_price`)
+    /// A spec whose `point_value` (`tick_size_settlement.0 / tick_size_price`)
     /// does not terminate within 9 digits must be rejected at construction,
     /// rather than silently truncating and losing a ULP downstream.
     ///
@@ -807,12 +832,12 @@ mod tests {
     fn new_rejects_non_terminating_point_value() {
         // 0.01 / 0.03 = 1/3 — not representable in 9-digit fixed point.
         let tsp = Price::from_str_unchecked("0.03");
-        let tsc = (Price::from_str_unchecked("0.01"), Currency::usd());
+        let tsc = (Price::from_str_unchecked("0.01"), Currency::usd().into());
         assert_eq!(
             Specification::new(tsp, tsc, Quantity::ONE, Quantity::MAX, QtyStep::default()),
             Err(InvalidSpecification::PointValueNotRepresentable {
                 tick_size_price: tsp,
-                tick_size_currency: tsc,
+                tick_size_settlement: tsc,
             })
         );
     }
@@ -821,9 +846,9 @@ mod tests {
     /// Both ends are reachable, and the error must carry the raw quotient.
     #[test]
     fn new_rejects_out_of_range_point_value() {
-        // Below MIN_RAW (== 1): an unfilled `tick_size_currency` divides to 0.
+        // Below MIN_RAW (== 1): an unfilled `tick_size_settlement` divides to 0.
         let tsp = Price::ONE;
-        let tsc = (Price::ZERO, Currency::usd());
+        let tsc = (Price::ZERO, Currency::usd().into());
         assert_eq!(
             Specification::new(tsp, tsc, Quantity::ONE, Quantity::MAX, QtyStep::default()),
             Err(InvalidSpecification::PointValueOutOfRange(0)),
@@ -832,7 +857,7 @@ mod tests {
 
         // Above MAX_RAW: 1.0 / 1e-9 = 1e9 points.
         let tsp = Price::from_str_unchecked("0.000000001");
-        let tsc = (Price::ONE, Currency::usd());
+        let tsc = (Price::ONE, Currency::usd().into());
         assert_eq!(
             Specification::new(tsp, tsc, Quantity::ONE, Quantity::MAX, QtyStep::default()),
             Err(InvalidSpecification::PointValueOutOfRange(
@@ -849,7 +874,7 @@ mod tests {
     fn zw_spec_with_max(min_quantity: &str, max_quantity: Quantity, step: &str) -> Specification {
         Specification::new(
             Price::from_str_unchecked("0.25"),
-            (Price::from_str_unchecked("12.5"), Currency::usd()),
+            (Price::from_str_unchecked("12.5"), Currency::usd().into()),
             Quantity::from_str_unchecked(min_quantity),
             max_quantity,
             QtyStep::new(Quantity::from_str_unchecked(step)).expect("step must be non-zero"),
@@ -897,7 +922,7 @@ mod tests {
         assert_eq!(
             Specification::new(
                 Price::from_str_unchecked("0.25"),
-                (Price::from_str_unchecked("12.5"), Currency::usd()),
+                (Price::from_str_unchecked("12.5"), Currency::usd().into()),
                 Quantity::from_str_unchecked("0"),
                 Quantity::MAX,
                 QtyStep::new(Quantity::from_str_unchecked("3")).expect("step must be non-zero"),
@@ -915,7 +940,7 @@ mod tests {
         assert_eq!(
             Specification::new(
                 Price::from_str_unchecked("0.25"),
-                (Price::from_str_unchecked("12.5"), Currency::usd()),
+                (Price::from_str_unchecked("12.5"), Currency::usd().into()),
                 min,
                 max,
                 QtyStep::default(),

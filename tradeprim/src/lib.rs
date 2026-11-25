@@ -2,7 +2,6 @@
 
 pub mod ascii_code;
 pub mod currency;
-pub mod currency_notional;
 pub mod decimal;
 pub mod position;
 pub mod price;

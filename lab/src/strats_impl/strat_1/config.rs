@@ -122,7 +122,7 @@ impl Default for Config<LastNthBDayOfPrevMonth> {
         );
         let spec = Specification::new(
             Price::from_str_unchecked("0.0001"),
-            (Price::from_str_unchecked("4.20"), Currency::usd()),
+            (Price::from_str_unchecked("4.20"), Currency::usd().into()),
             Quantity::from_str_unchecked("1"),
             Quantity::from_str_unchecked("10"),
             QtyStep::new(Quantity::from_str_unchecked("1")).unwrap(),
