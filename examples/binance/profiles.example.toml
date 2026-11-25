@@ -1,0 +1,36 @@
+# Copy to `profiles.toml` and fill in. Pick a profile with `--profile <name>`.
+#
+# Secrets never go in this file: it only holds paths to the key files. Keep them outside the
+# repository, readable only by you (`chmod 600`), e.g. in `~/.config/fin-workspace/binance/`.
+# Paths are absolute: `~` is not expanded.
+#
+# `api_key_path`: a file holding just the API key Binance shows when you register the public
+# key (surrounding whitespace is ignored). `private_key_path`: the Ed25519 private key (PEM).
+#
+# `env` selects Binance's URLs:
+#   testnet  prices and order books independent of the real market
+#   demo     prices and order books close to the real market; same features as live
+#   live     real money
+#
+# Keys are per environment: a testnet key does not work on demo or live.
+
+[testnet]
+env = "testnet"
+api_key_path = "/home/<you>/.config/fin-workspace/binance/testnet-api-key"
+private_key_path = "/home/<you>/.config/fin-workspace/binance/testnet-ed25519.pem"
+# Only if the PEM file is encrypted. The passphrase does not go in a file next to the key.
+# private_key_passphrase_env = "BINANCE_TESTNET_KEY_PASSPHRASE"
+
+[demo]
+env = "demo"
+api_key_path = "/home/<you>/.config/fin-workspace/binance/demo-api-key"
+private_key_path = "/home/<you>/.config/fin-workspace/binance/demo-ed25519.pem"
+
+[live]
+env = "live"
+api_key_path = "/home/<you>/.config/fin-workspace/binance/live-api-key"
+private_key_path = "/home/<you>/.config/fin-workspace/binance/live-ed25519.pem"
+
+# Market data only: public streams, no key needed.
+[market]
+env = "live"

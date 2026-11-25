@@ -33,3 +33,6 @@ lab/data/files/futures/*
 lab/logs/
 diagrams/
 indicators/old_tests/tests/
+
+# Binance example: real profiles hold key names and paths
+examples/binance/profiles.toml
