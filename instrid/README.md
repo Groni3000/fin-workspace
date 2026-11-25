@@ -28,6 +28,11 @@ granularities, and most type systems blur them into one:
 - [`Stock`, `FuturesContract`, `OptionContract`, `Crypto`] - concrete implementations of each trading instrument type.
   `Crypto` is a spot pair (BTC/USDT, BTC/EUR, EUR/USDT): at least one side is an `Asset::Crypto`,
   and it settles in its quote.
+
+  **Caution:** a few coin tickers are also active ISO 4217 codes (SCR is both Scroll and the
+  Seychelles rupee). `Asset::new(name, AssetClass::Currency)` turns such a coin into a currency,
+  so its fiat pairs (SCR/TRY) are rejected, and its crypto pairs (SCR/USDT) are accepted with the
+  coin labelled a currency. Build the coin with `Asset::crypto` when you know it's one.
 - `Instrument` - enum of concrete implementations
   (useful for gathering all instrument types together).
 
