@@ -169,13 +169,13 @@ const fn unwrap_asset(asset: Result<Asset, AssetError>) -> Asset {
     }
 }
 const AAPL_XNAS: Instrument = Instrument::Stock(Stock::new(
-    unwrap_asset(Asset::other("AAPL", AssetClass::Equity)),
+    unwrap_asset(Asset::equity("AAPL")),
     Asset::currency(Currency::usd()),
     Mic::xnas(),
     Asset::currency(Currency::usd()),
 ));
 const AAPL_XLON: Instrument = Instrument::Stock(Stock::new(
-    unwrap_asset(Asset::other("AAPL", AssetClass::Equity)),
+    unwrap_asset(Asset::equity("AAPL")),
     Asset::currency(Currency::usd()),
     Mic::xlon(),
     Asset::currency(Currency::usd()),
@@ -205,14 +205,14 @@ const FDAX_EUREX: Instrument = Instrument::Futures(FuturesContract::new_unchecke
 
 // Canonical XAU quote: LBMA Gold Price, USD.
 const XAU_USD: Instrument = Instrument::Stock(Stock::new(
-    unwrap_asset(Asset::other("XAU", AssetClass::Commodity)),
+    unwrap_asset(Asset::commodity("XAU")),
     Asset::currency(Currency::usd()),
     Mic::xlbm(),
     Asset::currency(Currency::usd()),
 ));
 // Same LBMA gold, quoted in EUR by the FX desk.
 const XAU_EUR: Instrument = Instrument::Stock(Stock::new(
-    unwrap_asset(Asset::other("XAU", AssetClass::Commodity)),
+    unwrap_asset(Asset::commodity("XAU")),
     Asset::currency(Currency::eur()),
     Mic::xlbm(),
     Asset::currency(Currency::eur()),
@@ -221,7 +221,7 @@ const XAU_EUR: Instrument = Instrument::Stock(Stock::new(
 // market from LBMA due to China's capital controls — the Shanghai-London
 // spread is a real, tradable basis, not a quote conversion.
 const XAU_CHF: Instrument = Instrument::Stock(Stock::new(
-    unwrap_asset(Asset::other("XAU", AssetClass::Commodity)),
+    unwrap_asset(Asset::commodity("XAU")),
     Asset::currency(Currency::chf()),
     Mic::xsge(),
     Asset::currency(Currency::chf()),

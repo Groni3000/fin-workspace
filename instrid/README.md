@@ -18,9 +18,10 @@ granularities, and most type systems blur them into one:
 `instrid` keeps both visible in the type system:
 
 - `Asset` - represents the entity, one variant per kind: `Currency` (ISO 4217 only, with its
-  precision), `Crypto` (a name), `Other` (a name and an `AssetClass`, for classes without a
-  variant yet). `Asset::new(name, class)` picks the variant and checks a currency against the ISO
-  registry; `Asset::currency`, `Asset::crypto` and `Asset::other` are `const` for constants.
+  precision), `Crypto`, `Equity` and `Commodity` (a name), `Other` (a name and an `AssetClass`,
+  for classes without a variant yet). `Asset::new(name, class)` picks the variant and checks a
+  currency against the ISO registry; `Asset::currency`, `Asset::crypto`, `Asset::equity`,
+  `Asset::commodity` and `Asset::other` are `const` for constants.
 - `TradedInstrument` - represents what we buy/sell (`base: Asset`), what is used to
   quote base (`price_quotation: Asset`), where it is traded (`mic: Mic`) and what it
   settles in (`settlement: Asset`).

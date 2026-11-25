@@ -12,8 +12,9 @@ type AssetName = crate::inline_str::InlineStr<12>;
 /// representation (two spellings of USD would be two different `HashMap` keys):
 /// - `Currency`: ISO 4217 only, with the ISO precision. USD, EUR.
 /// - `Crypto`: a coin or token, by name. BTC, USDT.
-/// - `Other`: a name and a class, for classes without a variant yet. AAPL (equity), CL
-///   (commodity), ES (index).
+/// - `Equity`: a share or a fund, by name. AAPL, SPY.
+/// - `Commodity`: by name. CL, XAU.
+/// - `Other`: a name and a class, for classes without a variant yet. ES (index).
 ///
 /// Serde keeps one shape for every variant, `{"name":"USD","class":"Currency"}`, and reads it
 /// back through [`Asset::new`], so a currency is checked against the ISO registry.
@@ -21,6 +22,8 @@ type AssetName = crate::inline_str::InlineStr<12>;
 pub enum Asset {
     Currency(CurrencyTag),
     Crypto(AssetName),
+    Equity(AssetName),
+    Commodity(AssetName),
     Other(OtherAsset),
 }
 
@@ -78,6 +81,8 @@ impl Asset {
                 .map(Self::currency)
                 .ok_or(AssetError::UnknownCurrency),
             AssetClass::Crypto => Self::crypto(name),
+            AssetClass::Equity => Self::equity(name),
+            AssetClass::Commodity => Self::commodity(name),
             _ => Self::other(name, class),
         }
     }
@@ -87,20 +92,37 @@ impl Asset {
     }
 
     pub const fn crypto(name: &str) -> Result<Self, AssetError> {
-        match AssetName::new(name) {
+        match asset_name(name) {
             Ok(name) => Ok(Self::Crypto(name)),
-            Err(e) => Err(AssetError::Name(e)),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub const fn equity(name: &str) -> Result<Self, AssetError> {
+        match asset_name(name) {
+            Ok(name) => Ok(Self::Equity(name)),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub const fn commodity(name: &str) -> Result<Self, AssetError> {
+        match asset_name(name) {
+            Ok(name) => Ok(Self::Commodity(name)),
+            Err(e) => Err(e),
         }
     }
 
     /// For classes without a variant of their own; `const`, unlike [`Asset::new`].
     pub const fn other(name: &str, class: AssetClass) -> Result<Self, AssetError> {
-        if matches!(class, AssetClass::Currency | AssetClass::Crypto) {
+        if matches!(
+            class,
+            AssetClass::Currency | AssetClass::Crypto | AssetClass::Equity | AssetClass::Commodity
+        ) {
             return Err(AssetError::HasOwnVariant(class));
         }
-        match AssetName::new(name) {
+        match asset_name(name) {
             Ok(name) => Ok(Self::Other(OtherAsset { name, class })),
-            Err(e) => Err(AssetError::Name(e)),
+            Err(e) => Err(e),
         }
     }
 
@@ -108,6 +130,8 @@ impl Asset {
         match self {
             Asset::Currency(_) => AssetClass::Currency,
             Asset::Crypto(_) => AssetClass::Crypto,
+            Asset::Equity(_) => AssetClass::Equity,
+            Asset::Commodity(_) => AssetClass::Commodity,
             Asset::Other(other) => other.class,
         }
     }
@@ -115,9 +139,16 @@ impl Asset {
     pub fn name(&self) -> &str {
         match self {
             Asset::Currency(tag) => tag.code(),
-            Asset::Crypto(name) => name.as_str(),
+            Asset::Crypto(name) | Asset::Equity(name) | Asset::Commodity(name) => name.as_str(),
             Asset::Other(other) => other.name.as_str(),
         }
+    }
+}
+
+const fn asset_name(name: &str) -> Result<AssetName, AssetError> {
+    match AssetName::new(name) {
+        Ok(name) => Ok(name),
+        Err(e) => Err(AssetError::Name(e)),
     }
 }
 
@@ -214,10 +245,16 @@ mod tests {
         assert!(matches!(btc, Asset::Crypto(name) if name.as_str() == "BTC"));
 
         let aapl = Asset::new("AAPL", AssetClass::Equity).expect("valid name");
-        let Asset::Other(other) = aapl else {
-            panic!("expected other, got {aapl:?}")
+        assert!(matches!(aapl, Asset::Equity(name) if name.as_str() == "AAPL"));
+
+        let cl = Asset::new("CL", AssetClass::Commodity).expect("valid name");
+        assert!(matches!(cl, Asset::Commodity(name) if name.as_str() == "CL"));
+
+        let es = Asset::new("ES", AssetClass::Index).expect("valid name");
+        let Asset::Other(other) = es else {
+            panic!("expected other, got {es:?}")
         };
-        assert_eq!((other.name(), other.class()), ("AAPL", AssetClass::Equity));
+        assert_eq!((other.name(), other.class()), ("ES", AssetClass::Index));
     }
 
     #[test]
@@ -229,10 +266,16 @@ mod tests {
             Asset::other("USD", AssetClass::Currency),
             Err(AssetError::HasOwnVariant(AssetClass::Currency))
         );
-        assert_eq!(
-            Asset::other("BTC", AssetClass::Crypto),
-            Err(AssetError::HasOwnVariant(AssetClass::Crypto))
-        );
+        for class in [
+            AssetClass::Crypto,
+            AssetClass::Equity,
+            AssetClass::Commodity,
+        ] {
+            assert_eq!(
+                Asset::other("X", class),
+                Err(AssetError::HasOwnVariant(class))
+            );
+        }
     }
 
     #[test]
@@ -261,6 +304,18 @@ mod tests {
                 AssetClass::Crypto,
                 "USDT",
                 "Crypto|USDT",
+            ),
+            (
+                Asset::equity("SPY").expect("valid"),
+                AssetClass::Equity,
+                "SPY",
+                "Equity|SPY",
+            ),
+            (
+                Asset::commodity("XAU").expect("valid"),
+                AssetClass::Commodity,
+                "XAU",
+                "Commodity|XAU",
             ),
             (
                 Asset::other("ES", AssetClass::Index).expect("valid"),
@@ -311,8 +366,16 @@ mod tests {
                 r#"{"name":"BTC","class":"Crypto"}"#,
             ),
             (
-                Asset::other("AAPL", AssetClass::Equity).expect("valid"),
+                Asset::equity("AAPL").expect("valid"),
                 r#"{"name":"AAPL","class":"Equity"}"#,
+            ),
+            (
+                Asset::commodity("CL").expect("valid"),
+                r#"{"name":"CL","class":"Commodity"}"#,
+            ),
+            (
+                Asset::other("ES", AssetClass::Index).expect("valid"),
+                r#"{"name":"ES","class":"Index"}"#,
             ),
         ];
         for (asset, json) in cases {
