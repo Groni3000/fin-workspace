@@ -60,7 +60,7 @@ mod tests {
             Asset::new("FGBL", AssetClass::FixedIncome).expect("Asset got incorrect parameters"),
             Asset::new("EUR", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xeur(),
-            Currency::eur(),
+            Currency::eur().into(),
             year,
             tenor,
             None,

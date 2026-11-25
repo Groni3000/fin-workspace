@@ -49,7 +49,7 @@ mod tests {
             Asset::new("VX", AssetClass::Index).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xcbo(),
-            Currency::usd(),
+            Currency::usd().into(),
             year,
             tenor,
             None,

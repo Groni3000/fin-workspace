@@ -173,19 +173,19 @@ const AAPL_XNAS: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("AAPL", AssetClass::Equity)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
     Mic::xnas(),
-    Currency::usd(),
+    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
 ));
 const AAPL_XLON: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("AAPL", AssetClass::Equity)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
     Mic::xlon(),
-    Currency::usd(),
+    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
 ));
 const ES_CME: Instrument = Instrument::Futures(FuturesContract::new_unchecked(
     unwrap_asset(Asset::new("ES", AssetClass::Index)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
     Mic::xcme(),
-    Currency::usd(),
+    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
     2026,
     Tenor::June,
     None,
@@ -194,7 +194,7 @@ const FDAX_EUREX: Instrument = Instrument::Futures(FuturesContract::new_unchecke
     unwrap_asset(Asset::new("FDX", AssetClass::Index)),
     unwrap_asset(Asset::new("EUR", AssetClass::Currency)),
     Mic::xeur(),
-    Currency::eur(),
+    unwrap_asset(Asset::new("EUR", AssetClass::Currency)),
     2026,
     Tenor::June,
     None,
@@ -209,14 +209,14 @@ const XAU_USD: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("XAU", AssetClass::Commodity)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
     Mic::xlbm(),
-    Currency::usd(),
+    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
 ));
 // Same LBMA gold, quoted in EUR by the FX desk.
 const XAU_EUR: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("XAU", AssetClass::Commodity)),
     unwrap_asset(Asset::new("EUR", AssetClass::Currency)),
     Mic::xlbm(),
-    Currency::eur(),
+    unwrap_asset(Asset::new("EUR", AssetClass::Currency)),
 ));
 // Shanghai Gold Exchange, CNY (onshore yuan). Materially different
 // market from LBMA due to China's capital controls — the Shanghai-London
@@ -225,7 +225,7 @@ const XAU_CHF: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("XAU", AssetClass::Commodity)),
     unwrap_asset(Asset::new("CHF", AssetClass::Currency)),
     Mic::xsge(),
-    Currency::chf(),
+    unwrap_asset(Asset::new("CHF", AssetClass::Currency)),
     // THIS CORRECT VALUE IS NOT CONST CURATED! Can't be used here.
     // So we are bullshiting right now with a not real currency for this instrument.
 
@@ -240,7 +240,7 @@ const JPY_6J: Instrument = Instrument::Futures(FuturesContract::new_unchecked(
     unwrap_asset(Asset::new("JPY", AssetClass::Currency)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
     Mic::xcme(),
-    Currency::usd(),
+    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
     2026,
     Tenor::June,
     None,
@@ -250,7 +250,7 @@ const BTC_USD: Instrument = Instrument::Stock(Stock::new(
     unwrap_asset(Asset::new("BTC", AssetClass::Crypto)),
     unwrap_asset(Asset::new("USD", AssetClass::Currency)),
     Mic::iexg(),
-    Currency::usd(),
+    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
 ));
 // ---
 

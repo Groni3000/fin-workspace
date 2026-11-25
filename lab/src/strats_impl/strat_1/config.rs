@@ -113,7 +113,7 @@ impl Default for Config<LastNthBDayOfPrevMonth> {
                 Asset::new("RB", AssetClass::Commodity).unwrap(),
                 Asset::new("USD", AssetClass::Currency).unwrap(),
                 Mic::xcme(),
-                Currency::usd(),
+                Currency::usd().into(),
                 2008,
                 Tenor::April,
                 None,

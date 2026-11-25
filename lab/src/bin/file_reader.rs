@@ -15,7 +15,7 @@ fn main() -> Result<(), ReadError> {
         Asset::new("RB", instrid::asset::AssetClass::Commodity).expect("Failed to create Asset"),
         Asset::new("USD", instrid::asset::AssetClass::Currency).expect("Failed to create Asset"),
         MicIso::xnym().into(),
-        Currency::usd(),
+        Currency::usd().into(),
         2025,
         Tenor::December,
         None,

@@ -73,7 +73,7 @@ fn stock(symbol: &str) -> Instrument {
         Asset::new(symbol, AssetClass::Equity).expect("valid asset"),
         Asset::new("USD", AssetClass::Currency).expect("valid asset"),
         Mic::arcx(),
-        Currency::usd(),
+        Currency::usd().into(),
     ))
 }
 

@@ -80,7 +80,7 @@ let spy = Instrument::Stock(Stock::new(
     Asset::new("SPY", AssetClass::Equity).unwrap(),
     Asset::new("USD", AssetClass::Currency).unwrap(),
     Mic::arcx(),
-    Currency::usd(),
+    Currency::usd().into(),
 ));
 let trade = Trade {
     ts: Timestamp::UNIX_EPOCH,

@@ -20,13 +20,13 @@ granularities, and most type systems blur them into one:
 - `Asset` - represents the entity: (`name + AssetClass`)
 - `TradedInstrument` - represents what we buy/sell (`base: Asset`), what is used to
   quote base (`price_quotation: Asset`), where it is traded (`mic: Mic`) and what it
-  settles in (`settlement_currency: Currency`).
+  settles in (`settlement: Asset`).
 - [`Stock`, `FuturesContract`, `OptionContract`] - concrete implementations of each trading instrument type.
 - `Instrument` - enum of concrete implementations
   (useful for gathering all instrument types together).
 
-These are small: `Stock` is 56 bytes, `FuturesContract` 64, `OptionContract` 72.
-`Instrument` is 72 bytes — the tag fits in existing padding.
+These are small: `Stock` is 46 bytes, `FuturesContract` 52, `OptionContract` 64.
+`Instrument` is 64 bytes — the tag fits in existing padding.
 
 `Mic` is 4 bytes: just the code. The full ISO 10383 record is a separate
 160-byte `MicIso`, fetched from the registry only when you actually want the
@@ -57,14 +57,14 @@ let spy = Stock::new(
     Asset::new("SPY", AssetClass::Equity).unwrap(),
     Asset::new("USD", AssetClass::Currency).unwrap(),
     Mic::arcx(),                   // NYSE Arca — where SPY actually lists
-    Currency::usd(),               // settlement currency
+    Currency::usd().into(),        // settlement
 );
 
 let cl_dec25 = FuturesContract::new(
     Asset::new("CL", AssetClass::Commodity).unwrap(),
     Asset::new("USD", AssetClass::Currency).unwrap(),
     Mic::xnym(),                   // NYMEX
-    Currency::usd(),
+    Currency::usd().into(),
     2025,
     Tenor::December,
     None,                          // unknown/unspecified day-of-month
@@ -74,7 +74,7 @@ let aapl_call = OptionContract::new(
     Asset::new("AAPL", AssetClass::Equity).unwrap(),
     Asset::new("USD", AssetClass::Currency).unwrap(),
     Mic::xnas(),
-    Currency::usd(),
+    Currency::usd().into(),
     2025, Tenor::December, 19,     // exact expiry (required for options)
     OptionKind::Call,
     ExerciseStyle::American,
@@ -83,7 +83,7 @@ let aapl_call = OptionContract::new(
 
 // A little bit verbose, but it's not like we print instruments all the time
 // and it holds all essential information. `Stock` and `FuturesContract` append
-// the settlement currency as `(USD)`; `OptionContract` does not.
+// the settlement's name as `(USD)`; `OptionContract` does not.
 println!("{spy}");                 // Stock:Equity|SPY/Currency|USD@ARCX(USD)
 println!("{cl_dec25}");            // Futures:Commodity|CL/Currency|USD@XNYM(USD) 2025-12
 println!("{aapl_call}");           // Option:Equity|AAPL/Currency|USD@XNAS 2025-12-19 American::Call#200

@@ -1,7 +1,5 @@
 use std::fmt::Display;
 
-use tradeprim::currency::Currency;
-
 use crate::asset::Asset;
 use crate::days_in_month;
 use crate::instruments::{InvalidContractDate, MAX_YEAR, TradedInstrument};
@@ -18,7 +16,7 @@ pub struct FuturesContract {
     base: Asset,
     price_quotation: Asset,
     mic: Mic,
-    settlement_currency: Currency,
+    settlement: Asset,
     year: u16,
     tenor: Tenor,
     day: Option<u8>,
@@ -35,7 +33,7 @@ impl<'de> serde::Deserialize<'de> for FuturesContract {
             raw.base,
             raw.price_quotation,
             raw.mic,
-            raw.settlement_currency,
+            raw.settlement,
             raw.year,
             raw.tenor,
             raw.day,
@@ -60,7 +58,7 @@ impl FuturesContract {
         base: Asset,
         price_quotation: Asset,
         mic: Mic,
-        settlement_currency: Currency,
+        settlement: Asset,
         year: u16,
         tenor: Tenor,
         day: Option<u8>,
@@ -79,7 +77,7 @@ impl FuturesContract {
             base,
             price_quotation,
             mic,
-            settlement_currency,
+            settlement,
             year,
             tenor,
             day,
@@ -90,7 +88,7 @@ impl FuturesContract {
         base: Asset,
         price_quotation: Asset,
         mic: Mic,
-        settlement_currency: Currency,
+        settlement: Asset,
         year: u16,
         tenor: Tenor,
         day: Option<u8>,
@@ -99,7 +97,7 @@ impl FuturesContract {
             base,
             price_quotation,
             mic,
-            settlement_currency,
+            settlement,
             year,
             tenor,
             day,
@@ -160,8 +158,8 @@ impl FuturesContract {
         &self.mic
     }
 
-    pub fn settlement_currency(&self) -> &Currency {
-        &self.settlement_currency
+    pub fn settlement(&self) -> &Asset {
+        &self.settlement
     }
 }
 
@@ -178,8 +176,8 @@ impl TradedInstrument for FuturesContract {
         &self.mic
     }
 
-    fn settlement_currency(&self) -> &Currency {
-        &self.settlement_currency
+    fn settlement(&self) -> &Asset {
+        &self.settlement
     }
 }
 
@@ -191,7 +189,7 @@ impl Display for FuturesContract {
             self.base,
             self.price_quotation,
             self.mic,
-            self.settlement_currency,
+            self.settlement.name(),
             self.year,
             self.tenor.ordinal(),
         )?;
@@ -206,6 +204,8 @@ impl Display for FuturesContract {
 
 #[cfg(test)]
 mod tests {
+    use tradeprim::currency::Currency;
+
     #[cfg(feature = "serde")]
     use crate::_assert_owned;
     use crate::{asset::AssetClass, mic::MicIso};
@@ -218,7 +218,7 @@ mod tests {
             Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             MicIso::xnas().into(),
-            Currency::usd(),
+            Currency::usd().into(),
             2026,
             Tenor::June,
             None,
@@ -230,7 +230,7 @@ mod tests {
             Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             MicIso::xnas().into(),
-            Currency::usd(),
+            Currency::usd().into(),
             2026,
             Tenor::June,
             Some(20),
@@ -261,7 +261,7 @@ mod tests {
         let f = cl();
         let serialized =
             serde_json::to_string(&f).expect("Futures contract should be serializable");
-        let expected = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2026,\"tenor\":6,\"day\":null}";
+        let expected = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement\":{\"name\":\"USD\",\"class\":\"Currency\"},\"year\":2026,\"tenor\":6,\"day\":null}";
 
         assert_eq!(serialized, expected);
     }
@@ -269,7 +269,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_futures_deserialize() {
-        let serialized = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2026,\"tenor\":6,\"day\":null}";
+        let serialized = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement\":{\"name\":\"USD\",\"class\":\"Currency\"},\"year\":2026,\"tenor\":6,\"day\":null}";
         let expected = cl();
         let deserialized: FuturesContract =
             serde_json::from_str(serialized).expect("Futures contract should be deserializable");
@@ -283,7 +283,7 @@ mod tests {
         let f = cl_with_day();
         let serialized =
             serde_json::to_string(&f).expect("Futures contract should be serializable");
-        let expected = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2026,\"tenor\":6,\"day\":20}";
+        let expected = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement\":{\"name\":\"USD\",\"class\":\"Currency\"},\"year\":2026,\"tenor\":6,\"day\":20}";
 
         assert_eq!(serialized, expected);
     }
@@ -291,7 +291,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_futures_with_day_deserialize() {
-        let serialized = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2026,\"tenor\":6,\"day\":20,\"settlement_currency\":\"USD\"}";
+        let serialized = "{\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"year\":2026,\"tenor\":6,\"day\":20,\"settlement\":{\"name\":\"USD\",\"class\":\"Currency\"}}";
         let expected = cl_with_day();
         let deserialized: FuturesContract =
             serde_json::from_str(serialized).expect("Futures contract should be deserializable");

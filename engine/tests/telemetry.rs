@@ -55,7 +55,7 @@ fn spy() -> Instrument {
         Asset::new("SPY", AssetClass::Equity).expect("valid asset"),
         Asset::new("USD", AssetClass::Currency).expect("valid asset"),
         Mic::arcx(),
-        Currency::usd(),
+        Currency::usd().into(),
     ))
 }
 

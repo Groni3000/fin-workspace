@@ -1,5 +1,3 @@
-use tradeprim::currency::Currency;
-
 use crate::asset::Asset;
 use crate::instruments::TradedInstrument;
 use crate::mic::Mic;
@@ -11,21 +9,16 @@ pub struct Stock {
     base: Asset,
     price_quotation: Asset,
     mic: Mic,
-    settlement_currency: Currency,
+    settlement: Asset,
 }
 
 impl Stock {
-    pub const fn new(
-        base: Asset,
-        price_quotation: Asset,
-        mic: Mic,
-        settlement_currency: Currency,
-    ) -> Self {
+    pub const fn new(base: Asset, price_quotation: Asset, mic: Mic, settlement: Asset) -> Self {
         Self {
             base,
             price_quotation,
             mic,
-            settlement_currency,
+            settlement,
         }
     }
 
@@ -41,8 +34,8 @@ impl Stock {
         &self.mic
     }
 
-    pub fn settlement_currency(&self) -> &Currency {
-        &self.settlement_currency
+    pub fn settlement(&self) -> &Asset {
+        &self.settlement
     }
 }
 
@@ -59,8 +52,8 @@ impl TradedInstrument for Stock {
         &self.mic
     }
 
-    fn settlement_currency(&self) -> &Currency {
-        &self.settlement_currency
+    fn settlement(&self) -> &Asset {
+        &self.settlement
     }
 }
 
@@ -69,13 +62,18 @@ impl Display for Stock {
         write!(
             f,
             "Stock:{}/{}@{}({})",
-            self.base, self.price_quotation, self.mic, self.settlement_currency
+            self.base,
+            self.price_quotation,
+            self.mic,
+            self.settlement.name()
         )
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use tradeprim::currency::Currency;
+
     #[cfg(feature = "serde")]
     use crate::_assert_owned;
     use crate::asset::AssetClass;
@@ -87,7 +85,7 @@ mod tests {
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
-            Currency::usd(),
+            Currency::usd().into(),
         )
     }
 
@@ -106,7 +104,7 @@ mod tests {
     fn test_stock_serialize() {
         let stock = aapl();
         let serialized = serde_json::to_string(&stock).expect("Stock should be serializable");
-        let expected = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\"}";
+        let expected = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement\":{\"name\":\"USD\",\"class\":\"Currency\"}}";
 
         assert_eq!(expected, serialized);
     }
@@ -115,7 +113,7 @@ mod tests {
     #[test]
     fn test_stock_deserialize() {
         let expected = aapl();
-        let stock_str = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\"}";
+        let stock_str = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement\":{\"name\":\"USD\",\"class\":\"Currency\"}}";
         let deserialized: Stock =
             serde_json::from_str(stock_str).expect("Stock should be deserializable");
 

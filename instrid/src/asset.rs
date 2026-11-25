@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use tradeprim::currency::Currency;
+
 type AssetName = crate::inline_str::InlineStr<12>;
 
 /// Represents an asset (e.g., equity, commodity, currency, etc.).
@@ -38,6 +40,14 @@ impl Asset {
 
     pub fn name(&self) -> crate::inline_str::InlineStr<12> {
         self.name
+    }
+}
+
+/// A currency as an asset: its ISO code, class [`AssetClass::Currency`].
+impl From<Currency> for Asset {
+    fn from(currency: Currency) -> Self {
+        Asset::new(currency.alphabetic_code(), AssetClass::Currency)
+            .expect("a 3-letter ISO code fits an asset name")
     }
 }
 

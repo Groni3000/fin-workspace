@@ -107,7 +107,7 @@ fn init_files_md<'a>(listing: &'a ListedTenors) -> Result<ChainReader<'a>, ReadE
         Asset::new("RB", instrid::asset::AssetClass::Commodity).expect("Failed to create Asset"),
         Asset::new("USD", instrid::asset::AssetClass::Currency).expect("Failed to create Asset"),
         Mic::xnym(),
-        Currency::usd(),
+        Currency::usd().into(),
         2025,
         Tenor::December,
         None,

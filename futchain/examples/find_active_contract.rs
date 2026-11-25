@@ -43,7 +43,7 @@ fn main() {
         Asset::new("ES", AssetClass::Index).expect("Asset got incorrect parameters"),
         Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xcme(),
-        Currency::usd(),
+        Currency::usd().into(),
         2024,
         Tenor::December,
         None,

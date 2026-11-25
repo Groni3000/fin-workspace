@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use tradeprim::{currency::Currency, prelude::Price};
+use tradeprim::prelude::Price;
 
 use crate::instruments::InvalidContractDate;
 use crate::{
@@ -17,7 +17,7 @@ pub struct OptionContract {
     base: Asset,
     price_quotation: Asset,
     mic: Mic,
-    settlement_currency: Currency,
+    settlement: Asset,
     year: u16,
     tenor: Tenor,
     day: u8,
@@ -37,7 +37,7 @@ impl<'de> serde::Deserialize<'de> for OptionContract {
             raw.base,
             raw.price_quotation,
             raw.mic,
-            raw.settlement_currency,
+            raw.settlement,
             raw.year,
             raw.tenor,
             raw.day,
@@ -121,7 +121,7 @@ impl OptionContract {
         base: Asset,
         price_quotation: Asset,
         mic: Mic,
-        settlement_currency: Currency,
+        settlement: Asset,
         year: u16,
         tenor: Tenor,
         day: u8,
@@ -141,7 +141,7 @@ impl OptionContract {
             base,
             price_quotation,
             mic,
-            settlement_currency,
+            settlement,
             year,
             tenor,
             day,
@@ -156,7 +156,7 @@ impl OptionContract {
         base: Asset,
         price_quotation: Asset,
         mic: Mic,
-        settlement_currency: Currency,
+        settlement: Asset,
         year: u16,
         tenor: Tenor,
         day: u8,
@@ -168,7 +168,7 @@ impl OptionContract {
             base,
             price_quotation,
             mic,
-            settlement_currency,
+            settlement,
             year,
             tenor,
             day,
@@ -178,8 +178,8 @@ impl OptionContract {
         }
     }
 
-    pub fn settlement_currency(&self) -> &Currency {
-        &self.settlement_currency
+    pub fn settlement(&self) -> &Asset {
+        &self.settlement
     }
 
     pub fn base(&self) -> &Asset {
@@ -232,8 +232,8 @@ impl TradedInstrument for OptionContract {
         &self.mic
     }
 
-    fn settlement_currency(&self) -> &Currency {
-        &self.settlement_currency
+    fn settlement(&self) -> &Asset {
+        &self.settlement
     }
 }
 
@@ -259,6 +259,8 @@ impl Display for OptionContract {
 
 #[cfg(test)]
 mod tests {
+    use tradeprim::currency::Currency;
+
     use std::str::FromStr;
 
     #[cfg(feature = "serde")]
@@ -272,7 +274,7 @@ mod tests {
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
-            Currency::usd(),
+            Currency::usd().into(),
             2025,
             Tenor::December,
             19,
@@ -297,7 +299,7 @@ mod tests {
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
-            Currency::usd(),
+            Currency::usd().into(),
             2025,
             Tenor::December,
             19,
@@ -315,7 +317,7 @@ mod tests {
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
-            Currency::usd(),
+            Currency::usd().into(),
             2025,
             Tenor::December,
             19,
@@ -333,7 +335,7 @@ mod tests {
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
-            Currency::usd(),
+            Currency::usd().into(),
             2025,
             Tenor::December,
             19,
@@ -355,7 +357,7 @@ mod tests {
     fn test_option_serialize() {
         let opt = aapl_call_200_dec25();
         let serialized = serde_json::to_string(&opt).unwrap();
-        let expected = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200\"}";
+        let expected = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement\":{\"name\":\"USD\",\"class\":\"Currency\"},\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200\"}";
 
         assert_eq!(serialized, expected);
     }
@@ -363,7 +365,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_option_deserialize() {
-        let serialized = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200\"}";
+        let serialized = "{\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement\":{\"name\":\"USD\",\"class\":\"Currency\"},\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200\"}";
         let expected = aapl_call_200_dec25();
         let deserialized: OptionContract = serde_json::from_str(serialized).unwrap();
 

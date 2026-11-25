@@ -81,7 +81,7 @@ mod calendar_tests {
             Asset::new("AAPL", AssetClass::Equity).unwrap(),
             Asset::new("USD", AssetClass::Currency).unwrap(),
             Mic::xnas(),
-            Currency::usd(),
+            Currency::usd().into(),
             year,
             tenor,
             day,
@@ -100,7 +100,7 @@ mod calendar_tests {
             Asset::new("CL", AssetClass::Commodity).unwrap(),
             Asset::new("USD", AssetClass::Currency).unwrap(),
             Mic::xnym(),
-            Currency::usd(),
+            Currency::usd().into(),
             year,
             tenor,
             day,
@@ -230,7 +230,7 @@ mod calendar_tests {
             format!(
                 r#"{{"base":{{"name":"AAPL","class":"Equity"}},
                      "price_quotation":{{"name":"USD","class":"Currency"}},
-                     "mic":"XNAS","settlement_currency":"USD",
+                     "mic":"XNAS","settlement":{{"name":"USD","class":"Currency"}},
                      "year":{year},"tenor":{month},"day":{day},
                      "kind":"Call","style":"American","strike":"200"}}"#
             )
@@ -241,7 +241,7 @@ mod calendar_tests {
             format!(
                 r#"{{"base":{{"name":"CL","class":"Commodity"}},
                      "price_quotation":{{"name":"USD","class":"Currency"}},
-                     "mic":"XNYM","settlement_currency":"USD",
+                     "mic":"XNYM","settlement":{{"name":"USD","class":"Currency"}},
                      "year":{year},"tenor":{month},"day":{day}}}"#
             )
         }

@@ -19,19 +19,19 @@ fn main() {
         Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
         Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xnas(),
-        Currency::usd(),
+        Currency::usd().into(),
     ));
     let aapl_xlon = Instrument::Stock(Stock::new(
         Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
         Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xlon(),
-        Currency::usd(),
+        Currency::usd().into(),
     ));
     let es_cme = Instrument::Futures(FuturesContract::new_unchecked(
         Asset::new("ES", AssetClass::Index).expect("Asset got incorrect parameters"),
         Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xcme(),
-        Currency::usd(),
+        Currency::usd().into(),
         2026,
         Tenor::June,
         None,
@@ -40,7 +40,7 @@ fn main() {
         Asset::new("FDX", AssetClass::Index).expect("Asset got incorrect parameters"),
         Asset::new("EUR", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xeur(),
-        Currency::eur(),
+        Currency::eur().into(),
         2026,
         Tenor::June,
         None,
@@ -55,14 +55,14 @@ fn main() {
         Asset::new("XAU", AssetClass::Commodity).expect("Asset got incorrect parameters"),
         Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xlbm(),
-        Currency::usd(),
+        Currency::usd().into(),
     ));
     // Same LBMA gold, quoted in EUR by the FX desk.
     let xau_eur = Instrument::Stock(Stock::new(
         Asset::new("XAU", AssetClass::Commodity).expect("Asset got incorrect parameters"),
         Asset::new("EUR", AssetClass::Currency).expect("Asset got incorrect parameters"),
         Mic::xlbm(),
-        Currency::eur(),
+        Currency::eur().into(),
     ));
     // Shanghai Gold Exchange, CNY (onshore yuan). Materially different
     // market from LBMA due to China's capital controls — the Shanghai-London
@@ -73,7 +73,8 @@ fn main() {
         Mic::xsge(),
         Currency::from_alphabetic_code("CNY")
             .expect("Code should be valid")
-            .expect("Could not find currency code"),
+            .expect("Could not find currency code")
+            .into(),
     ));
     // ---
 

@@ -62,7 +62,7 @@ mod tests {
             Asset::new("HE", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xcme(),
-            Currency::usd(),
+            Currency::usd().into(),
             year,
             tenor,
             None,

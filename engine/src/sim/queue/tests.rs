@@ -97,7 +97,7 @@ fn spy() -> Instrument {
         Asset::new("SPY", AssetClass::Equity).unwrap(),
         Asset::new("USD", AssetClass::Currency).unwrap(),
         Mic::arcx(),
-        Currency::usd(),
+        Currency::usd().into(),
     ))
 }
 

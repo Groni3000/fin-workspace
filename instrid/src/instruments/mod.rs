@@ -9,7 +9,6 @@ pub mod stock;
 pub use futures::FuturesContract;
 pub use options::{ExerciseStyle, OptionContract, OptionKind};
 pub use stock::Stock;
-use tradeprim::currency::Currency;
 
 use crate::tenor::Tenor;
 
@@ -29,7 +28,7 @@ pub enum Instrument {
 ///     - We buy `base` asset
 ///     - Using `price_quotation`
 ///     - On `mic` venue
-///     - using `settlement_currency`
+///     - settled in `settlement`
 pub trait TradedInstrument {
     /// Returns a reference to the base asset of this instrument.
     fn base(&self) -> &Asset;
@@ -37,8 +36,8 @@ pub trait TradedInstrument {
     fn price_quotation(&self) -> &Asset;
     /// Returns a reference to the MIC of this instrument.
     fn mic(&self) -> &Mic;
-    /// Returns a settlement currency.
-    fn settlement_currency(&self) -> &Currency;
+    /// Returns what the instrument settles in.
+    fn settlement(&self) -> &Asset;
 }
 
 impl TradedInstrument for Instrument {
@@ -66,11 +65,11 @@ impl TradedInstrument for Instrument {
         }
     }
 
-    fn settlement_currency(&self) -> &Currency {
+    fn settlement(&self) -> &Asset {
         match self {
-            Instrument::Stock(stock) => stock.settlement_currency(),
-            Instrument::Futures(futures) => futures.settlement_currency(),
-            Instrument::Option(option) => option.settlement_currency(),
+            Instrument::Stock(stock) => stock.settlement(),
+            Instrument::Futures(futures) => futures.settlement(),
+            Instrument::Option(option) => option.settlement(),
         }
     }
 }
@@ -140,6 +139,8 @@ impl Display for InvalidContractDate {
 
 #[cfg(test)]
 mod tests {
+    use tradeprim::currency::Currency;
+
     #[cfg(feature = "serde")]
     use std::str::FromStr;
 
@@ -160,7 +161,7 @@ mod tests {
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             MicIso::xnas().into(),
-            Currency::usd(),
+            Currency::usd().into(),
         )
     }
 
@@ -170,7 +171,7 @@ mod tests {
             Asset::new("CL", AssetClass::Commodity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             MicIso::xnas().into(),
-            Currency::usd(),
+            Currency::usd().into(),
             2026,
             Tenor::June,
             None,
@@ -183,7 +184,7 @@ mod tests {
             Asset::new("AAPL", AssetClass::Equity).expect("Asset got incorrect parameters"),
             Asset::new("USD", AssetClass::Currency).expect("Asset got incorrect parameters"),
             Mic::xnas(),
-            Currency::usd(),
+            Currency::usd().into(),
             2025,
             Tenor::December,
             19,
@@ -204,7 +205,7 @@ mod tests {
     fn test_instrument_stock_serialize() {
         let inst: Instrument = aapl_stock().into();
         let serialized = serde_json::to_string(&inst).unwrap();
-        let expected = "{\"type\":\"Stock\",\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\"}";
+        let expected = "{\"type\":\"Stock\",\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement\":{\"name\":\"USD\",\"class\":\"Currency\"}}";
 
         assert_eq!(serialized, expected);
     }
@@ -212,7 +213,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_instrument_stock_deserialize() {
-        let serialized = "{\"type\":\"Stock\",\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\"}";
+        let serialized = "{\"type\":\"Stock\",\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement\":{\"name\":\"USD\",\"class\":\"Currency\"}}";
         let expected: Instrument = aapl_stock().into();
         let deserialized: Instrument = serde_json::from_str(serialized).unwrap();
 
@@ -224,7 +225,7 @@ mod tests {
     fn test_instrument_futures_serialize() {
         let inst: Instrument = cl_future().into();
         let serialized = serde_json::to_string(&inst).unwrap();
-        let expected = "{\"type\":\"Futures\",\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2026,\"tenor\":6,\"day\":null}";
+        let expected = "{\"type\":\"Futures\",\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement\":{\"name\":\"USD\",\"class\":\"Currency\"},\"year\":2026,\"tenor\":6,\"day\":null}";
 
         assert_eq!(serialized, expected);
     }
@@ -232,7 +233,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_instrument_futures_deserialize() {
-        let serialized = "{\"type\":\"Futures\",\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2026,\"tenor\":6,\"day\":null}";
+        let serialized = "{\"type\":\"Futures\",\"base\":{\"name\":\"CL\",\"class\":\"Commodity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement\":{\"name\":\"USD\",\"class\":\"Currency\"},\"year\":2026,\"tenor\":6,\"day\":null}";
         let expected: Instrument = cl_future().into();
         let deserialized: Instrument = serde_json::from_str(serialized).unwrap();
 
@@ -244,7 +245,7 @@ mod tests {
     fn test_instrument_option_serialize() {
         let inst: Instrument = aapl_option().into();
         let serialized = serde_json::to_string(&inst).unwrap();
-        let expected = "{\"type\":\"Option\",\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200\"}";
+        let expected = "{\"type\":\"Option\",\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement\":{\"name\":\"USD\",\"class\":\"Currency\"},\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200\"}";
 
         assert_eq!(serialized, expected);
     }
@@ -252,7 +253,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_instrument_option_deserialize() {
-        let serialized = "{\"type\":\"Option\",\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement_currency\":\"USD\",\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200\"}";
+        let serialized = "{\"type\":\"Option\",\"base\":{\"name\":\"AAPL\",\"class\":\"Equity\"},\"price_quotation\":{\"name\":\"USD\",\"class\":\"Currency\"},\"mic\":\"XNAS\",\"settlement\":{\"name\":\"USD\",\"class\":\"Currency\"},\"year\":2025,\"tenor\":12,\"day\":19,\"kind\":\"Call\",\"style\":\"American\",\"strike\":\"200\"}";
         let expected: Instrument = aapl_option().into();
         let deserialized: Instrument = serde_json::from_str(serialized).unwrap();
 
