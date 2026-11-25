@@ -25,12 +25,24 @@ granularities, and most type systems blur them into one:
 - `TradedInstrument` - represents what we buy/sell (`base: Asset`), what is used to
   quote base (`price_quotation: Asset`), where it is traded (`mic: Mic`) and what it
   settles in (`settlement: Asset`).
-- [`Stock`, `FuturesContract`, `OptionContract`] - concrete implementations of each trading instrument type.
+- [`Stock`, `FuturesContract`, `OptionContract`, `Crypto`] - concrete implementations of each trading instrument type.
+  `Crypto` is a spot pair (BTC/USDT, BTC/EUR, EUR/USDT): at least one side is an `Asset::Crypto`,
+  and it settles in its quote.
 - `Instrument` - enum of concrete implementations
   (useful for gathering all instrument types together).
 
-These are small: `Stock` is 46 bytes, `FuturesContract` 52, `OptionContract` 64.
-`Instrument` is 64 bytes — the tag fits in existing padding.
+These are small, and `Instrument`'s tag fits in existing padding:
+
+```rust
+use std::mem::size_of;
+use instrid::prelude::*;
+
+assert_eq!(size_of::<Crypto>(), 32);
+assert_eq!(size_of::<Stock>(), 46);
+assert_eq!(size_of::<FuturesContract>(), 52);
+assert_eq!(size_of::<OptionContract>(), 64);
+assert_eq!(size_of::<Instrument>(), 64);
+```
 
 `Mic` is 4 bytes: just the code. The full ISO 10383 record is a separate
 160-byte `MicIso`, fetched from the registry only when you actually want the
@@ -248,7 +260,7 @@ That registry stores `MicIso` — the full 160-byte ISO record. `Mic`, the
 and `mic_iso_by_code` goes the other way when you need the details.
 
 But that's not all. It would be nice to have some LSP support for the most common MICs.
-So, unconditionally, we codegen 33 of them as associated const constructors
+So, unconditionally, we codegen 34 of them as associated const constructors
 (both `Mic::xnas()` and `MicIso::xnas()`).
 The docstring for each construction will tell you MIC's name and whether it's
 an operating or segment MIC.
@@ -261,8 +273,24 @@ let nasdaq: Mic  = Mic::xnas();   // NASDAQ - ALL MARKETS (XNAS, operating).
 let bats:   Mic  = Mic::bats();   // CBOE BZX U.S. EQUITIES EXCHANGE (BATS, segment of XCBO).
 ```
 
+A venue without an ISO 10383 code (most crypto exchanges: Binance, Bybit, OKX) uses `XXXX`,
+"NO MARKET". **Instruments on two such venues can't be told apart**: BTCUSDT on Binance and
+BTCUSDT on Bybit are the same `Instrument`, so a cross-venue strategy must not mix them in one
+map, position or portfolio.
+
+```rust
+use instrid::prelude::*;
+
+let usdt = Asset::crypto("USDT").unwrap();
+let on_binance = Crypto::new(Asset::crypto("BTC").unwrap(), usdt, Mic::xxxx()).unwrap();
+let on_bybit = Crypto::new(Asset::crypto("BTC").unwrap(), usdt, Mic::xxxx()).unwrap();
+
+assert_eq!(on_binance.mic().to_string(), "XXXX");
+assert_eq!(on_binance, on_bybit); // the venue is lost
+```
+
 Lookup by code always works — the `mic-full` feature controls _how many_ records
-are embedded, not whether the registry exists. By default only the 33 curated
+are embedded, not whether the registry exists. By default only the 34 curated
 MICs are compiled in; with `mic-full` you get all ~2_840.
 
 ```rust

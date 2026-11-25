@@ -20,7 +20,7 @@ pub mod tenor;
 pub mod prelude {
     pub use crate::asset::{Asset, AssetClass};
     pub use crate::instruments::{
-        ExerciseStyle, FuturesContract, Instrument, OptionContract, OptionKind, Stock,
+        Crypto, ExerciseStyle, FuturesContract, Instrument, OptionContract, OptionKind, Stock,
         TradedInstrument,
     };
     pub use crate::mic::{

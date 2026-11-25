@@ -2,10 +2,12 @@ use std::fmt::{Debug, Display};
 
 use crate::{asset::Asset, mic::Mic};
 
+pub mod crypto;
 pub mod futures;
 pub mod options;
 pub mod stock;
 
+pub use crypto::{Crypto, NoCryptoAsset};
 pub use futures::FuturesContract;
 pub use options::{ExerciseStyle, OptionContract, OptionKind};
 pub use stock::Stock;
@@ -20,6 +22,7 @@ pub enum Instrument {
     Stock(Stock),
     Futures(FuturesContract),
     Option(OptionContract),
+    Crypto(Crypto),
 }
 
 /// Trait that shows that an `Instrument` is uniquely identified in the most general way.
@@ -46,6 +49,7 @@ impl TradedInstrument for Instrument {
             Instrument::Stock(stock) => stock.base(),
             Instrument::Futures(futures) => futures.base(),
             Instrument::Option(option) => option.base(),
+            Instrument::Crypto(crypto) => crypto.base(),
         }
     }
 
@@ -54,6 +58,7 @@ impl TradedInstrument for Instrument {
             Instrument::Stock(stock) => stock.price_quotation(),
             Instrument::Futures(futures) => futures.price_quotation(),
             Instrument::Option(option) => option.price_quotation(),
+            Instrument::Crypto(crypto) => crypto.price_quotation(),
         }
     }
 
@@ -62,6 +67,7 @@ impl TradedInstrument for Instrument {
             Instrument::Stock(stock) => stock.mic(),
             Instrument::Futures(futures) => futures.mic(),
             Instrument::Option(option) => option.mic(),
+            Instrument::Crypto(crypto) => crypto.mic(),
         }
     }
 
@@ -70,6 +76,7 @@ impl TradedInstrument for Instrument {
             Instrument::Stock(stock) => stock.settlement(),
             Instrument::Futures(futures) => futures.settlement(),
             Instrument::Option(option) => option.settlement(),
+            Instrument::Crypto(crypto) => crypto.settlement(),
         }
     }
 }
@@ -92,12 +99,19 @@ impl From<OptionContract> for Instrument {
     }
 }
 
+impl From<Crypto> for Instrument {
+    fn from(c: Crypto) -> Self {
+        Self::Crypto(c)
+    }
+}
+
 impl Display for Instrument {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Instrument::Stock(s) => std::fmt::Display::fmt(s, f),
             Instrument::Futures(fu) => std::fmt::Display::fmt(fu, f),
             Instrument::Option(option) => std::fmt::Display::fmt(option, f),
+            Instrument::Crypto(crypto) => std::fmt::Display::fmt(crypto, f),
         }
     }
 }
