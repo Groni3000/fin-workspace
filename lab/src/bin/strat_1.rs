@@ -203,7 +203,7 @@ fn init_kafka_md(
     let globex = |instr: &FuturesContract| {
         format!(
             "{}{}{}",
-            instr.base().name().as_str(),
+            instr.base().name(),
             instr.tenor().code(),
             instr.year() % 10
         )
@@ -252,7 +252,7 @@ fn init_kafka_merged_md(
     let globex = |instr: &FuturesContract| {
         format!(
             "{}{}{}",
-            instr.base().name().as_str(),
+            instr.base().name(),
             instr.tenor().code(),
             instr.year() % 10
         )

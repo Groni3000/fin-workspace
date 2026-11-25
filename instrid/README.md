@@ -17,7 +17,10 @@ granularities, and most type systems blur them into one:
 
 `instrid` keeps both visible in the type system:
 
-- `Asset` - represents the entity: (`name + AssetClass`)
+- `Asset` - represents the entity, one variant per kind: `Currency` (ISO 4217 only, with its
+  precision), `Crypto` (a name), `Other` (a name and an `AssetClass`, for classes without a
+  variant yet). `Asset::new(name, class)` picks the variant and checks a currency against the ISO
+  registry; `Asset::currency`, `Asset::crypto` and `Asset::other` are `const` for constants.
 - `TradedInstrument` - represents what we buy/sell (`base: Asset`), what is used to
   quote base (`price_quotation: Asset`), where it is traded (`mic: Mic`) and what it
   settles in (`settlement: Asset`).
@@ -51,7 +54,7 @@ use std::str::FromStr;
 use tradeprim::currency::Currency;
 use tradeprim::prelude::Price;
 
-// `Asset::new` returns a `Result` (the name length is validated);
+// `Asset::new` returns a `Result` (the name length is validated, a currency must be ISO 4217);
 // unwrapped here for brevity.
 let spy = Stock::new(
     Asset::new("SPY", AssetClass::Equity).unwrap(),
@@ -265,6 +268,8 @@ instrid = { version = "*", features = ["serde"] }
 
 Wire formats are chosen for human-readability and exact roundtripping:
 
+- `Asset` → `{"name": "USD", "class": "Currency"}` for every variant, deserialized via
+  `Asset::new`, so a currency is checked against the ISO registry.
 - `Mic` → 4-letter code string (`"XNAS"`), deserialized via the registry.
 - `Tenor` → `u8` (1–12), via `From<Tenor> for u8` + `TryFrom<u8> for Tenor`.
 - `Price` strikes → string (`"200"`), via `tradeprim`'s fixed-point formatting.

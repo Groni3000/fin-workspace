@@ -71,6 +71,10 @@ impl Currency {
         self.precision
     }
 
+    pub const fn tag(&self) -> CurrencyTag {
+        CurrencyTag::new(self.alphabetic_code, self.precision)
+    }
+
     pub fn from_alphabetic_code(code: &str) -> Result<Option<Currency>, AsciiCodeError> {
         let code: AsciiCode<3> = code.try_into()?;
         Ok(registry().get(&code).copied())
@@ -96,7 +100,9 @@ impl Display for CurrencyTag {
 }
 
 impl CurrencyTag {
-    pub fn new(alphabetic_code: AsciiCode<3>, precision: u8) -> Self {
+    /// Crate-private: a tag comes from a registry [`Currency`] ([`Currency::tag`]), so it is
+    /// always an ISO 4217 code.
+    pub(crate) const fn new(alphabetic_code: AsciiCode<3>, precision: u8) -> Self {
         Self {
             alphabetic_code,
             precision,
@@ -105,6 +111,11 @@ impl CurrencyTag {
 
     pub fn alphabetic_code(&self) -> AsciiCode<3> {
         self.alphabetic_code
+    }
+
+    /// The alphabetic code, e.g. "USD".
+    pub fn code(&self) -> &str {
+        self.alphabetic_code.as_str()
     }
 
     pub fn precision(&self) -> u8 {
@@ -142,7 +153,7 @@ impl Hash for CurrencyTag {
 
 impl From<Currency> for CurrencyTag {
     fn from(value: Currency) -> Self {
-        CurrencyTag::new(value.alphabetic_code, value.precision)
+        value.tag()
     }
 }
 

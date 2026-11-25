@@ -3,8 +3,7 @@
 use std::collections::HashMap;
 
 use instrid::{
-    asset::{Asset, AssetClass},
-    inline_str::InlineStrError,
+    asset::{Asset, AssetClass, AssetError},
     instruments::{FuturesContract, Instrument, Stock, TradedInstrument},
     mic::Mic,
     spec::{Spec, Specification},
@@ -163,38 +162,38 @@ fn px(s: &str) -> Price {
 
 // --- Instruments you trade
 #[allow(dead_code)]
-const fn unwrap_asset(asset: Result<Asset, InlineStrError>) -> Asset {
+const fn unwrap_asset(asset: Result<Asset, AssetError>) -> Asset {
     match asset {
         Ok(asset) => asset,
         Err(_e) => panic!("Asset got incorrect parameters"),
     }
 }
 const AAPL_XNAS: Instrument = Instrument::Stock(Stock::new(
-    unwrap_asset(Asset::new("AAPL", AssetClass::Equity)),
-    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
+    unwrap_asset(Asset::other("AAPL", AssetClass::Equity)),
+    Asset::currency(Currency::usd()),
     Mic::xnas(),
-    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
+    Asset::currency(Currency::usd()),
 ));
 const AAPL_XLON: Instrument = Instrument::Stock(Stock::new(
-    unwrap_asset(Asset::new("AAPL", AssetClass::Equity)),
-    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
+    unwrap_asset(Asset::other("AAPL", AssetClass::Equity)),
+    Asset::currency(Currency::usd()),
     Mic::xlon(),
-    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
+    Asset::currency(Currency::usd()),
 ));
 const ES_CME: Instrument = Instrument::Futures(FuturesContract::new_unchecked(
-    unwrap_asset(Asset::new("ES", AssetClass::Index)),
-    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
+    unwrap_asset(Asset::other("ES", AssetClass::Index)),
+    Asset::currency(Currency::usd()),
     Mic::xcme(),
-    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
+    Asset::currency(Currency::usd()),
     2026,
     Tenor::June,
     None,
 ));
 const FDAX_EUREX: Instrument = Instrument::Futures(FuturesContract::new_unchecked(
-    unwrap_asset(Asset::new("FDX", AssetClass::Index)),
-    unwrap_asset(Asset::new("EUR", AssetClass::Currency)),
+    unwrap_asset(Asset::other("FDX", AssetClass::Index)),
+    Asset::currency(Currency::eur()),
     Mic::xeur(),
-    unwrap_asset(Asset::new("EUR", AssetClass::Currency)),
+    Asset::currency(Currency::eur()),
     2026,
     Tenor::June,
     None,
@@ -206,26 +205,26 @@ const FDAX_EUREX: Instrument = Instrument::Futures(FuturesContract::new_unchecke
 
 // Canonical XAU quote: LBMA Gold Price, USD.
 const XAU_USD: Instrument = Instrument::Stock(Stock::new(
-    unwrap_asset(Asset::new("XAU", AssetClass::Commodity)),
-    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
+    unwrap_asset(Asset::other("XAU", AssetClass::Commodity)),
+    Asset::currency(Currency::usd()),
     Mic::xlbm(),
-    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
+    Asset::currency(Currency::usd()),
 ));
 // Same LBMA gold, quoted in EUR by the FX desk.
 const XAU_EUR: Instrument = Instrument::Stock(Stock::new(
-    unwrap_asset(Asset::new("XAU", AssetClass::Commodity)),
-    unwrap_asset(Asset::new("EUR", AssetClass::Currency)),
+    unwrap_asset(Asset::other("XAU", AssetClass::Commodity)),
+    Asset::currency(Currency::eur()),
     Mic::xlbm(),
-    unwrap_asset(Asset::new("EUR", AssetClass::Currency)),
+    Asset::currency(Currency::eur()),
 ));
 // Shanghai Gold Exchange, CNY (onshore yuan). Materially different
 // market from LBMA due to China's capital controls — the Shanghai-London
 // spread is a real, tradable basis, not a quote conversion.
 const XAU_CHF: Instrument = Instrument::Stock(Stock::new(
-    unwrap_asset(Asset::new("XAU", AssetClass::Commodity)),
-    unwrap_asset(Asset::new("CHF", AssetClass::Currency)),
+    unwrap_asset(Asset::other("XAU", AssetClass::Commodity)),
+    Asset::currency(Currency::chf()),
     Mic::xsge(),
-    unwrap_asset(Asset::new("CHF", AssetClass::Currency)),
+    Asset::currency(Currency::chf()),
     // THIS CORRECT VALUE IS NOT CONST CURATED! Can't be used here.
     // So we are bullshiting right now with a not real currency for this instrument.
 
@@ -237,20 +236,20 @@ const XAU_CHF: Instrument = Instrument::Stock(Stock::new(
 // CME Japanese Yen future: price is USD per JPY, so the tick is tiny
 // (0.0000005) and the point value is huge (12_500_000). Granular price.
 const JPY_6J: Instrument = Instrument::Futures(FuturesContract::new_unchecked(
-    unwrap_asset(Asset::new("JPY", AssetClass::Currency)),
-    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
+    Asset::currency(Currency::jpy()),
+    Asset::currency(Currency::usd()),
     Mic::xcme(),
-    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
+    Asset::currency(Currency::usd()),
     2026,
     Tenor::June,
     None,
 ));
 // Bitcoin spot in USD: whole ticks, but you trade fractional quantities.
 const BTC_USD: Instrument = Instrument::Stock(Stock::new(
-    unwrap_asset(Asset::new("BTC", AssetClass::Crypto)),
-    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
+    unwrap_asset(Asset::crypto("BTC")),
+    Asset::currency(Currency::usd()),
     Mic::iexg(),
-    unwrap_asset(Asset::new("USD", AssetClass::Currency)),
+    Asset::currency(Currency::usd()),
 ));
 // ---
 

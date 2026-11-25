@@ -131,7 +131,7 @@ impl<'a> ChainReader<'a> {
         let contract = chain.contract();
         format!(
             "{}_{}{:02}_1min.txt",
-            contract.base().name().as_str(),
+            contract.base().name(),
             contract.tenor().code(),
             contract.year() % 100
         )

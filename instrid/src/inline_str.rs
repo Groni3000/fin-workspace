@@ -48,7 +48,7 @@ impl<const N: usize> std::fmt::Debug for InlineStr<N> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InlineStrError {
     TooLong { got: usize, cap: usize },
     NotAscii,
