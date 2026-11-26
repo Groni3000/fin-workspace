@@ -1,6 +1,7 @@
 //! Live trading on Binance Spot.
 
 pub mod bridge;
+pub mod feed;
 pub mod instruments;
 pub mod kline;
 pub mod profile;

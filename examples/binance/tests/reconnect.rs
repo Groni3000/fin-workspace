@@ -1,146 +1,14 @@
 //! What the SDK's market-data streams do when the server goes away, against a local fake server.
 
-use std::time::Duration;
+mod common;
 
 use binance_sdk::config::ConfigurationWebsocketStreams;
 use binance_sdk::models::{WebsocketEvent, WebsocketStreamsConnectConfig};
 use binance_sdk::spot::SpotWsStreams;
 use binance_sdk::spot::websocket_streams::{KlineIntervalEnum, KlineParams, WebsocketStreams};
-use futures_util::{SinkExt, StreamExt};
-use tokio::net::TcpListener;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use common::{A_WHILE, CANDLE, Command, Connection, SOON, STREAM, Server};
+use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::time::timeout;
-use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
-use tokio_tungstenite::tungstenite::protocol::CloseFrame;
-
-const STREAM: &str = "btcusdt@kline_1s";
-
-const CANDLE: &str = r#"{"stream":"btcusdt@kline_1s","data":{"e":"kline","E":1795657567024,"s":"BTCUSDT","k":{"t":1795657565000,"T":1795657565999,"s":"BTCUSDT","i":"1s","f":-1,"L":-1,"o":"60760.01000000","c":"60760.01000000","h":"60760.01000000","l":"60760.01000000","v":"0.00000000","n":0,"x":true,"q":"0.00000000","V":"0.00000000","Q":"0.00000000","B":"0"}}}"#;
-
-/// Long enough for anything that happens on localhost.
-const SOON: Duration = Duration::from_secs(2);
-/// How long to wait before concluding that something doesn't happen.
-const A_WHILE: Duration = Duration::from_millis(700);
-
-/// Accepts connections and replies to `SUBSCRIBE` like Binance does.
-struct Server {
-    url: String,
-    connections: UnboundedReceiver<Connection>,
-}
-
-/// The server's side of one connection.
-struct Connection {
-    /// The requested path with its query.
-    path: String,
-    commands: UnboundedSender<Command>,
-    /// Text frames from the client.
-    received: UnboundedReceiver<String>,
-}
-
-enum Command {
-    Send(String),
-    Close(u16),
-    /// Closes the TCP connection without a close frame.
-    Drop,
-}
-
-impl Server {
-    // The handshake callback's error type is tungstenite's, an HTTP response.
-    #[allow(clippy::result_large_err)]
-    async fn start() -> Self {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let url = format!("ws://{}", listener.local_addr().unwrap());
-        let (connections_tx, connections) = unbounded_channel();
-        tokio::spawn(async move {
-            loop {
-                let (tcp, _) = listener.accept().await.unwrap();
-                let mut path = String::new();
-                let ws =
-                    tokio_tungstenite::accept_hdr_async(tcp, |req: &Request, resp: Response| {
-                        path = req.uri().to_string();
-                        Ok(resp)
-                    })
-                    .await
-                    .unwrap();
-                let (commands, mut commands_rx) = unbounded_channel();
-                let (received_tx, received) = unbounded_channel();
-                let _ = connections_tx.send(Connection {
-                    path,
-                    commands,
-                    received,
-                });
-                tokio::spawn(async move {
-                    let (mut sink, mut stream) = ws.split();
-                    loop {
-                        tokio::select! {
-                            command = commands_rx.recv() => match command {
-                                Some(Command::Send(text)) => sink.send(Message::text(text)).await.unwrap(),
-                                Some(Command::Close(code)) => {
-                                    let frame = CloseFrame { code: code.into(), reason: "".into() };
-                                    let _ = sink.send(Message::Close(Some(frame))).await;
-                                }
-                                Some(Command::Drop) | None => return,
-                            },
-                            message = stream.next() => match message {
-                                Some(Ok(Message::Text(text))) => {
-                                    let text = text.to_string();
-                                    if let Some(reply) = subscribe_reply(&text) {
-                                        sink.send(Message::text(reply)).await.unwrap();
-                                    }
-                                    let _ = received_tx.send(text);
-                                }
-                                Some(Ok(_)) => {}
-                                Some(Err(_)) | None => return,
-                            },
-                        }
-                    }
-                });
-            }
-        });
-        Self { url, connections }
-    }
-
-    async fn next_connection(&mut self) -> Connection {
-        timeout(SOON, self.connections.recv())
-            .await
-            .expect("a connection in time")
-            .unwrap()
-    }
-
-    async fn assert_no_connection(&mut self) {
-        assert!(
-            timeout(A_WHILE, self.connections.recv()).await.is_err(),
-            "unexpected connection"
-        );
-    }
-}
-
-fn subscribe_reply(text: &str) -> Option<String> {
-    let request: serde_json::Value = serde_json::from_str(text).ok()?;
-    (request["method"] == "SUBSCRIBE")
-        .then(|| format!(r#"{{"result":null,"id":{}}}"#, request["id"]))
-}
-
-impl Connection {
-    fn send(&self, command: Command) {
-        self.commands.send(command).unwrap();
-    }
-
-    async fn next_received(&mut self) -> String {
-        timeout(SOON, self.received.recv())
-            .await
-            .expect("a frame in time")
-            .unwrap()
-    }
-
-    async fn assert_nothing_received(&mut self) {
-        assert!(
-            timeout(A_WHILE, self.received.recv()).await.is_err(),
-            "unexpected frame"
-        );
-    }
-}
 
 /// The SDK's events, without pings and pongs.
 #[derive(Debug, PartialEq)]
@@ -172,8 +40,8 @@ impl Client {
             .await
             .unwrap();
         let (events_tx, events) = unbounded_channel();
-        // The subscription ends when it's dropped, so it's leaked: it lives as long as the test.
-        std::mem::forget(connection.subscribe_on_ws_events(move |event| {
+        // Runs as long as the connection does, whether or not the `Subscription` is kept.
+        connection.subscribe_on_ws_events(move |event| {
             let event = match event {
                 WebsocketEvent::Open => Event::Open,
                 WebsocketEvent::Message(m) => Event::Message(m),
@@ -182,7 +50,7 @@ impl Client {
                 WebsocketEvent::Ping | WebsocketEvent::Pong => return,
             };
             let _ = events_tx.send(event);
-        }));
+        });
         Self { connection, events }
     }
 
@@ -213,9 +81,7 @@ async fn subscribed(server: &mut Server) -> (Client, Connection) {
     let mut first = server.next_connection().await;
     assert_eq!(first.path, "/stream?streams=");
     client.subscribe().await;
-    let request: serde_json::Value = serde_json::from_str(&first.next_received().await).unwrap();
-    assert_eq!(request["method"], "SUBSCRIBE");
-    assert_eq!(request["params"], serde_json::json!([STREAM]));
+    first.assert_subscribed().await;
     assert_eq!(client.next_event().await, Event::Open);
     let Event::Message(reply) = client.next_event().await else {
         panic!("expected the subscribe reply")
