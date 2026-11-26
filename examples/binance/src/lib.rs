@@ -1,6 +1,9 @@
 //! Live trading on Binance Spot.
 
+pub mod bridge;
 pub mod profile;
+
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use binance_sdk::config::ConfigurationRestApi;
 use binance_sdk::spot::{SpotRestApi, rest_api::RestApi};
@@ -27,4 +30,21 @@ impl Env {
             Env::Live => SpotRestApi::production(config),
         }
     }
+}
+
+/// Binance's clock and ours, in ms since the Unix epoch. Ours is taken halfway through the
+/// request, so the network delay cancels out of the difference.
+pub async fn clocks(
+    client: &RestApi,
+) -> Result<(i64, i64), Box<dyn std::error::Error + Send + Sync>> {
+    let sent = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as i64;
+    let server = client
+        .time()
+        .await?
+        .data()
+        .await?
+        .server_time
+        .ok_or("no serverTime")?;
+    let received = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as i64;
+    Ok((server, (sent + received) / 2))
 }

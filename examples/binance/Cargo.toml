@@ -12,5 +12,5 @@ publish = false
 # even with `rustls-tls`.
 binance-sdk = { version = "=78.3.0", default-features = false, features = ["spot", "openssl-tls"] }
 serde = { version = "1", features = ["derive"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync", "time"] }
 toml = "1"

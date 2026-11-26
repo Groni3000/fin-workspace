@@ -6,8 +6,9 @@
 
 use std::path::Path;
 use std::process::ExitCode;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::Instant;
 
+use binance_example::clocks;
 use binance_example::profile::Profile;
 
 const PROFILES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/profiles.toml");
@@ -36,16 +37,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         started.elapsed().as_millis()
     );
 
-    let sent = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as i64;
-    let server = client
-        .time()
-        .await?
-        .data()
-        .await?
-        .server_time
-        .ok_or("no serverTime")?;
-    let received = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as i64;
-    let ours = (sent + received) / 2;
+    let (server, ours) = clocks(&client).await?;
     println!(
         "server time {server} ms, ours {ours} ms, offset {} ms",
         server - ours
