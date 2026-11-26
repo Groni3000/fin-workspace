@@ -8,6 +8,7 @@ pub mod kline;
 pub mod live;
 pub mod orders;
 pub mod profile;
+pub mod user_stream;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
