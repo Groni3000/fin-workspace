@@ -27,3 +27,11 @@ pub const EXEC_TARGET: &str = "exec";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct OrderId(Uuid);
+
+impl std::str::FromStr for OrderId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::try_parse(s).map(Self)
+    }
+}
