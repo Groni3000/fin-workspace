@@ -1,4 +1,4 @@
-# Copy to `profiles.toml` and fill in. Pick a profile with `--profile <name>`.
+# Copy to `profiles.toml` and fill in. Bins take a profile name, e.g. `ping testnet`.
 #
 # Secrets never go in this file: it only holds paths to the key files. Keep them outside the
 # repository, readable only by you (`chmod 600`), e.g. in `~/.config/fin-workspace/binance/`.
@@ -30,7 +30,3 @@ private_key_path = "/home/<you>/.config/fin-workspace/binance/demo-ed25519.pem"
 env = "live"
 api_key_path = "/home/<you>/.config/fin-workspace/binance/live-api-key"
 private_key_path = "/home/<you>/.config/fin-workspace/binance/live-ed25519.pem"
-
-# Market data only: public streams, no key needed.
-[market]
-env = "live"
