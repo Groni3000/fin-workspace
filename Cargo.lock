@@ -84,9 +84,11 @@ name = "binance-example"
 version = "0.0.0"
 dependencies = [
  "binance-sdk",
+ "instrid",
  "serde",
  "tokio",
  "toml",
+ "tradeprim",
 ]
 
 [[package]]

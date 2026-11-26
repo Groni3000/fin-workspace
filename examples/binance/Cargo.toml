@@ -11,6 +11,8 @@ publish = false
 # `openssl-tls`: private-key (Ed25519) signing exists only with it, and the SDK links OpenSSL
 # even with `rustls-tls`.
 binance-sdk = { version = "=78.3.0", default-features = false, features = ["spot", "openssl-tls"] }
+instrid = { path = "../../instrid" }
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync", "time"] }
 toml = "1"
+tradeprim = { path = "../../tradeprim" }

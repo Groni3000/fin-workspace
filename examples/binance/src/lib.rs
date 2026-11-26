@@ -1,6 +1,7 @@
 //! Live trading on Binance Spot.
 
 pub mod bridge;
+pub mod instruments;
 pub mod profile;
 
 use std::time::{SystemTime, UNIX_EPOCH};
