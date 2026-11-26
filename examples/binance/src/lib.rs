@@ -6,8 +6,9 @@ pub mod profile;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use binance_sdk::config::ConfigurationRestApi;
-use binance_sdk::spot::{SpotRestApi, rest_api::RestApi};
+use binance_sdk::config::{ConfigurationRestApi, ConfigurationWebsocketStreams};
+use binance_sdk::spot::websocket_streams::WebsocketStreamsHandle;
+use binance_sdk::spot::{SpotRestApi, SpotWsStreams, rest_api::RestApi};
 use serde::Deserialize;
 
 /// Which Binance deployment to talk to.
@@ -29,6 +30,15 @@ impl Env {
             Env::Testnet => SpotRestApi::testnet(config),
             Env::Demo => SpotRestApi::demo(config),
             Env::Live => SpotRestApi::production(config),
+        }
+    }
+
+    /// A market-data streams client for this environment's URL.
+    pub fn streams(self, config: ConfigurationWebsocketStreams) -> WebsocketStreamsHandle {
+        match self {
+            Env::Testnet => SpotWsStreams::testnet(config),
+            Env::Demo => SpotWsStreams::demo(config),
+            Env::Live => SpotWsStreams::production(config),
         }
     }
 }
