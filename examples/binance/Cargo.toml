@@ -19,3 +19,9 @@ serde_json = "1"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync", "time"] }
 toml = "1"
 tradeprim = { path = "../../tradeprim" }
+
+[dev-dependencies]
+# A fake stream server for the reconnect tests. Both are already in the tree through the SDK.
+futures-util = "0.3"
+tokio = { version = "1", features = ["net"] }
+tokio-tungstenite = { version = "0.26", default-features = false, features = ["handshake"] }
