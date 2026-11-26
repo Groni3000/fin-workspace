@@ -11,9 +11,12 @@ pub mod profile;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use binance_sdk::config::{ConfigurationRestApi, ConfigurationWebsocketStreams};
+use binance_sdk::config::{
+    ConfigurationRestApi, ConfigurationWebsocketApi, ConfigurationWebsocketStreams,
+};
+use binance_sdk::spot::websocket_api::WebsocketApiHandle;
 use binance_sdk::spot::websocket_streams::WebsocketStreamsHandle;
-use binance_sdk::spot::{SpotRestApi, SpotWsStreams, rest_api::RestApi};
+use binance_sdk::spot::{SpotRestApi, SpotWsApi, SpotWsStreams, rest_api::RestApi};
 use serde::Deserialize;
 
 /// Which Binance deployment to talk to.
@@ -35,6 +38,15 @@ impl Env {
             Env::Testnet => SpotRestApi::testnet(config),
             Env::Demo => SpotRestApi::demo(config),
             Env::Live => SpotRestApi::production(config),
+        }
+    }
+
+    /// A WebSocket API client (requests, and the account's own events) for this environment's URL.
+    pub fn ws_api(self, config: ConfigurationWebsocketApi) -> WebsocketApiHandle {
+        match self {
+            Env::Testnet => SpotWsApi::testnet(config),
+            Env::Demo => SpotWsApi::demo(config),
+            Env::Live => SpotWsApi::production(config),
         }
     }
 
