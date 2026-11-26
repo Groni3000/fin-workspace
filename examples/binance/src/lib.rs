@@ -2,6 +2,7 @@
 
 pub mod bridge;
 pub mod feed;
+pub mod gap;
 pub mod instruments;
 pub mod kline;
 pub mod profile;

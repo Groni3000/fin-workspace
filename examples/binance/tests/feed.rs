@@ -6,9 +6,10 @@ use std::sync::mpsc::{self, TryRecvError};
 use std::time::Duration;
 
 use binance_example::feed::{self, FeedEvent, Reason, Watchdog};
+use binance_example::gap::Gap;
 use binance_sdk::config::ConfigurationWebsocketStreams;
 use binance_sdk::spot::SpotWsStreams;
-use common::{A_WHILE, CANDLE, Command, SOON, STREAM, Server, unreachable_url};
+use common::{A_WHILE, CANDLE, Command, SOON, STREAM, Server, candle_at, unreachable_url};
 use mdata::HasTimestamp;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -67,6 +68,13 @@ impl Feed {
         match self.next_event().await {
             FeedEvent::Kline(k) => k.candle.timestamp().to_string(),
             other => panic!("expected a candle, got {other:?}"),
+        }
+    }
+
+    async fn next_gap(&mut self) -> (String, String) {
+        match self.next_event().await {
+            FeedEvent::Gap(Gap { from, until }) => (from.to_string(), until.to_string()),
+            other => panic!("expected a gap, got {other:?}"),
         }
     }
 
@@ -196,8 +204,8 @@ async fn a_dropped_connection_is_left_to_the_sdk() {
     let mut second = server.next_connection().await;
     assert_eq!(second.path, format!("/stream?streams={STREAM}"));
     second.assert_nothing_received().await;
-    second.send(Command::Send(CANDLE.to_string()));
-    assert_eq!(feed.next_candle_open().await, CANDLE_OPEN);
+    second.send(Command::Send(candle_at(1)));
+    assert_eq!(feed.next_candle_open().await, "2026-11-26T01:46:06Z");
     feed.assert_no_event().await;
     feed.stop().await;
 }
@@ -212,5 +220,59 @@ async fn the_wait_doubles_up_to_the_cap_while_unreachable() {
         waits.push(after);
     }
     assert_eq!(waits, [ms(50), ms(100), ms(200), ms(200)]);
+    feed.stop().await;
+}
+
+/// Every candle once, in order; a gap is reported just before the candle after it.
+#[tokio::test(flavor = "current_thread")]
+async fn gaps_are_reported_and_repeats_dropped() {
+    let mut server = Server::start().await;
+    let mut feed = Feed::start(server.url.clone(), QUICK);
+    let mut connection = server.next_connection().await;
+    connection.assert_subscribed().await;
+
+    for s in [0, 1, 3, 1, 4] {
+        connection.send(Command::Send(candle_at(s)));
+    }
+    assert_eq!(feed.next_candle_open().await, "2026-11-26T01:46:05Z");
+    assert_eq!(feed.next_candle_open().await, "2026-11-26T01:46:06Z");
+    assert_eq!(
+        feed.next_gap().await,
+        (
+            "2026-11-26T01:46:07Z".to_string(),
+            "2026-11-26T01:46:08Z".to_string()
+        )
+    );
+    assert_eq!(feed.next_candle_open().await, "2026-11-26T01:46:08Z");
+    assert_eq!(feed.next_candle_open().await, "2026-11-26T01:46:09Z");
+    feed.stop().await;
+}
+
+/// The tracker outlives the connection, so a gap across a replacement is reported too.
+#[tokio::test(flavor = "current_thread")]
+async fn a_gap_across_a_fresh_connection_is_reported() {
+    let mut server = Server::start().await;
+    let mut feed = Feed::start(server.url.clone(), QUICK);
+    let mut first = server.next_connection().await;
+    first.assert_subscribed().await;
+    first.send(Command::Send(candle_at(0)));
+    assert_eq!(feed.next_candle_open().await, "2026-11-26T01:46:05Z");
+
+    first.send(Command::Close(1000));
+    assert!(matches!(
+        feed.next_reconnect().await,
+        (Reason::GaveUp(_), _)
+    ));
+    let mut second = server.next_connection().await;
+    second.assert_subscribed().await;
+    second.send(Command::Send(candle_at(3)));
+    assert_eq!(
+        feed.next_gap().await,
+        (
+            "2026-11-26T01:46:06Z".to_string(),
+            "2026-11-26T01:46:08Z".to_string()
+        )
+    );
+    assert_eq!(feed.next_candle_open().await, "2026-11-26T01:46:08Z");
     feed.stop().await;
 }

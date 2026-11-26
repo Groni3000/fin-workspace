@@ -17,6 +17,15 @@ pub const STREAM: &str = "btcusdt@kline_1s";
 
 pub const CANDLE: &str = r#"{"stream":"btcusdt@kline_1s","data":{"e":"kline","E":1795657567024,"s":"BTCUSDT","k":{"t":1795657565000,"T":1795657565999,"s":"BTCUSDT","i":"1s","f":-1,"L":-1,"o":"60760.01000000","c":"60760.01000000","h":"60760.01000000","l":"60760.01000000","v":"0.00000000","n":0,"x":true,"q":"0.00000000","V":"0.00000000","Q":"0.00000000","B":"0"}}}"#;
 
+/// [`CANDLE`], opening `s` seconds later.
+pub fn candle_at(s: i64) -> String {
+    let open = 1_795_657_565_000 + s * 1000;
+    CANDLE.replace(
+        r#""t":1795657565000,"T":1795657565999"#,
+        &format!(r#""t":{open},"T":{}"#, open + 999),
+    )
+}
+
 /// Long enough for anything that happens on localhost.
 pub const SOON: Duration = Duration::from_secs(2);
 /// How long to wait before concluding that something doesn't happen.

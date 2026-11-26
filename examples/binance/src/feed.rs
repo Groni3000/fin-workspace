@@ -8,6 +8,9 @@
 //!   candles arrive every second, empty seconds included, so a long enough silence means trouble;
 //! - giving up: after a normal close (and other codes it considers permanent) the SDK stays
 //!   disconnected for good.
+//!
+//! Candles are followed across connections by a [`GapTracker`]: a gap is reported before the
+//! candle after it, and repeated candles are dropped.
 
 use std::fmt::{self, Display};
 use std::future::Future;
@@ -20,10 +23,13 @@ use binance_sdk::models::{ConfigBuildError, WebsocketEvent};
 use binance_sdk::spot::websocket_streams::{
     KlineIntervalEnum, KlineParams, WebsocketStreams, WebsocketStreamsHandle,
 };
+use jiff::SignedDuration;
+use mdata::HasTimestamp;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::time::{Instant, sleep, sleep_until, timeout};
 
 use crate::Env;
+use crate::gap::{Gap, GapTracker, Seen};
 use crate::kline::{self, Kline, Message, ParseError};
 
 /// How long the SDK waits before reconnecting by itself. Each second waited is a candle to
@@ -61,6 +67,8 @@ impl Default for Watchdog {
 #[derive(Debug)]
 pub enum FeedEvent {
     Kline(Kline),
+    /// Candles missing before the next [`FeedEvent::Kline`].
+    Gap(Gap),
     /// A message that didn't parse. The feed carries on.
     Invalid {
         raw: String,
@@ -114,6 +122,7 @@ pub async fn run(
 ) {
     let mut stop = pin!(stop);
     let mut backoff = watchdog.backoff_min;
+    let mut tracker = GapTracker::new(SignedDuration::from_secs(1));
     loop {
         let connected = tokio::select! {
             connected = connect(streams, symbol) => connected,
@@ -124,7 +133,7 @@ pub async fn run(
             Ok((connection, mut sdk_events)) => {
                 let mut candle_seen = false;
                 let ended = tokio::select! {
-                    ended = watch(&mut sdk_events, watchdog.silence, events, &mut candle_seen) => ended,
+                    ended = watch(&mut sdk_events, watchdog.silence, events, &mut tracker, &mut candle_seen) => ended,
                     () = &mut stop => None,
                 };
                 if candle_seen {
@@ -179,6 +188,7 @@ async fn watch(
     sdk_events: &mut UnboundedReceiver<WebsocketEvent>,
     silence: Duration,
     events: &Sender<FeedEvent>,
+    tracker: &mut GapTracker,
     candle_seen: &mut bool,
 ) -> Option<Reason> {
     let mut deadline = Instant::now() + silence;
@@ -192,6 +202,11 @@ async fn watch(
                 Ok(Message::Kline(k)) => {
                     deadline = Instant::now() + silence;
                     *candle_seen = true;
+                    match tracker.see(k.candle.timestamp()) {
+                        Seen::Next => {}
+                        Seen::AfterGap(gap) => events.send(FeedEvent::Gap(gap)).ok()?,
+                        Seen::Repeat => continue,
+                    }
                     FeedEvent::Kline(k)
                 }
                 Ok(Message::Reply { error: None, .. }) => continue,
