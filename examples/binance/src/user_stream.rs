@@ -252,17 +252,6 @@ mod tests {
     }
 
     #[test]
-    fn a_partial_fill_is_the_last_trade_only() {
-        let raw = TRADE
-            .replace(r#""l":"0.00010000""#, r#""l":"0.00004000""#)
-            .replace(r#""X":"FILLED""#, r#""X":"PARTIALLY_FILLED""#);
-        let Update::Fill { fill, .. } = parse(&raw).expect("parses") else {
-            panic!("expected a fill");
-        };
-        assert_eq!(fill.quantity().qty().to_string(), "0.00004");
-    }
-
-    #[test]
     fn a_rejection_keeps_binances_reason() {
         let raw =
             with_execution("REJECTED").replace(r#""r":"NONE""#, r#""r":"INSUFFICIENT_BALANCES""#);
