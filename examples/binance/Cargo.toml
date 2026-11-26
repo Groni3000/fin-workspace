@@ -1,0 +1,14 @@
+[package]
+name = "binance-example"
+version = "0.0.0"
+edition = "2024"
+description = "Live trading on Binance Spot, built on the fin-workspace crates"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+# Pinned exactly: the SDK's major version moves often and its API with it.
+# `openssl-tls`: private-key (Ed25519) signing exists only with it, and the SDK links OpenSSL
+# even with `rustls-tls`.
+binance-sdk = { version = "=78.3.0", default-features = false, features = ["spot", "openssl-tls"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

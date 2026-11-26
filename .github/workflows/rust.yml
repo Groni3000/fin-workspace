@@ -34,24 +34,25 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       # `--all-targets` covers lib/tests/examples/benches but NOT doctests.
+      # `binance-example` has its own job: the SDK alone is ~260 crates.
       - name: Test (default features)
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace --exclude binance-example --all-targets
 
       # Doctests run here instead: the README examples need `serde`, and this
       # skips `lab`, whose `kafka` feature would compile librdkafka from C.
       # `--workspace` so a new crate's doctests can't be forgotten in a list.
       - name: Test (all features, incl. doctests)
-        run: cargo test --workspace --exclude lab --all-features
+        run: cargo test --workspace --exclude lab --exclude binance-example --all-features
 
       # Lint and format are platform-independent — running them twice would
       # just burn Windows minutes, which bill at 2x.
       - name: Clippy
         if: runner.os == 'Linux'
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --exclude binance-example --all-targets -- -D warnings
 
       - name: Clippy (all features)
         if: runner.os == 'Linux'
-        run: cargo clippy --workspace --exclude lab --all-targets --all-features -- -D warnings
+        run: cargo clippy --workspace --exclude lab --exclude binance-example --all-targets --all-features -- -D warnings
 
       - name: Format
         if: runner.os == 'Linux'
@@ -71,6 +72,18 @@ jobs:
       - name: Check kafka-gated targets
         run: cargo check -p lab --features kafka --all-targets
 
+  # The Binance example, Linux only. Its dependencies are audited with the rest of `Cargo.lock`
+  # by the Audit workflow.
+  binance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test -p binance-example --all-targets
+      - name: Clippy
+        run: cargo clippy -p binance-example --all-targets -- -D warnings
+
   coverage:
     runs-on: ubuntu-latest
     steps:
@@ -84,7 +97,7 @@ jobs:
       # Collect once with --no-report, then render twice. Rendering a second
       # time from a run that already reported is not supported.
       - name: Collect coverage
-        run: cargo llvm-cov --no-report --workspace --all-targets
+        run: cargo llvm-cov --no-report --workspace --exclude binance-example --all-targets
 
       # Written to the run summary so the number is visible without opening
       # logs. No `--fail-under-lines` yet: set one from the first real run
