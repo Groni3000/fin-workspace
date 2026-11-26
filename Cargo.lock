@@ -84,15 +84,19 @@ name = "binance-example"
 version = "0.0.0"
 dependencies = [
  "binance-sdk",
+ "engine",
+ "foldhash",
  "futures-util",
  "instrid",
  "jiff 1.0.1",
  "mdata",
+ "oms",
  "serde",
  "serde_json",
  "tokio",
  "tokio-tungstenite",
  "toml",
+ "tracing",
  "tradeprim",
 ]
 

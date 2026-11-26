@@ -5,6 +5,7 @@ pub mod feed;
 pub mod gap;
 pub mod instruments;
 pub mod kline;
+pub mod live;
 pub mod profile;
 
 use std::time::{SystemTime, UNIX_EPOCH};

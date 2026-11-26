@@ -26,6 +26,11 @@ pub fn candle_at(s: i64) -> String {
     )
 }
 
+/// [`candle_at`] with trades: a volume of 0.5.
+pub fn trade_at(s: i64) -> String {
+    candle_at(s).replace(r#""v":"0.00000000""#, r#""v":"0.50000000""#)
+}
+
 /// Long enough for anything that happens on localhost.
 pub const SOON: Duration = Duration::from_secs(2);
 /// How long to wait before concluding that something doesn't happen.
