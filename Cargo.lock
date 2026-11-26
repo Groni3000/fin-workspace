@@ -91,6 +91,7 @@ dependencies = [
  "jiff 1.0.1",
  "mdata",
  "oms",
+ "rust_decimal",
  "serde",
  "serde_json",
  "tokio",
@@ -98,6 +99,7 @@ dependencies = [
  "toml",
  "tracing",
  "tradeprim",
+ "uuid",
 ]
 
 [[package]]

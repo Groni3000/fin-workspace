@@ -17,12 +17,16 @@ instrid = { path = "../../instrid" }
 jiff = "1.0"
 mdata = { path = "../../mdata" }
 oms = { path = "../../oms" }
+# Order quantities as the SDK takes them.
+rust_decimal = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync", "time"] }
 toml = "1"
 tracing = "0.1"
 tradeprim = { path = "../../tradeprim" }
+# Client order ids: the kind of UUID an `oms::OrderId` holds.
+uuid = { version = "1", features = ["v7"] }
 
 [dev-dependencies]
 # A fake stream server for the reconnect tests. Both are already in the tree through the SDK.

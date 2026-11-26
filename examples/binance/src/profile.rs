@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::fmt::{self, Debug, Display};
 use std::path::{Path, PathBuf};
 
-use binance_sdk::config::{ConfigurationRestApi, PrivateKey};
+use binance_sdk::config::{ConfigurationRestApi, ConfigurationRestApiBuilder, PrivateKey};
 use binance_sdk::models::ConfigBuildError;
 use binance_sdk::spot::rest_api::RestApi;
 use serde::Deserialize;
@@ -153,20 +153,21 @@ impl Profile {
         })
     }
 
-    /// The SDK's REST configuration, signing with this profile's keys.
-    pub fn rest_config(&self) -> Result<ConfigurationRestApi, ConfigBuildError> {
-        let mut builder = ConfigurationRestApi::builder()
+    /// The SDK's REST configuration, signing with this profile's keys, for further settings.
+    /// Settings like `timeout` only work here: `build` bakes them into the HTTP client.
+    pub fn rest_builder(&self) -> ConfigurationRestApiBuilder {
+        let builder = ConfigurationRestApi::builder()
             .api_key(self.keys.api_key.clone())
             .private_key(PrivateKey::Raw(self.keys.private_key.clone()));
-        if let Some(passphrase) = &self.keys.passphrase {
-            builder = builder.private_key_passphrase(passphrase.clone());
+        match &self.keys.passphrase {
+            Some(passphrase) => builder.private_key_passphrase(passphrase.clone()),
+            None => builder,
         }
-        builder.build()
     }
 
     /// A REST client for this profile's environment, signing with its keys.
     pub fn rest(&self) -> Result<RestApi, ConfigBuildError> {
-        Ok(self.env.rest(self.rest_config()?))
+        Ok(self.env.rest(self.rest_builder().build()?))
     }
 }
 
