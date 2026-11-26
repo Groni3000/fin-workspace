@@ -85,7 +85,10 @@ version = "0.0.0"
 dependencies = [
  "binance-sdk",
  "instrid",
+ "jiff 1.0.1",
+ "mdata",
  "serde",
+ "serde_json",
  "tokio",
  "toml",
  "tradeprim",

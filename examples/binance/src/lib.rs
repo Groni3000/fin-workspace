@@ -2,6 +2,7 @@
 
 pub mod bridge;
 pub mod instruments;
+pub mod kline;
 pub mod profile;
 
 use std::time::{SystemTime, UNIX_EPOCH};
