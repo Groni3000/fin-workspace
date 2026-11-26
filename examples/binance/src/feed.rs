@@ -32,8 +32,7 @@ use crate::Env;
 use crate::gap::{Gap, GapTracker, Seen};
 use crate::kline::{self, Kline, Message, ParseError};
 
-/// How long the SDK waits before reconnecting by itself. Each second waited is a candle to
-/// backfill.
+/// How long the SDK waits before reconnecting by itself. Each second waited is a candle missed.
 const SDK_RECONNECT_DELAY_MS: u64 = 1000;
 
 /// How long a disconnect may take before the connection is dropped instead.
@@ -42,7 +41,7 @@ const DISCONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// The SDK's error once it has stopped reconnecting.
 const GAVE_UP: &str = "permanently failed";
 
-/// When to replace a connection, and how long to wait between attempts.
+/// When to replace a connection, how long to wait between attempts, and when to stop trying.
 #[derive(Debug, Clone, Copy)]
 pub struct Watchdog {
     /// No candle for this long: the connection is replaced. Longer than the SDK's own reconnect
@@ -52,6 +51,10 @@ pub struct Watchdog {
     /// back to this after a candle.
     pub backoff_min: Duration,
     pub backoff_max: Duration,
+    /// No candle for this long: the feed ends with [`FeedEvent::Lost`]. Checked as each attempt
+    /// ends, so the end comes up to one wait and one attempt later: a connect gives up after
+    /// 10 s, a silent connection after `silence` plus up to 5 s to disconnect.
+    pub give_up: Duration,
 }
 
 impl Default for Watchdog {
@@ -59,7 +62,8 @@ impl Default for Watchdog {
         Self {
             silence: Duration::from_secs(5),
             backoff_min: Duration::from_secs(1),
-            backoff_max: Duration::from_secs(30),
+            backoff_max: Duration::from_secs(60),
+            give_up: Duration::from_secs(10 * 60),
         }
     }
 }
@@ -78,6 +82,12 @@ pub enum FeedEvent {
     Reconnecting {
         reason: Reason,
         after: Duration,
+    },
+    /// No candle for [`Watchdog::give_up`]; the feed has ended. The last event. `reason`: why
+    /// the last attempt ended.
+    Lost {
+        blind: Duration,
+        reason: Reason,
     },
 }
 
@@ -112,7 +122,8 @@ pub fn streams(env: Env) -> Result<WebsocketStreamsHandle, ConfigBuildError> {
 }
 
 /// Sends the 1-second candles of `symbol` (as Binance spells it, e.g. `BTCUSDT`) until `stop`
-/// completes or `events` is closed, replacing the connection when [`Watchdog`] says so.
+/// completes, `events` is closed, or [`Watchdog::give_up`] passes without a candle. Replaces the
+/// connection when [`Watchdog`] says so.
 pub async fn run(
     streams: &WebsocketStreamsHandle,
     symbol: &str,
@@ -123,6 +134,7 @@ pub async fn run(
     let mut stop = pin!(stop);
     let mut backoff = watchdog.backoff_min;
     let mut tracker = GapTracker::new(SignedDuration::from_secs(1));
+    let mut last_candle = Instant::now();
     loop {
         let connected = tokio::select! {
             connected = connect(streams, symbol) => connected,
@@ -131,12 +143,12 @@ pub async fn run(
         let reason = match connected {
             Err(e) => Reason::ConnectFailed(e),
             Ok((connection, mut sdk_events)) => {
-                let mut candle_seen = false;
+                let before = last_candle;
                 let ended = tokio::select! {
-                    ended = watch(&mut sdk_events, watchdog.silence, events, &mut tracker, &mut candle_seen) => ended,
+                    ended = watch(&mut sdk_events, watchdog.silence, events, &mut tracker, &mut last_candle) => ended,
                     () = &mut stop => None,
                 };
-                if candle_seen {
+                if last_candle > before {
                     backoff = watchdog.backoff_min;
                 }
                 // Bounded, as a dead network may never answer; dropping the connection closes
@@ -148,6 +160,11 @@ pub async fn run(
                 }
             }
         };
+        let blind = last_candle.elapsed();
+        if blind >= watchdog.give_up {
+            let _ = events.send(FeedEvent::Lost { blind, reason });
+            return;
+        }
         let after = backoff;
         backoff = (backoff * 2).min(watchdog.backoff_max);
         if events
@@ -189,7 +206,7 @@ async fn watch(
     silence: Duration,
     events: &Sender<FeedEvent>,
     tracker: &mut GapTracker,
-    candle_seen: &mut bool,
+    last_candle: &mut Instant,
 ) -> Option<Reason> {
     let mut deadline = Instant::now() + silence;
     loop {
@@ -200,8 +217,8 @@ async fn watch(
         let out = match event {
             WebsocketEvent::Message(raw) => match kline::parse(&raw) {
                 Ok(Message::Kline(k)) => {
-                    deadline = Instant::now() + silence;
-                    *candle_seen = true;
+                    *last_candle = Instant::now();
+                    deadline = *last_candle + silence;
                     match tracker.see(k.candle.timestamp()) {
                         Seen::Next => {}
                         Seen::AfterGap(gap) => events.send(FeedEvent::Gap(gap)).ok()?,

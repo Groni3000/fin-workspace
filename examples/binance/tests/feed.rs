@@ -19,6 +19,7 @@ const QUICK: Watchdog = Watchdog {
     silence: Duration::from_millis(300),
     backoff_min: Duration::from_millis(50),
     backoff_max: Duration::from_millis(200),
+    give_up: Duration::from_secs(60),
 };
 
 const fn ms(n: u64) -> Duration {
@@ -274,5 +275,59 @@ async fn a_gap_across_a_fresh_connection_is_reported() {
         )
     );
     assert_eq!(feed.next_candle_open().await, "2026-11-26T01:46:08Z");
+    feed.stop().await;
+}
+
+/// The feed ends by itself, with `Lost` as its last event.
+#[tokio::test(flavor = "current_thread")]
+async fn no_candle_for_too_long_ends_the_feed() {
+    let watchdog = Watchdog {
+        give_up: ms(400),
+        ..QUICK
+    };
+    let mut feed = Feed::start(unreachable_url().await, watchdog);
+    let ended = async {
+        loop {
+            match feed.next_event().await {
+                FeedEvent::Reconnecting { reason, .. } => {
+                    assert!(matches!(reason, Reason::ConnectFailed(_)), "{reason:?}")
+                }
+                FeedEvent::Lost { blind, reason } => {
+                    assert!(matches!(reason, Reason::ConnectFailed(_)), "{reason:?}");
+                    break blind;
+                }
+                other => panic!("expected a reconnect or the end, got {other:?}"),
+            }
+        }
+    };
+    let blind = timeout(SOON, ended).await.expect("the end in time");
+    assert!(blind >= ms(400), "{blind:?}");
+    timeout(SOON, feed.task)
+        .await
+        .expect("ended in time")
+        .unwrap();
+    assert!(feed.events.try_recv().is_err(), "events after the end");
+}
+
+/// Blind time counts from the last candle, not from the start.
+#[tokio::test(flavor = "current_thread")]
+async fn a_candle_restarts_the_blind_time() {
+    let watchdog = Watchdog {
+        give_up: ms(500),
+        ..QUICK
+    };
+    let mut server = Server::start().await;
+    let mut feed = Feed::start(server.url.clone(), watchdog);
+    let mut first = server.next_connection().await;
+    first.assert_subscribed().await;
+    first.send(Command::Send(candle_at(0)));
+    assert_eq!(feed.next_candle_open().await, CANDLE_OPEN);
+    assert_eq!(feed.next_reconnect().await, (Reason::Silence, ms(50)));
+
+    let mut second = server.next_connection().await;
+    second.assert_subscribed().await;
+    second.send(Command::Send(candle_at(1)));
+    assert_eq!(feed.next_candle_open().await, "2026-11-26T01:46:06Z");
+    assert_eq!(feed.next_reconnect().await, (Reason::Silence, ms(50)));
     feed.stop().await;
 }
